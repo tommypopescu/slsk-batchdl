@@ -13,6 +13,18 @@ namespace Tests.Cli;
 [TestClass]
 public class RemoteCliBackendTests
 {
+    [TestInitialize]
+    public void Initialize()
+    {
+        Logger.RemoveNonFileOutputs();
+    }
+
+    [TestCleanup]
+    public void Cleanup()
+    {
+        Logger.RemoveNonFileOutputs();
+    }
+
     [TestMethod]
     public void NormalizeServerUrl_AcceptsHostOnlyAndDefaultsDaemonPort()
     {
@@ -259,6 +271,7 @@ public class RemoteCliBackendTests
         }
         finally
         {
+            Logger.RemoveNonFileOutputs();
             Console.SetOut(originalOut);
             await app.StopAsync();
             if (Directory.Exists(musicRoot))
@@ -481,6 +494,7 @@ public class RemoteCliBackendTests
         }
         finally
         {
+            Logger.RemoveNonFileOutputs();
             Console.SetOut(originalOut);
             await app.StopAsync();
             if (Directory.Exists(musicRoot))
