@@ -495,7 +495,8 @@ public class DownloadEngine
         {
             await _clientManager.WaitUntilReadyAsync(job.Cts!.Token);
 
-            Events.RaiseJobStarted(job);
+            if (!HasPreResolvedAlbumResults(job))
+                Events.RaiseJobStarted(job);
 
             bool foundSomething = false;
             ResponseData responseData = new ResponseData();
@@ -518,6 +519,8 @@ public class DownloadEngine
 
                     foundSomething = true;
                 }
+                else if (albumJob.Results.Count > 0)
+                    foundSomething = true;
                 else
                     await searcher!.SearchAlbum(albumJob, config.Search, responseData, job.Cts!.Token);
                 foundSomething = albumJob.Results.Count > 0;
@@ -630,6 +633,10 @@ public class DownloadEngine
             }
         }
     }
+
+    static bool HasPreResolvedAlbumResults(Job job)
+        => job is AlbumJob albumJob
+            && (albumJob.ResolvedTarget != null || albumJob.Results.Count > 0);
 
 
     // ── per-job-type handlers ─────────────────────────────────────────────────

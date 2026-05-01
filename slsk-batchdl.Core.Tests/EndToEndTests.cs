@@ -375,5 +375,80 @@ namespace Tests.EndToEnd
             }
         }
 
+        [TestMethod]
+        public async Task AlbumAggregateJob_DownloadsResolvedAlbumCandidatesWithoutResearchingThem()
+        {
+            var lengthOne = new Soulseek.FileAttribute(Soulseek.FileAttributeType.Length, 120);
+            var lengthTwo = new Soulseek.FileAttribute(Soulseek.FileAttributeType.Length, 180);
+            var index = new List<Soulseek.SearchResponse>
+            {
+                new(
+                    username: "user1",
+                    token: 1,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100,
+                    queueLength: 0,
+                    fileList:
+                    [
+                        new Soulseek.File(1, "Music\\ELO\\Time\\01. ELO - First.mp3", 10000, ".mp3", [lengthOne]),
+                        new Soulseek.File(2, "Music\\ELO\\Time\\02. ELO - Second.mp3", 10000, ".mp3", [lengthTwo]),
+                    ]),
+                new(
+                    username: "user2",
+                    token: 2,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100,
+                    queueLength: 0,
+                    fileList:
+                    [
+                        new Soulseek.File(3, "Shares\\Electric Light Orchestra\\Time\\01. ELO - First.mp3", 10000, ".mp3", [lengthOne]),
+                        new Soulseek.File(4, "Shares\\Electric Light Orchestra\\Time\\02. ELO - Second.mp3", 10000, ".mp3", [lengthTwo]),
+                    ]),
+            };
+            var testClient = new ClientTests.MockSoulseekClient(index);
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-download-album-aggregate-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var rootSettings = new DownloadSettings();
+                rootSettings.Output.ParentDir = outputDir;
+                rootSettings.Search.NoBrowseFolder = true;
+
+                var aggregateJob = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
+                var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
+                var app = new DownloadEngine(engineSettings, clientManager);
+                var startedAlbumJobs = 0;
+                var albumDownloadsStarted = 0;
+                app.Events.JobStarted += job =>
+                {
+                    if (job is AlbumJob)
+                        startedAlbumJobs++;
+                };
+                app.Events.AlbumDownloadStarted += (job, _) =>
+                {
+                    if (job is AlbumJob)
+                        albumDownloadsStarted++;
+                };
+                app.Enqueue(aggregateJob, rootSettings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                Assert.AreEqual(JobState.Done, aggregateJob.State);
+                Assert.IsTrue(aggregateJob.Albums.Count > 0, "Album aggregate should produce resolved album candidates.");
+                Assert.AreEqual(0, startedAlbumJobs, "Resolved album-aggregate candidates should not run a second album search.");
+                Assert.IsTrue(albumDownloadsStarted > 0, "Resolved album-aggregate candidates should still enter album download.");
+                Assert.IsTrue(Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Length > 0,
+                    "Album aggregate should download files from the resolved candidate album.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir))
+                    Directory.Delete(outputDir, true);
+            }
+        }
+
     }
 }

@@ -753,11 +753,9 @@ public class CliProgressReporter
 
         lock (Printing.ConsoleLock)
         {
-            if (_jobBars.TryGetValue(job, out var headerBar) && headerBar != null)
-            {
-                _jobStatuses[job] = "downloading";
-                try { RefreshOrPrintJobLineWithProfileSuffix(headerBar, 0, job, AlbumHeaderText(job, 0, total, "downloading"), print: true); } catch { }
-            }
+            var headerBar = _jobBars.GetOrAdd(job, _ => Printing.GetProgressBar());
+            _jobStatuses[job] = "downloading";
+            try { RefreshOrPrintJobLineWithProfileSuffix(headerBar, 0, job, AlbumHeaderText(job, 0, total, "downloading"), print: true); } catch { }
 
             Printing.PrintAlbumHeader(folder);
 
@@ -807,11 +805,9 @@ public class CliProgressReporter
         int total = job.Tracks?.Count ?? job.Folder.Files?.Count ?? 0;
         lock (Printing.ConsoleLock)
         {
-            if (_backendJobBars.TryGetValue(job.Summary.JobId, out var headerBar) && headerBar != null)
-            {
-                _backendJobStatuses[job.Summary.JobId] = "downloading";
-                try { RefreshOrPrintJobLineWithProfileSuffix(headerBar, 0, job.Summary, AlbumHeaderText(job.Summary, 0, total, "downloading"), print: true); } catch { }
-            }
+            var headerBar = _backendJobBars.GetOrAdd(job.Summary.JobId, _ => Printing.GetProgressBar());
+            _backendJobStatuses[job.Summary.JobId] = "downloading";
+            try { RefreshOrPrintJobLineWithProfileSuffix(headerBar, 0, job.Summary, AlbumHeaderText(job.Summary, 0, total, "downloading"), print: true); } catch { }
 
             Printing.PrintAlbumHeader(ToAlbumFolder(job.Folder));
             InitializeBackendAlbumBlock(job.Summary, job.Tracks);
