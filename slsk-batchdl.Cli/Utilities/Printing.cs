@@ -244,38 +244,7 @@ public static class Printing
         }
         else if (job is AlbumJob albumJob)
         {
-            if (printOption.HasFlag(PrintOption.Json))
-            {
-                var foldersToPrint = printOption.HasFlag(PrintOption.Full)
-                    ? albumJob.Results
-                    : albumJob.Results.Take(1).ToList();
-                JsonPrinter.PrintAlbumJson(foldersToPrint, albumJob);
-            }
-            else if (printOption.HasFlag(PrintOption.Link))
-            {
-                if (albumJob.Results.Count > 0)
-                    PrintAlbumLink(albumJob.Results[0]);
-            }
-            else
-            {
-                if (!printOption.HasFlag(PrintOption.Full))
-                    Console.WriteLine($"Result 1 of {albumJob.Results.Count} for album {job.ToString(true)}:");
-                else
-                    Console.WriteLine($"Results ({albumJob.Results.Count}) for album {job.ToString(true)}:");
-
-                if (albumJob.Results.Count > 0)
-                {
-                    if (!search.NoBrowseFolder)
-                        Console.WriteLine("[Skipping full folder retrieval]");
-
-                    foreach (var folder in albumJob.Results)
-                    {
-                        PrintAlbum(folder);
-                        if (!printOption.HasFlag(PrintOption.Full))
-                            break;
-                    }
-                }
-            }
+            PrintAlbumResults(albumJob, printOption, search);
         }
         else if (job is AlbumAggregateJob albumAggregateJob)
         {
@@ -286,9 +255,16 @@ public static class Printing
             }
 
             bool nonVerbose = (printOption & (PrintOption.Json | PrintOption.Link | PrintOption.Index)) != 0;
-            foreach (var album in albumAggregateJob.Albums)
+            for (int i = 0; i < albumAggregateJob.Albums.Count; i++)
             {
-                PrintResults(album, printOption, search);
+                PrintAlbumResults(
+                    albumAggregateJob.Albums[i],
+                    printOption,
+                    search,
+                    aggregateResultIndex: i + 1,
+                    aggregateResultCount: albumAggregateJob.Albums.Count,
+                    aggregateDisplayName: albumAggregateJob.ToString(true));
+
                 if (!nonVerbose)
                     Console.WriteLine();
             }
@@ -296,6 +272,51 @@ public static class Printing
         else
         {
             Console.WriteLine("No results.");
+        }
+    }
+
+    private static void PrintAlbumResults(
+        AlbumJob albumJob,
+        PrintOption printOption,
+        SearchSettings search,
+        int? aggregateResultIndex = null,
+        int? aggregateResultCount = null,
+        string? aggregateDisplayName = null)
+    {
+        if (printOption.HasFlag(PrintOption.Json))
+        {
+            var foldersToPrint = printOption.HasFlag(PrintOption.Full)
+                ? albumJob.Results
+                : albumJob.Results.Take(1).ToList();
+            JsonPrinter.PrintAlbumJson(foldersToPrint, albumJob);
+        }
+        else if (printOption.HasFlag(PrintOption.Link))
+        {
+            if (albumJob.Results.Count > 0)
+                PrintAlbumLink(albumJob.Results[0]);
+        }
+        else
+        {
+            string displayName = aggregateDisplayName ?? albumJob.ToString(true);
+            if (aggregateResultIndex is { } resultIndex && aggregateResultCount is { } resultCount)
+                Console.WriteLine($"Result {resultIndex} of {resultCount} for album {displayName}:");
+            else if (!printOption.HasFlag(PrintOption.Full))
+                Console.WriteLine($"Result 1 of {albumJob.Results.Count} for album {displayName}:");
+            else
+                Console.WriteLine($"Results ({albumJob.Results.Count}) for album {displayName}:");
+
+            if (albumJob.Results.Count > 0)
+            {
+                if (!search.NoBrowseFolder)
+                    Console.WriteLine("[Skipping full folder retrieval]");
+
+                foreach (var folder in albumJob.Results)
+                {
+                    PrintAlbum(folder);
+                    if (!printOption.HasFlag(PrintOption.Full))
+                        break;
+                }
+            }
         }
     }
 

@@ -351,6 +351,12 @@ namespace Tests.EndToEnd
                 var aggregateJob = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
                 var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
                 var app = new DownloadEngine(engineSettings, clientManager);
+                var startedAlbumJobs = 0;
+                app.Events.JobStarted += job =>
+                {
+                    if (job is AlbumJob)
+                        startedAlbumJobs++;
+                };
                 app.Enqueue(aggregateJob, rootSettings);
                 app.CompleteEnqueue();
 
@@ -358,6 +364,7 @@ namespace Tests.EndToEnd
 
                 Assert.AreEqual(JobState.Done, aggregateJob.State);
                 Assert.IsTrue(aggregateJob.Albums.Count > 0, "Print-results mode should retain album-aggregate candidates for printing.");
+                Assert.AreEqual(0, startedAlbumJobs, "Print-results mode should not re-search album-aggregate candidate albums.");
                 Assert.AreEqual(0, Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Length,
                     "Print-results mode should not download album-aggregate files.");
             }

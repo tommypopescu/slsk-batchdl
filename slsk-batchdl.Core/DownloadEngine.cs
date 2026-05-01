@@ -536,6 +536,9 @@ public class DownloadEngine
                 foundSomething = newAlbumJobs.Count > 0;
                 Events.RaiseJobCompleted(job, foundSomething, responseData.lockedFilesCount);
 
+                if (config.PrintResults)
+                    return;
+
                 if (foundSomething)
                 {
                     var albumList = new JobList(job.ItemName, newAlbumJobs);
