@@ -138,5 +138,6 @@ public sealed class EngineEventDtoAdapter
                     .Where(song => song.ResolvedTarget != null)
                     .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
                     .ToList()
-                : null);
+                : null,
+            folder.IsFullyRetrieved);
 }

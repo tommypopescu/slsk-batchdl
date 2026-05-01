@@ -722,7 +722,8 @@ public sealed class EngineStateStore
                     .Where(song => song.ResolvedTarget != null)
                     .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
                     .ToList()
-                : null);
+                : null,
+            folder.IsFullyRetrieved);
 
     private JobState EffectiveState(Job job)
         => executionCompletedJobs.Contains(job.Id) && IsActiveJobState(job.State)

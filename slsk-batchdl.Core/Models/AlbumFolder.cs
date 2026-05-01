@@ -11,6 +11,7 @@ namespace Sldl.Core.Models;
         public int[]         SearchSortedAudioLengths { get; }
         public string?       SearchRepresentativeAudioFilename { get; }
         public bool          HasSearchMetadata { get; }
+        public bool          IsFullyRetrieved { get; set; }
 
         private readonly Lazy<List<SongJob>> files;
 

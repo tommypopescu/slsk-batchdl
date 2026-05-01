@@ -494,7 +494,8 @@ public sealed class EngineSupervisor
                     .Where(song => song.ResolvedTarget != null)
                     .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
                     .ToList()
-                : null);
+                : null,
+            folder.IsFullyRetrieved);
 
     private static SongQueryDto ToSongQuery(SongQuery query)
         => new(Optional(query.Artist), Optional(query.Title), Optional(query.Album), Optional(query.URI), Optional(query.Length), query.ArtistMaybeWrong);

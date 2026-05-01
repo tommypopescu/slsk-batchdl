@@ -240,6 +240,8 @@ public partial class Searcher
                 var info = InferSongQuery(file.Filename, new SongQuery { Artist = firstInfo.Artist, Album = firstInfo.Album });
                 folder.Files.Add(new SongJob(info) { ResolvedTarget = candidate });
             }
+
+            folder.IsFullyRetrieved = true;
         }
         catch (Exception ex)
         {

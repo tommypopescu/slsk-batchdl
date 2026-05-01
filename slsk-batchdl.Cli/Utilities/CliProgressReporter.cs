@@ -1327,7 +1327,10 @@ public class CliProgressReporter
         => new(
             folder.Username,
             folder.FolderPath,
-            folder.Files?.Select(ToSongJob).ToList() ?? []);
+            folder.Files?.Select(ToSongJob).ToList() ?? [])
+        {
+            IsFullyRetrieved = folder.IsFullyRetrieved,
+        };
 
     private static SongJob ToSongJob(FileCandidateDto file)
     {

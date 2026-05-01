@@ -203,12 +203,14 @@ internal sealed class InteractiveCliCoordinator
                         availableFolders,
                         canRetrieve: true,
                         retrievedFolders: session.RetrievedFolders,
-                        retrieveFolderCallback: async folder => await _backend.RetrieveFolderAndWaitAsync(
-                            session.SourceSearchJobId,
-                            new RetrieveFolderRequestDto(
-                                new AlbumFolderRefDto(folder.Username, folder.FolderPath),
-                                ToAlbumQueryDto(session.Query)),
-                            _appToken),
+                        retrieveFolderCallback: async folder => await RunPromptRetrieveFolderAsync(
+                            folder,
+                            async () => await _backend.RetrieveFolderAndWaitAsync(
+                                session.SourceSearchJobId,
+                                new RetrieveFolderRequestDto(
+                                    new AlbumFolderRefDto(folder.Username, folder.FolderPath),
+                                    ToAlbumQueryDto(session.Query)),
+                                _appToken)),
                         filterStr: session.FilterStr);
 
                     result = await interactive.Run();
@@ -245,6 +247,16 @@ internal sealed class InteractiveCliCoordinator
         RegisterExternalRoot(job.Id);
 
         _engine.Enqueue(job, settings);
+    }
+
+    private static async Task<int> RunPromptRetrieveFolderAsync(AlbumFolder folder, Func<Task<int>> retrieve)
+    {
+        Printing.WriteLine($"RetrieveFolderJob: retrieving folder: {folder.FolderPath}", ConsoleColor.Gray, force: true);
+        int newFiles = await retrieve();
+        folder.IsFullyRetrieved = true;
+        string status = newFiles > 0 ? "found additional files in" : "no additional files found";
+        Printing.WriteLine($"RetrieveFolderJob: {status}: {folder.FolderPath}", ConsoleColor.Gray, force: true);
+        return newFiles;
     }
 
     private void RegisterExternalRoot(Guid jobId)
@@ -324,10 +336,13 @@ internal sealed class InteractiveCliCoordinator
     }
 
     internal static AlbumFolder ToAlbumFolder(AlbumFolderDto folder)
-        => new(
+        => new AlbumFolder(
             folder.Username,
             folder.FolderPath,
-            () => folder.Files?.Select(ToSongJob).ToList() ?? []);
+            () => folder.Files?.Select(ToSongJob).ToList() ?? [])
+        {
+            IsFullyRetrieved = folder.IsFullyRetrieved,
+        };
 
     private static SongJob ToSongJob(FileCandidateDto file)
     {

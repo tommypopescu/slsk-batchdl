@@ -715,7 +715,7 @@ public class DownloadEngine
                 if (config.Transfer.AlbumTrackCountMaxRetries > 0
                     && ((folderCond.MaxTrackCount ?? 0) > 0 || ((folderCond.MinTrackCount ?? 0) > 0 && job.Query.Album.Length > 0)))
                 {
-                    if (!retrievedFolders.Contains(chosenFolder.FolderPath))
+                    if (!chosenFolder.IsFullyRetrieved && !retrievedFolders.Contains(chosenFolder.FolderPath))
                     {
                         await ProcessFolderRetrieval(chosenFolder, job,
                             "Verifying album track count.\n    Retrieving full folder contents...");
@@ -756,7 +756,7 @@ public class DownloadEngine
                 Events.RaiseAlbumTrackDownloadStarted(job, chosenFolder);
                 await RunAlbumDownloads(chosenFolder, cts);
 
-                if (!config.Search.NoBrowseFolder && retrieveCurrent && !retrievedFolders.Contains(chosenFolder.FolderPath))
+                if (!config.Search.NoBrowseFolder && retrieveCurrent && !chosenFolder.IsFullyRetrieved && !retrievedFolders.Contains(chosenFolder.FolderPath))
                 {
                     var newFilesFound = await ProcessFolderRetrieval(chosenFolder, job);
                     retrievedFolders.Add(chosenFolder.FolderPath);
@@ -1323,6 +1323,9 @@ public class DownloadEngine
 
     public async Task<int> ProcessFolderRetrieval(AlbumFolder folder, Job parentJob, string? customMessage = null)
     {
+        if (folder.IsFullyRetrieved)
+            return 0;
+
         var rfJob = new RetrieveFolderJob(folder) { ItemName = folder.FolderPath };
 
         RegisterJob(rfJob, parentJob);

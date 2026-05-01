@@ -106,6 +106,9 @@ public sealed record FileCandidateDto(
 /// <param name="Files">
 /// Optional file list. Present only when requested with includeFiles=true. May be incomplete; retrieve the full folder to see authoritative contents.
 /// </param>
+/// <param name="IsFullyRetrieved">
+/// True after the server has browsed the peer's folder and merged the full contents into this result.
+/// </param>
 public sealed record AlbumFolderDto(
     AlbumFolderRefDto Ref,
     string Username,
@@ -113,7 +116,8 @@ public sealed record AlbumFolderDto(
     PeerInfoDto Peer,
     int FileCount,
     int AudioFileCount,
-    IReadOnlyList<FileCandidateDto>? Files = null);
+    IReadOnlyList<FileCandidateDto>? Files = null,
+    bool IsFullyRetrieved = false);
 
 /// <summary>
 /// Aggregate track candidate produced by aggregate search result views.

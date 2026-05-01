@@ -194,6 +194,16 @@ internal sealed class RemoteInteractiveCliCoordinator
         interactiveAlbumSessions[summary.JobId] = session;
     }
 
+    private static async Task<int> RunPromptRetrieveFolderAsync(AlbumFolder folder, Func<Task<int>> retrieve)
+    {
+        Printing.WriteLine($"RetrieveFolderJob: retrieving folder: {folder.FolderPath}", ConsoleColor.Gray, force: true);
+        int newFiles = await retrieve();
+        folder.IsFullyRetrieved = true;
+        string status = newFiles > 0 ? "found additional files in" : "no additional files found";
+        Printing.WriteLine($"RetrieveFolderJob: {status}: {folder.FolderPath}", ConsoleColor.Gray, force: true);
+        return newFiles;
+    }
+
     private async Task<AlbumFolder?> PromptForAlbumSelectionAsync(InteractiveAlbumSession session)
     {
         var availableFolders = session.Folders
@@ -229,12 +239,14 @@ internal sealed class RemoteInteractiveCliCoordinator
                         availableFolders,
                         canRetrieve: true,
                         retrievedFolders: session.RetrievedFolders,
-                        retrieveFolderCallback: async folder => await backend.RetrieveFolderAndWaitAsync(
-                            session.SourceSearchJobId,
-                            new RetrieveFolderRequestDto(
-                                new AlbumFolderRefDto(folder.Username, folder.FolderPath),
-                                session.Query),
-                            appToken),
+                        retrieveFolderCallback: async folder => await RunPromptRetrieveFolderAsync(
+                            folder,
+                            async () => await backend.RetrieveFolderAndWaitAsync(
+                                session.SourceSearchJobId,
+                                new RetrieveFolderRequestDto(
+                                    new AlbumFolderRefDto(folder.Username, folder.FolderPath),
+                                    session.Query),
+                                appToken)),
                         filterStr: session.FilterStr);
 
                     result = await interactive.Run();

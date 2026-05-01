@@ -191,13 +191,12 @@ public class InteractiveModeManager
                     if (canRetrieve)
                     {
                         string folderKey = username + '\\' + subfolder;
-                        if (!retrievedFolders.Contains(folderKey))
+                        if (!folder.IsFullyRetrieved)
                         {
                             int newFiles = await retrieveFolderCallback(folder);
                             retrievedFolders.Add(folderKey);
                             if (newFiles == 0)
                             {
-                                Console.WriteLine("No more files found.");
                                 goto Loop;
                             }
                             else

@@ -530,6 +530,19 @@ public class EngineSupervisorTests
             var afterRetrieve = supervisor.GetFolderResults(searchSummary.JobId, includeFiles: true);
             Assert.IsNotNull(afterRetrieve);
             Assert.AreEqual(2, afterRetrieve.Items[0].Files?.Count);
+            Assert.IsTrue(afterRetrieve.Items[0].IsFullyRetrieved);
+
+            var downloadSummary = await supervisor.StartFolderDownloadAsync(
+                searchSummary.JobId,
+                new StartFolderDownloadRequestDto(afterRetrieve.Items[0].Ref),
+                CancellationToken.None);
+
+            Assert.IsNotNull(downloadSummary);
+            await WaitForJobStateAsync(supervisor, downloadSummary.JobId, ServerProtocol.JobStates.Done);
+
+            var retrieveJobs = supervisor.StateStore.GetJobs(
+                new JobQuery(null, ServerJobKind.RetrieveFolder, searchSummary.WorkflowId, IncludeAll: true));
+            Assert.AreEqual(1, retrieveJobs.Count, "Starting a download from a fully retrieved folder should not browse it again.");
 
             cts.Cancel();
             await runTask;

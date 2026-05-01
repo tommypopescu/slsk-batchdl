@@ -178,7 +178,8 @@ internal sealed class LocalCliBackend
                             .Where(song => song.ResolvedTarget != null)
                             .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
                             .ToList()
-                        : null)).ToList()));
+                        : null,
+                    folder.IsFullyRetrieved)).ToList()));
         }
 
         var albumJob = stateStore.GetJob<AlbumJob>(jobId);
@@ -203,7 +204,8 @@ internal sealed class LocalCliBackend
                         .Where(song => song.ResolvedTarget != null)
                         .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
                         .ToList()
-                    : null)).ToList()));
+                    : null,
+                folder.IsFullyRetrieved)).ToList()));
     }
 
     public Task<SearchResultSnapshotDto<AggregateTrackCandidateDto>?> GetAggregateTrackResultsAsync(Guid jobId, CancellationToken ct = default)
@@ -280,26 +282,17 @@ internal sealed class LocalCliBackend
 
     public async Task<int> RetrieveFolderAndWaitAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
     {
-        var summary = await StartRetrieveFolderAsync(searchJobId, request, ct);
-        if (summary == null)
+        ct.ThrowIfCancellationRequested();
+
+        var searchJob = stateStore.GetJob<SearchJob>(searchJobId);
+        if (searchJob?.Config == null)
             return 0;
 
-        while (true)
-        {
-            ct.ThrowIfCancellationRequested();
+        var folder = FindAlbumFolder(searchJob, request.Folder, request.AlbumQuery);
+        if (folder == null)
+            throw new ArgumentException("Requested folder was not found in this search job.");
 
-            var retrieveJob = stateStore.GetJob<RetrieveFolderJob>(summary.JobId);
-            if (retrieveJob == null)
-            {
-                await Task.Delay(25, ct);
-                continue;
-            }
-
-            if (retrieveJob.State is not (JobState.Pending or JobState.Extracting or JobState.Searching or JobState.Downloading))
-                return retrieveJob.NewFilesFoundCount;
-
-            await Task.Delay(25, ct);
-        }
+        return await engine.ProcessFolderRetrieval(folder, searchJob);
     }
 
     public Task<IReadOnlyList<JobSummaryDto>?> StartFileDownloadsAsync(Guid searchJobId, StartFileDownloadsRequestDto request, CancellationToken ct = default)
@@ -557,5 +550,6 @@ internal sealed class LocalCliBackend
                     .Where(song => song.ResolvedTarget != null)
                     .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
                     .ToList()
-                : null);
+                : null,
+            folder.IsFullyRetrieved);
 }
