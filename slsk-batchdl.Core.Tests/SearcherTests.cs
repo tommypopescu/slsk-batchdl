@@ -536,6 +536,31 @@ namespace Tests.Unit
         }
 
         [TestMethod]
+        public void AggregateAlbums_AssignsItemNameFromFolderName()
+        {
+            var folders = new List<AlbumFolder>
+            {
+                AlbumFolder("User1", @"Music\Rock\ELO\Time",[180, 181, 182]),
+            };
+
+            var search = TestHelpers.CreateDefaultSettings().Download.Search;
+            search.MinSharesAggregate = 1;
+            var query = new AlbumQuery { Artist = "ELO", Album = "Time" };
+
+            // Check full projector
+            var fullProjected = SearchResultProjector.AggregateAlbums(folders, query, search);
+            Assert.AreEqual(1, fullProjected.Count);
+            Assert.AreEqual("Time", fullProjected[0].ItemName, "Full projector should derive the item name from the representative folder path.");
+
+            // Check incremental projector
+            var incrementalProjector = new IncrementalAlbumAggregateProjector(query, search);
+            incrementalProjector.AddRange(folders);
+            var incrementalProjected = incrementalProjector.Snapshot();
+            Assert.AreEqual(1, incrementalProjected.Count);
+            Assert.AreEqual("Time", incrementalProjected[0].ItemName, "Incremental projector should derive the item name from the representative folder path.");
+        }
+
+        [TestMethod]
         public void AggregateAlbums_UsesSearchMetadataWithoutMaterializingFiles()
         {
             List<SongJob> ThrowIfMaterialized() => throw new AssertFailedException("AggregateAlbums should not force AlbumFolder.Files when search metadata is available.");

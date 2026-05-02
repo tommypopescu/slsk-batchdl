@@ -284,6 +284,9 @@ public static partial class SearchResultProjector
             {
                 var newJob = new AlbumJob(query);
                 newJob.Results = x.Versions;
+                var repFolder = x.Versions.FirstOrDefault()?.FolderPath;
+                if (!string.IsNullOrWhiteSpace(repFolder))
+                    newJob.ItemName = Utils.GetBaseNameSlsk(repFolder);
                 return newJob;
             })
             .ToList();

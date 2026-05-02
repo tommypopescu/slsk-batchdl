@@ -410,10 +410,14 @@ public sealed class EngineSupervisor
         if (folder == null)
             throw new ArgumentException("Requested folder was not found in this search job.");
 
+        string? itemName = searchJob.ItemName;
+        if (searchJob.DefaultAggregateAlbumProjection != null && !string.IsNullOrWhiteSpace(folder.FolderPath))
+            itemName = Utils.GetBaseNameSlsk(folder.FolderPath);
+
         var albumJob = new AlbumJob(new AlbumQuery(albumQuery))
         {
             ResolvedTarget = folder,
-            ItemName = searchJob.ItemName,
+            ItemName = itemName,
         };
 
         var settings = jobSettingsResolver.ResolveFollowUp(albumJob, request.Options);

@@ -538,7 +538,7 @@ public class DownloadEngine
                     albumList.WorkflowId = job.WorkflowId;
                     foreach (var aj in newAlbumJobs)
                     {
-                        aj.ItemName = job.ItemName;
+                        aj.ItemName ??= job.ItemName;
                         aj.Config = job.Config;
                         _contexts[aj.Id] = new JobContext
                         {

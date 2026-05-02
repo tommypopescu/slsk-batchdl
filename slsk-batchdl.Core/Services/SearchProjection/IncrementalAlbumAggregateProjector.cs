@@ -73,6 +73,9 @@ public sealed class IncrementalAlbumAggregateProjector
             {
                 var newJob = new AlbumJob(query);
                 newJob.Results = x.Versions.ToList();
+                var repFolder = x.Versions.FirstOrDefault()?.FolderPath;
+                if (!string.IsNullOrWhiteSpace(repFolder))
+                    newJob.ItemName = Utils.GetBaseNameSlsk(repFolder);
                 return newJob;
             })
             .ToList();
