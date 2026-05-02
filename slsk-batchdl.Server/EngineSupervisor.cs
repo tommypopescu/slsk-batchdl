@@ -313,11 +313,15 @@ public sealed class EngineSupervisor
                 ?? (searchJob.DefaultFileProjection is { } fileProjection
                     ? new AggregateTrackProjection(fileProjection.Query)
                     : new AggregateTrackProjection(new SongQuery { Title = searchJob.QueryText }));
+        bool includeCandidates = projection?.IncludeCandidates ?? false;
         var snapshot = searchJob.GetAggregateTracks(aggregateProjection, searchJob.Config.Search, GetCurrentEngineUserSuccessCounts());
         return new SearchResultSnapshotDto<AggregateTrackCandidateDto>(
             snapshot.Revision,
             snapshot.IsComplete,
-            snapshot.Items.Select(song => new AggregateTrackCandidateDto(ToSongQuery(song.Query), song.ItemName)).ToList());
+            snapshot.Items.Select(song => new AggregateTrackCandidateDto(
+                ToSongQuery(song.Query),
+                song.ItemName,
+                includeCandidates ? song.Candidates?.Select(ToFileCandidateDto).ToList() : null)).ToList());
     }
 
     public SearchResultSnapshotDto<AggregateAlbumCandidateDto>? GetAggregateAlbumResults(Guid jobId)

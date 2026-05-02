@@ -164,7 +164,8 @@ public sealed record FolderSearchProjectionRequestDto(
 /// Projection options for grouping search results as aggregate track candidates.
 /// </summary>
 public sealed record AggregateTrackProjectionRequestDto(
-    SongQueryDto? SongQuery = null);
+    SongQueryDto? SongQuery = null,
+    bool IncludeCandidates = false);
 
 /// <summary>
 /// Projection options for grouping search results as aggregate album candidates.

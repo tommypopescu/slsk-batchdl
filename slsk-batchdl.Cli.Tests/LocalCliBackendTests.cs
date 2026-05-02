@@ -205,6 +205,117 @@ public class LocalCliBackendTests
         }
     }
 
+    [TestMethod]
+    public async Task GetAggregateTrackResultsAsync_WithIncludeCandidates_PopulatesCandidatesPerGroup()
+    {
+        string musicRoot = Path.Combine(Path.GetTempPath(), "sldl-cli-backend-agg-track-" + Guid.NewGuid());
+        // Same filename in two different folders → same inferred (artist, title) and same hash-derived length.
+        // They end up as two candidates for the same aggregate group.
+        Directory.CreateDirectory(Path.Combine(musicRoot, "Folder1"));
+        Directory.CreateDirectory(Path.Combine(musicRoot, "Folder2"));
+        File.WriteAllText(Path.Combine(musicRoot, "Folder1", "Artist - Track One.mp3"), "a");
+        File.WriteAllText(Path.Combine(musicRoot, "Folder2", "Artist - Track One.mp3"), "b");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        try
+        {
+            var engineSettings = new EngineSettings { MockFilesDir = musicRoot, MockFilesReadTags = false };
+            var downloadSettings = new DownloadSettings
+            {
+                Output = { ParentDir = musicRoot, FailedAlbumPath = Path.Combine(musicRoot, "failed") },
+                Search = { MinSharesAggregate = 1 },
+            };
+
+            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
+            var backend = new LocalCliBackend(engine);
+
+            var searchJob = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track One" });
+            engine.Enqueue(searchJob, downloadSettings);
+            var runTask = engine.RunAsync(cts.Token);
+
+            await WaitForConditionAsync(
+                () => searchJob.State == JobState.Done,
+                "Timed out waiting for aggregate track search to complete.");
+
+            var result = await backend.GetAggregateTrackResultsAsync(
+                searchJob.Id,
+                new AggregateTrackProjectionRequestDto(IncludeCandidates: true),
+                cts.Token);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(1, result.Items.Count, "Expected one aggregate group for 'Artist - Track One'.");
+            var group = result.Items[0];
+            Assert.IsNotNull(group.Candidates, "Candidates should be populated when IncludeCandidates = true.");
+            Assert.AreEqual(2, group.Candidates!.Count, "Both file versions should be included as candidates.");
+
+            engine.CompleteEnqueue();
+            cts.Cancel();
+            await runTask;
+        }
+        finally
+        {
+            if (Directory.Exists(musicRoot))
+                Directory.Delete(musicRoot, true);
+        }
+    }
+
+    [TestMethod]
+    public async Task GetAggregateAlbumResultsAsync_WithIncludeFolders_PopulatesFoldersPerBucket()
+    {
+        string musicRoot = Path.Combine(Path.GetTempPath(), "sldl-cli-backend-agg-album-" + Guid.NewGuid());
+        // Two album folders with the same track filename → same hash-derived length →
+        // grouped into one aggregate bucket. MinSharesAggregate is set to 1 since both
+        // folders belong to the single mock "local" user.
+        Directory.CreateDirectory(Path.Combine(musicRoot, "Artist", "Album A"));
+        Directory.CreateDirectory(Path.Combine(musicRoot, "Artist", "Album B"));
+        File.WriteAllText(Path.Combine(musicRoot, "Artist", "Album A", "01. Artist - Track One.mp3"), "a");
+        File.WriteAllText(Path.Combine(musicRoot, "Artist", "Album B", "01. Artist - Track One.mp3"), "b");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        try
+        {
+            var engineSettings = new EngineSettings { MockFilesDir = musicRoot, MockFilesReadTags = false };
+            var downloadSettings = new DownloadSettings
+            {
+                Output = { ParentDir = musicRoot, FailedAlbumPath = Path.Combine(musicRoot, "failed") },
+                Search = { MinSharesAggregate = 1 },
+            };
+
+            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
+            var backend = new LocalCliBackend(engine);
+
+            var searchJob = new SearchJob(new AlbumQuery { Artist = "Artist" });
+            engine.Enqueue(searchJob, downloadSettings);
+            var runTask = engine.RunAsync(cts.Token);
+
+            await WaitForConditionAsync(
+                () => searchJob.State == JobState.Done,
+                "Timed out waiting for aggregate album search to complete.");
+
+            var result = await backend.GetAggregateAlbumResultsAsync(
+                searchJob.Id,
+                new AggregateAlbumProjectionRequestDto(IncludeFolders: true),
+                cts.Token);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(1, result.Items.Count, "Expected one aggregate bucket for the two album versions.");
+            var bucket = result.Items[0];
+            Assert.IsNotNull(bucket.Folders, "Folders should be populated when IncludeFolders = true.");
+            Assert.AreEqual(2, bucket.Folders!.Count, "Both album folder versions should appear in the bucket.");
+
+            engine.CompleteEnqueue();
+            cts.Cancel();
+            await runTask;
+        }
+        finally
+        {
+            if (Directory.Exists(musicRoot))
+                Directory.Delete(musicRoot, true);
+        }
+    }
+
     private static async Task WaitForConditionAsync(Func<bool> condition, string failureMessage)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);

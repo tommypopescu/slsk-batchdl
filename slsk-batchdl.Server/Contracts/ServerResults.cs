@@ -124,7 +124,8 @@ public sealed record AlbumFolderDto(
 /// </summary>
 public sealed record AggregateTrackCandidateDto(
     SongQueryDto Query,
-    string? ItemName);
+    string? ItemName,
+    List<FileCandidateDto>? Candidates = null);
 
 /// <summary>
 /// Aggregate album candidate produced by album-aggregate search result views.

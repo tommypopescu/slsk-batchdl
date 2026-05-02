@@ -225,11 +225,15 @@ internal sealed class LocalCliBackend
                 ?? (searchJob.DefaultFileProjection is { } fileProjection
                     ? new AggregateTrackProjection(fileProjection.Query)
                     : new AggregateTrackProjection(new SongQuery { Title = searchJob.QueryText }));
+        bool includeCandidates = request.IncludeCandidates;
         var snapshot = searchJob.GetAggregateTracks(projection, searchJob.Config.Search, engine.UserSuccessCounts);
         return Task.FromResult<SearchResultSnapshotDto<AggregateTrackCandidateDto>?>(new(
             snapshot.Revision,
             snapshot.IsComplete,
-            snapshot.Items.Select(song => new AggregateTrackCandidateDto(ToSongQueryDto(song.Query), song.ItemName)).ToList()));
+            snapshot.Items.Select(song => new AggregateTrackCandidateDto(
+                ToSongQueryDto(song.Query),
+                song.ItemName,
+                includeCandidates ? song.Candidates?.Select(ToFileCandidateDto).ToList() : null)).ToList()));
     }
 
     public Task<SearchResultSnapshotDto<AggregateAlbumCandidateDto>?> GetAggregateAlbumResultsAsync(Guid jobId, CancellationToken ct = default)
