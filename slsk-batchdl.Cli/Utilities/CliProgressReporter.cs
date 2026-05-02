@@ -596,7 +596,7 @@ public class CliProgressReporter
             return;
         }
 
-        var d = _bars.GetOrAdd(song, _ => new BarData { Bar = _cli.AlbumCompactProgress ? null : Printing.GetProgressBar() });
+        var d = _bars.GetOrAdd(song, _ => new BarData { Bar = Printing.GetProgressBar() });
         d.JobPrefix = $"[{song.DisplayId}] SongJob: ";
         d.StateLabel = "Queued";
         d.BaseText   = Printing.DisplayString(song.Query, candidate.File, candidate.Response, infoFirst: false);
@@ -621,7 +621,7 @@ public class CliProgressReporter
         if (IsBackendInlineChild(song.JobId) && !_backendBars.ContainsKey(song.JobId))
             return;
 
-        var d = _backendBars.GetOrAdd(song.JobId, _ => new BarData { Bar = _cli.AlbumCompactProgress ? null : Printing.GetProgressBar() });
+        var d = _backendBars.GetOrAdd(song.JobId, _ => new BarData { Bar = Printing.GetProgressBar() });
         d.JobPrefix = IsBackendInlineChild(song.JobId) ? null : $"[{song.DisplayId}] SongJob: ";
         d.StateLabel = "Queued";
         d.BaseText = $"{song.Candidate.Username}\\..\\{System.IO.Path.GetFileName(song.Candidate.Filename)}";

@@ -21,6 +21,28 @@ public static class Printing
     public static bool IsBuffering { get; private set; }
     private static readonly System.Collections.Concurrent.ConcurrentQueue<Action> _buffer = new();
 
+    // Highest row occupied by any progress bar — cursor must be below this before normal output.
+    private static int _barHighWaterMark = -1;
+
+    internal static void UpdateBarHighWaterMark(int y)
+    {
+        if (y > _barHighWaterMark)
+            _barHighWaterMark = y;
+    }
+
+    // Move the cursor below all bar rows so normal console output doesn't overwrite them.
+    // Must be called inside ConsoleLock.
+    private static void EnsureCursorBelowBars()
+    {
+        if (_barHighWaterMark < 0 || Console.IsOutputRedirected) return;
+        int needed = _barHighWaterMark + 1;
+        if (Console.CursorTop < needed)
+        {
+            Console.CursorTop  = needed;
+            Console.CursorLeft = 0;
+        }
+    }
+
     public static void SetBuffering(bool enable)
     {
         lock (ConsoleLock)
@@ -48,27 +70,33 @@ public static class Printing
         private string  _lastItem = "";
         private bool    _isQueued;
         private ConsoleColor _textColor;
+        private ConsoleColor _bgColor;
 
         public int     Y       => _initialized ? _y : Console.CursorTop;
-        public string? Line1   => null;
+        public string? Line1   => _lastItem;
         public int     Current => _lastCurrent;
 
         public BufferedProgressBar()
         {
             if (!IsBuffering)
-                Initialize();
+                lock (ConsoleLock) { Initialize(); }
         }
 
         private void Initialize()
         {
             _y = Console.CursorTop;
             _textColor = Console.ForegroundColor;
+            _bgColor   = Console.BackgroundColor;
             Console.WriteLine("");
+            UpdateBarHighWaterMark(_y);
             _initialized = true;
         }
 
         public void Refresh(int current, string item)
         {
+            if (current == _lastCurrent && item == _lastItem)
+                return;
+
             _lastCurrent = current;
             _lastItem    = item;
 
@@ -114,24 +142,38 @@ public static class Printing
                 int pct  = Math.Clamp(_lastCurrent, 0, 100);
                 int num2 = Math.Max(0, windowWidth - textWidth - 8); // progress bar chars (= 2)
 
-                var prevColor = Console.ForegroundColor;
+                // Save cursor so we can restore it after writing the bar (same pattern as
+                // Konsole's _Refresh — cursor stays at the natural "below all bars" position).
+                int savedTop  = Console.CursorTop;
+                int savedLeft = Console.CursorLeft;
+                var prevFg    = Console.ForegroundColor;
+                var prevBg    = Console.BackgroundColor;
                 try
                 {
-                    Console.CursorTop  = _y;
-                    Console.CursorLeft = 0;
+                    Console.CursorTop       = _y;
+                    Console.CursorLeft      = 0;
                     Console.ForegroundColor = _textColor;
+                    Console.BackgroundColor = _bgColor;
                     Console.Write(text[..cutAt]);
                     Console.Write(new string(' ', textWidth - displayW)); // pad to textWidth display cols
                     Console.Write($" ({pct,-3}%) ");                      // 8 chars
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.Write(new string(' ', num2));                  // progress bar area
-                    // Leave cursor at the start of the next row so subsequent bar
-                    // initializations record the correct y position.
-                    Console.CursorTop  = _y + 1;
-                    Console.CursorLeft = 0;
                 }
                 catch { }
-                finally { Console.ForegroundColor = prevColor; }
+                finally
+                {
+                    // Restore all console state (color + cursor) to what it was before we
+                    // jumped to _y — same pattern as Konsole's ConsoleState save/restore.
+                    try
+                    {
+                        Console.ForegroundColor = prevFg;
+                        Console.BackgroundColor = prevBg;
+                        Console.CursorTop  = savedTop;
+                        Console.CursorLeft = savedLeft;
+                    }
+                    catch { }
+                }
             }
         }
 
@@ -834,6 +876,7 @@ public static class Printing
 
         lock (ConsoleLock)
         {
+            EnsureCursorBelowBars();
             Console.ForegroundColor = color;
             Console.WriteLine(value);
             Console.ResetColor();
@@ -850,6 +893,7 @@ public static class Printing
 
         lock (ConsoleLock)
         {
+            EnsureCursorBelowBars();
             Console.ForegroundColor = color;
             Console.Write(value);
             Console.ResetColor();

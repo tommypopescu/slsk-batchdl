@@ -115,7 +115,7 @@ internal static partial class Program
         {
             lock (Printing.ConsoleLock)
             {
-                Console.WriteLine();
+                Printing.WriteLine(force: true);
                 Printing.Write("Cancel job ID or all jobs? id/[A]ll/n=Esc: ", ConsoleColor.Yellow, force: true);
             }
 
@@ -232,7 +232,7 @@ internal static partial class Program
         {
             lock (Printing.ConsoleLock)
             {
-                Console.WriteLine();
+                Printing.WriteLine(force: true);
                 Printing.Write("Cancel job ID or current workflow? id/[A]ll/n=Esc: ", ConsoleColor.Yellow, force: true);
             }
 
@@ -465,7 +465,7 @@ internal static partial class Program
                 continue;
 
             if (printedAny && !nonVerbose)
-                Console.WriteLine();
+                Printing.WriteLine();
 
             Printing.PrintResults(job, settings.PrintOption, settings.Search);
             printedAny = true;
