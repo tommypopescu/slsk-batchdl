@@ -282,11 +282,21 @@ public static partial class SearchResultProjector
             .OrderByDescending(x => x.Users.Count)
             .Select(x =>
             {
-                var newJob = new AlbumJob(query);
-                newJob.Results = x.Versions;
                 var repFolder = x.Versions.FirstOrDefault()?.FolderPath;
-                if (!string.IsNullOrWhiteSpace(repFolder))
-                    newJob.ItemName = Utils.GetBaseNameSlsk(repFolder);
+                var itemName = !string.IsNullOrWhiteSpace(repFolder)
+                    ? Utils.GetBaseNameSlsk(repFolder)
+                    : null;
+                // Populate Album so each job gets a unique index key. Without this, all
+                // aggregate album jobs share the same key (artist + empty album), causing
+                // index collisions: the last write wins and all albums on rerun match the
+                // same path.
+                var jobQuery = !string.IsNullOrWhiteSpace(itemName)
+                    ? new AlbumQuery(query) { Album = itemName }
+                    : query;
+                var newJob = new AlbumJob(jobQuery);
+                newJob.Results = x.Versions;
+                if (itemName != null)
+                    newJob.ItemName = itemName;
                 return newJob;
             })
             .ToList();

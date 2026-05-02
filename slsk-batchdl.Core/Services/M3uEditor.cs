@@ -488,12 +488,13 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
     {
         return job.State switch
         {
-            JobState.Done    => (JobState.Done,             job.FailureReason),
-            JobState.Failed  => (JobState.Failed,           job.FailureReason),
-            JobState.Skipped => job.FailureReason != FailureReason.None
-                                    ? (JobState.NotFoundLastTime, job.FailureReason)
-                                    : (JobState.AlreadyExists,    FailureReason.None),
-            _                => (JobState.Pending,          FailureReason.None),
+            JobState.Done         => (JobState.Done,          job.FailureReason),
+            JobState.Failed       => (JobState.Failed,        job.FailureReason),
+            JobState.AlreadyExists => (JobState.AlreadyExists, FailureReason.None),
+            JobState.Skipped      => job.FailureReason != FailureReason.None
+                                         ? (JobState.NotFoundLastTime, job.FailureReason)
+                                         : (JobState.AlreadyExists,    FailureReason.None),
+            _                     => (JobState.Pending,       FailureReason.None),
         };
     }
 

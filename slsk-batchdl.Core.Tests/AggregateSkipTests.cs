@@ -153,6 +153,123 @@ namespace Tests.EndToEnd
         }
 
         [TestMethod]
+        public async Task AlbumAggregateJob_MultipleAlbums_SkipsCorrectlyPerAlbumOnRerun()
+        {
+            // Regression: when an artist has multiple aggregate albums, all AlbumJobs were
+            // created with the original empty-album query, giving every album the same index key.
+            // The last album to write would overwrite the others; on rerun every album matched
+            // that single path, causing wrong skips and re-downloads.
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-test-out-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            // Two albums with different track lengths so they form distinct aggregate buckets.
+            var response = new Soulseek.SearchResponse("User1", 1, true, 100, 0,
+            [
+                TestHelpers.CreateSlFile(@"Artist\Album A\01. Artist - Song.mp3", length: 100),
+                TestHelpers.CreateSlFile(@"Artist\Album B\01. Artist - Song.mp3", length: 200),
+            ]);
+            var testClient = new ClientTests.MockSoulseekClient([response]);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var dl = new DownloadSettings();
+                dl.Extraction.Input = "artist=Artist";
+                dl.Extraction.IsAlbum = true;
+                dl.Output.ParentDir = outputDir;
+                dl.Output.WriteIndex = true;
+                dl.Output.HasConfiguredIndex = true;
+                dl.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv");
+                dl.Search.IsAggregate = true;
+                dl.Search.MinSharesAggregate = 1;
+                dl.Skip.SkipExisting = true;
+
+                // Run 1: download both albums.
+                var app1 = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app1.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                app1.CompleteEnqueue();
+                await app1.RunAsync(CancellationToken.None);
+
+                var aggJob1 = app1.Queue.AllJobs().OfType<AlbumAggregateJob>().FirstOrDefault();
+                Assert.IsNotNull(aggJob1);
+                Assert.AreEqual(2, aggJob1.Albums.Count, "Both albums should be found.");
+                Assert.IsTrue(aggJob1.Albums.All(a => a.State == JobState.Done), "Both albums should download on first run.");
+
+                // Run 2: both albums should be skipped.
+                var app2 = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app2.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                app2.CompleteEnqueue();
+                await app2.RunAsync(CancellationToken.None);
+
+                var aggJob2 = app2.Queue.AllJobs().OfType<AlbumAggregateJob>().FirstOrDefault();
+                Assert.IsNotNull(aggJob2);
+                Assert.AreEqual(2, aggJob2.Albums.Count, "Both albums should be found on second run.");
+                Assert.IsTrue(aggJob2.Albums.All(a => a.State == JobState.AlreadyExists),
+                    $"Both albums should be skipped on rerun. States: {string.Join(", ", aggJob2.Albums.Select(a => $"{a.ItemName}={a.State}"))}");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AlbumAggregateJob_SkipDoesNotCorruptIndexState()
+        {
+            // Regression: JobToIndexState had no case for AlreadyExists, so skipped albums
+            // were written as Pending (state=0) to the index. The third run would then see
+            // Pending and re-download the album instead of skipping it again.
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-test-out-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var file = TestHelpers.CreateSlFile(@"Album\01. Artist - Song.mp3", length: 180);
+            var response = new Soulseek.SearchResponse("User1", 1, true, 100, 0, [file]);
+            var testClient = new ClientTests.MockSoulseekClient([response]);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var dl = new DownloadSettings();
+                dl.Extraction.Input = "artist=Artist";
+                dl.Extraction.IsAlbum = true;
+                dl.Output.ParentDir = outputDir;
+                dl.Output.WriteIndex = true;
+                dl.Output.HasConfiguredIndex = true;
+                dl.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv");
+                dl.Search.IsAggregate = true;
+                dl.Search.MinSharesAggregate = 1;
+                dl.Skip.SkipExisting = true;
+
+                async Task RunOnce()
+                {
+                    var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                    app.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                    app.CompleteEnqueue();
+                    await app.RunAsync(CancellationToken.None);
+                }
+
+                await RunOnce(); // Run 1: download
+                await RunOnce(); // Run 2: skip — must not corrupt index state
+
+                // Run 3: must also skip (not re-download)
+                var app3 = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app3.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                app3.CompleteEnqueue();
+                await app3.RunAsync(CancellationToken.None);
+
+                var aggJob3 = app3.Queue.AllJobs().OfType<AlbumAggregateJob>().FirstOrDefault();
+                Assert.IsNotNull(aggJob3);
+                Assert.AreEqual(1, aggJob3.Albums.Count);
+                Assert.AreEqual(JobState.AlreadyExists, aggJob3.Albums[0].State,
+                    "Album skipped on run 2 must still be skipped on run 3 (index state must not be corrupted).");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task AlbumAggregateJob_SkipsExistingAlbumsOnRerun()
         {
             var outputDir = Path.Combine(Path.GetTempPath(), "slsk-test-out-" + Guid.NewGuid());
