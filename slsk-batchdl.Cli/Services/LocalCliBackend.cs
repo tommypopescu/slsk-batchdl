@@ -255,11 +255,15 @@ internal sealed class LocalCliBackend
         if (projection == null)
             throw new ArgumentException("Aggregate album projection requires an album query.");
 
+        bool includeFolders = request?.IncludeFolders ?? false;
         var snapshot = searchJob.GetAggregateAlbums(projection, searchJob.Config.Search);
         return Task.FromResult<SearchResultSnapshotDto<AggregateAlbumCandidateDto>?>(new(
             snapshot.Revision,
             snapshot.IsComplete,
-            snapshot.Items.Select(album => new AggregateAlbumCandidateDto(ToAlbumQueryDto(album.Query), album.ItemName)).ToList()));
+            snapshot.Items.Select(album => new AggregateAlbumCandidateDto(
+                ToAlbumQueryDto(album.Query),
+                album.ItemName,
+                includeFolders ? [..album.Results.Select(f => ToAlbumFolderDto(f, includeFiles: true))] : null)).ToList()));
     }
 
     public Task<JobSummaryDto?> StartRetrieveFolderAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)

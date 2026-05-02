@@ -131,7 +131,8 @@ public sealed record AggregateTrackCandidateDto(
 /// </summary>
 public sealed record AggregateAlbumCandidateDto(
     AlbumQueryDto Query,
-    string? ItemName);
+    string? ItemName,
+    List<AlbumFolderDto>? Folders = null);
 
 /// <summary>
 /// Soulseek file attribute pair.

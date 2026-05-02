@@ -338,11 +338,15 @@ public sealed class EngineSupervisor
         if (aggregateProjection == null)
             throw new ArgumentException("Aggregate album projection requires an album query.");
 
+        bool includeFolders = projection?.IncludeFolders ?? false;
         var snapshot = searchJob.GetAggregateAlbums(aggregateProjection, searchJob.Config.Search);
         return new SearchResultSnapshotDto<AggregateAlbumCandidateDto>(
             snapshot.Revision,
             snapshot.IsComplete,
-            snapshot.Items.Select(album => new AggregateAlbumCandidateDto(ToAlbumQuery(album.Query), album.ItemName)).ToList());
+            snapshot.Items.Select(album => new AggregateAlbumCandidateDto(
+                ToAlbumQuery(album.Query),
+                album.ItemName,
+                includeFolders ? album.Results.Select(f => ToAlbumFolderDto(f, includeFiles: true)).ToList() : null)).ToList());
     }
 
     public async Task<JobSummaryDto?> StartRetrieveFolderAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct)

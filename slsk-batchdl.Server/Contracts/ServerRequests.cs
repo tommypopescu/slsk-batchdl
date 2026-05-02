@@ -170,4 +170,5 @@ public sealed record AggregateTrackProjectionRequestDto(
 /// Projection options for grouping search results as aggregate album candidates.
 /// </summary>
 public sealed record AggregateAlbumProjectionRequestDto(
-    AlbumQueryDto AlbumQuery);
+    AlbumQueryDto? AlbumQuery = null,
+    bool IncludeFolders = false);

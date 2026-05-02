@@ -129,7 +129,10 @@ internal sealed class InteractiveCliCoordinator
         if (searchJob.State != JobState.Done || searchJob.DefaultAggregateAlbumProjection == null)
             return;
 
-        var aggregateResult = _backend.GetAggregateAlbumResultsAsync(searchJob.Id, _appToken).GetAwaiter().GetResult();
+        var aggregateResult = _backend.GetAggregateAlbumResultsAsync(
+            searchJob.Id,
+            new AggregateAlbumProjectionRequestDto(IncludeFolders: true),
+            _appToken).GetAwaiter().GetResult();
         if (aggregateResult == null || aggregateResult.Items.Count == 0)
             return;
 
@@ -138,12 +141,7 @@ internal sealed class InteractiveCliCoordinator
             if (_appToken.IsCancellationRequested || !_interactiveEnabled)
                 break;
 
-            var folderResult = _backend.GetFolderResultsAsync(
-                searchJob.Id,
-                new FolderSearchProjectionRequestDto(albumCandidate.Query, IncludeFiles: true),
-                _appToken).GetAwaiter().GetResult();
-
-            var folders = folderResult?.Items.Select(ToAlbumFolder).ToList() ?? [];
+            var folders = albumCandidate.Folders?.Select(ToAlbumFolder).ToList() ?? [];
             if (folders.Count == 0)
                 continue;
 
