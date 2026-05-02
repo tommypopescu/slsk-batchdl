@@ -219,5 +219,35 @@ namespace Tests.Index
 
             Assert.IsFalse(editor2.TryGetFailureReason(lookupSongs[1], out _));
         }
+
+        [TestMethod]
+        public void Index_DoesNotIncludeNonAudioFiles()
+        {
+            var queue = new JobList("Test Queue");
+            var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+            
+            var audioSong = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" });
+            audioSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(1, "Track.mp3", 100, ".mp3"));
+            audioSong.UpdateState(JobState.Done);
+            audioSong.DownloadPath = "Artist/Album/Track.mp3";
+
+            var imageSong = new SongJob(new SongQuery());
+            imageSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(2, "Cover.jpg", 100, ".jpg"));
+            imageSong.UpdateState(JobState.Done);
+            imageSong.DownloadPath = "Artist/Album/Cover.jpg";
+
+            var folder = new AlbumFolder("user", "Artist\\Album", [audioSong, imageSong]);
+            album.ResolvedTarget = folder;
+            album.UpdateState(JobState.Done);
+            queue.Add(album);
+
+            File.WriteAllText(testM3uPath, "");
+            var editor = new M3uEditor(testM3uPath, queue, M3uOption.Index, true);
+            editor.Update();
+
+            var lines = File.ReadAllLines(testM3uPath);
+            Assert.IsFalse(lines.Any(l => l.Contains("Cover.jpg")), "Index should not contain non-audio files.");
+            Assert.IsTrue(lines.Any(l => l.Contains("Track.mp3")), "Index should contain the audio file.");
+        }
     }
 }

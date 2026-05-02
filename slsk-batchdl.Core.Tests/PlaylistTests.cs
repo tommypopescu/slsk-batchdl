@@ -88,5 +88,34 @@ namespace Tests.Playlist
             Assert.AreEqual(1, lines.Length);
             Assert.AreEqual("Artist/Title (Remix).mp3", lines[0].Replace('\\', '/'));
         }
+
+        [TestMethod]
+        public void Playlist_DoesNotIncludeNonAudioFiles()
+        {
+            var queue = new JobList("Test Queue");
+            var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+            
+            var audioSong = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" });
+            audioSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(1, "Track.mp3", 100, ".mp3"));
+            audioSong.UpdateState(JobState.Done);
+            audioSong.DownloadPath = "Artist/Album/Track.mp3";
+
+            var imageSong = new SongJob(new SongQuery());
+            imageSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(2, "Cover.jpg", 100, ".jpg"));
+            imageSong.UpdateState(JobState.Done);
+            imageSong.DownloadPath = "Artist/Album/Cover.jpg";
+
+            var folder = new AlbumFolder("user", "Artist\\Album", [audioSong, imageSong]);
+            album.ResolvedTarget = folder;
+            album.UpdateState(JobState.Done);
+            queue.Add(album);
+
+            var editor = new M3uEditor(testM3uPath, queue, M3uOption.Playlist, false);
+            editor.Update();
+
+            var lines = File.ReadAllLines(testM3uPath);
+            Assert.AreEqual(1, lines.Length, "Playlist should only contain the audio file.");
+            Assert.IsTrue(lines[0].EndsWith("Track.mp3"));
+        }
     }
 }

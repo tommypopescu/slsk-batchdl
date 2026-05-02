@@ -68,7 +68,9 @@ namespace Tests.ClientTests
                         {
                             // Generate deterministic length from filename
                             var filename = Path.GetFileName(path);
-                            var length = Math.Abs(filename.GetHashCode() % 1000) + 1; // 1-1000 seconds
+                            int hash = 0;
+                            foreach (char c in filename) hash = (hash * 31) + c;
+                            var length = Math.Abs(hash % 1000) + 1; // 1-1000 seconds
                             attributes.Add(new Soulseek.FileAttribute(FileAttributeType.Length, length));
                         }
                     }
