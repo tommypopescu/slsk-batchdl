@@ -53,7 +53,7 @@ public class Downloader
                     }
 
                     song.DownloadPath = outputPath;
-                    song.State        = JobState.Done;
+                    song.UpdateState(JobState.Done);
                     return;
                 }
                 else
@@ -143,7 +143,7 @@ public class Downloader
 
         song.ChosenCandidate = candidate;
         song.DownloadPath    = outputPath;
-        song.State           = JobState.Done;
+        song.UpdateState(JobState.Done);
     }
 
     static string GetStateLabel(TransferStates s)

@@ -295,24 +295,24 @@ namespace Tests.FileManagerTests
                 ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 0, false, 0, 0, null),
                                                    new Soulseek.File(0, @"Artist1\Album1\01. Track1.mp3", 0, "mp3")),
                 DownloadPath = audio1Base,
-                State = JobState.Done,
             };
+            file1.UpdateState(JobState.Done);
 
             var file2 = new SongJob(new SongQuery { Artist = "Artist1", Album = "Album1", Title = "Track2" })
             {
                 ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 0, false, 0, 0, null),
                                                    new Soulseek.File(0, @"Artist1\Album1\02. Track2.mp3", 0, "mp3")),
                 DownloadPath = audio2Base,
-                State = JobState.Done,
             };
+            file2.UpdateState(JobState.Done);
 
             var coverFile = new SongJob(new SongQuery())
             {
                 ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 0, false, 0, 0, null),
                                                    new Soulseek.File(0, @"Artist1\Album1\Cover.jpg", 0, "jpg")),
                 DownloadPath = coverBase,
-                State = JobState.Done,
             };
+            coverFile.UpdateState(JobState.Done);
 
             var allFiles = new List<SongJob> { file1, file2, coverFile };
 

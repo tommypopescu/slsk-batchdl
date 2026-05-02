@@ -217,6 +217,8 @@ namespace Tests.Eventing
             };
 
             song.Discovery = new DiscoverySummary { ResultCount = 5, LockedFileCount = 2 };
+            song.UpdateState(JobState.Downloading);
+
             var raiseMethod = typeof(EngineEvents).GetMethod("RaiseJobStateChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             raiseMethod?.Invoke(events, [song, JobState.Downloading]);
 
@@ -238,11 +240,119 @@ namespace Tests.Eventing
             events.JobStateChanged += (j, s) => sub2SawIt = j.Discovery != null;
 
             song.Discovery = new DiscoverySummary { ResultCount = 1 };
+            song.UpdateState(JobState.Downloading);
+
             var raiseMethod = typeof(EngineEvents).GetMethod("RaiseJobStateChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             raiseMethod?.Invoke(events, [song, JobState.Downloading]);
 
             Assert.IsTrue(sub1SawIt, "First subscriber should see metadata");
             Assert.IsTrue(sub2SawIt, "Second subscriber should see metadata (not consumed)");
+        }
+
+        [TestMethod]
+        public async Task EngineEvents_JobStateChanged_ToFailed_ExtractJob_HasFailureReasonPopulated()
+        {
+            var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+            var downloadSettings = new DownloadSettings();
+            
+            // Pointing to a non-existent file will cause ListExtractor to throw FileNotFoundException
+            var extractJob = new ExtractJob("invalid-input-that-throws.txt", InputType.List); 
+            var client = new ClientTests.MockSoulseekClient([]);
+            var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+            var engine = new DownloadEngine(engineSettings, clientManager);
+
+            FailureReason capturedReason = FailureReason.None;
+            bool failedFired = false;
+
+            engine.Events.JobStateChanged += (job, state) =>
+            {
+                if (ReferenceEquals(job, extractJob) && state == JobState.Failed)
+                {
+                    failedFired = true;
+                    capturedReason = job.FailureReason;
+                }
+            };
+
+            engine.Enqueue(extractJob, downloadSettings);
+            engine.CompleteEnqueue();
+
+            await engine.RunAsync(CancellationToken.None);
+
+            Assert.IsTrue(failedFired, "JobStateChanged should fire with JobState.Failed.");
+            Assert.AreEqual(FailureReason.ExtractionFailed, capturedReason, 
+                "FailureReason must be populated BEFORE the JobStateChanged event is fired for ExtractJobs.");
+        }
+
+        [TestMethod]
+        public async Task EngineEvents_JobStateChanged_ToFailed_NotFound_HasFailureReasonPopulated()
+        {
+            var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+            var downloadSettings = new DownloadSettings();
+            
+            var songJob = new SongJob(new SongQuery { Artist = "Nonexistent", Title = "Track" });
+            var client = new ClientTests.MockSoulseekClient([]);
+            var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+            var engine = new DownloadEngine(engineSettings, clientManager);
+
+            FailureReason capturedReason = FailureReason.None;
+            bool failedFired = false;
+
+            engine.Events.JobStateChanged += (job, state) =>
+            {
+                if (ReferenceEquals(job, songJob) && state == JobState.Failed)
+                {
+                    failedFired = true;
+                    capturedReason = job.FailureReason;
+                }
+            };
+
+            engine.Enqueue(songJob, downloadSettings);
+            engine.CompleteEnqueue();
+
+            await engine.RunAsync(CancellationToken.None);
+
+            Assert.IsTrue(failedFired, "JobStateChanged should fire with JobState.Failed.");
+            Assert.AreEqual(FailureReason.NoSuitableFileFound, capturedReason, 
+                "FailureReason must be populated BEFORE the JobStateChanged event is fired for not found items.");
+        }
+
+        [TestMethod]
+        public async Task EngineEvents_JobStateChanged_ToFailed_Download_HasFailureReasonPopulated()
+        {
+            var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+            var downloadSettings = new DownloadSettings();
+            downloadSettings.Transfer.MaxRetriesPerTrack = 0; // Fail quickly
+            
+            var songJob = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" });
+            
+            // Give it a candidate but make the mock client fail the download
+            var file = TestHelpers.CreateSlFile(@"Music\Artist\Track.mp3", length: 180);
+            var response = new Soulseek.SearchResponse("failuser", 1, true, 100, 0, [file]);
+            
+            var client = new ClientTests.MockSoulseekClient([response], failingUsers: ["failuser"]);
+            var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+            var engine = new DownloadEngine(engineSettings, clientManager);
+
+            FailureReason capturedReason = FailureReason.None;
+            bool failedFired = false;
+
+            engine.Events.JobStateChanged += (job, state) =>
+            {
+                if (ReferenceEquals(job, songJob) && state == JobState.Failed)
+                {
+                    failedFired = true;
+                    capturedReason = job.FailureReason;
+                }
+            };
+
+            engine.Enqueue(songJob, downloadSettings);
+            engine.CompleteEnqueue();
+
+            await engine.RunAsync(CancellationToken.None);
+
+            Assert.IsTrue(failedFired, "JobStateChanged should fire with JobState.Failed.");
+            Assert.AreEqual(FailureReason.AllDownloadsFailed, capturedReason, 
+                "FailureReason must be populated BEFORE the JobStateChanged event is fired for download failures.");
         }
     }
 }

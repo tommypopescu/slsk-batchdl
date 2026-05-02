@@ -111,7 +111,7 @@ public class CliProgressReporter
             else if (state == JobState.Done)
                 ReportAlbumDownloadCompleted(albumJob);
             else if (state == JobState.Failed)
-                ReportJobStatus(albumJob, "failed");
+                ReportJobStatus(albumJob, TerminalStatusLabel(state, albumJob.FailureReason));
         }
         else if (job is ExtractJob extractJob)
         {
@@ -120,7 +120,11 @@ public class CliProgressReporter
             else if (state == JobState.Done && extractJob.Result != null)
                 ReportExtractionCompleted(extractJob, extractJob.Result);
             else if (state == JobState.Failed)
-                ReportJobStatus(extractJob, "extraction failed");
+            {
+                if (extractJob.FailureMessage != null)
+                    ReportExtractionFailed(extractJob, extractJob.FailureMessage);
+                ReportJobStatus(extractJob, TerminalStatusLabel(state, extractJob.FailureReason, "extraction failed"));
+            }
         }
         else
         {
@@ -128,6 +132,8 @@ public class CliProgressReporter
                 ReportJobSearching(job);
             else if (state == JobState.Downloading)
                 ReportJobDownloading(job);
+            else if (state == JobState.Failed)
+                ReportJobStatus(job, TerminalStatusLabel(state, job.FailureReason));
         }
     }
 
@@ -192,6 +198,11 @@ public class CliProgressReporter
     private void ReportJobUpserted(JobSummaryDto summary)
     {
         RememberBackendStructure(summary);
+
+        if (summary.State == ServerProtocol.JobStates.Failed && summary.Kind != ServerJobKind.Song && summary.Kind != ServerJobKind.Extract)
+        {
+            ReportJobStatus(new JobStatusEventDto(summary, TerminalStatusLabel(summary.State, summary.FailureReason)));
+        }
 
         if (PlainMode)
             return;
@@ -524,7 +535,8 @@ public class CliProgressReporter
             return "Succeeded";
 
         var reason = FailureReasonLabel(song.FailureReason);
-        return reason.Length > 0 ? $"Failed [{reason}]" : "Failed";
+        if (reason.Length == 0) reason = "Unknown error";
+        return $"Failed[{reason}]";
     }
 
     private static string SongDisplay(SongStateChangedEventDto song)
@@ -547,11 +559,24 @@ public class CliProgressReporter
     }
 
     private static string TerminalLabel(SongStateChangedEventDto song)
-        => song.State is ServerProtocol.JobStates.Done or ServerProtocol.JobStates.AlreadyExists
-            ? "Succeeded"
-            : song.FailureReason != null
-                ? $"Failed [{FailureReasonLabel(song.FailureReason)}]"
-                : "Failed";
+    {
+        if (song.State is ServerProtocol.JobStates.Done or ServerProtocol.JobStates.AlreadyExists)
+            return "Succeeded";
+
+        var reason = FailureReasonLabel(song.FailureReason);
+        if (reason.Length == 0) reason = "Unknown error";
+        return $"Failed [{reason}]";
+    }
+
+    private static string TerminalStatusLabel(JobState state, FailureReason reason, string fallbackStatus = "failed")
+    {
+        if (state is JobState.Done or JobState.AlreadyExists)
+            return "succeeded";
+
+        var reasonLabel = FailureReasonLabel(reason);
+        if (reasonLabel.Length == 0) reasonLabel = "Unknown error";
+        return $"{fallbackStatus}[{reasonLabel}]";
+    }
 
     private static string TerminalStatusLabel(SongJob song)
     {
@@ -559,15 +584,23 @@ public class CliProgressReporter
             return "succeeded";
 
         var reason = FailureReasonLabel(song.FailureReason);
+        if (reason.Length == 0 && song.State is JobState.Failed or JobState.Skipped or JobState.NotFoundLastTime)
+            reason = "Unknown error";
+
         var discovery = song.Discovery != null && song.Discovery.LockedFileCount > 0 
             ? $" (Found {song.Discovery.LockedFileCount} locked files)" 
             : "";
         return reason.Length > 0 ? $"failed [{reason}]{discovery}" : $"failed{discovery}";
     }
-    private static string TerminalStatusLabel(ServerJobState state, ServerFailureReason? reason)
+
+    private static string TerminalStatusLabel(ServerJobState state, ServerFailureReason? reason, string fallbackStatus = "failed")
     {
+        if (state is ServerJobState.Done or ServerJobState.AlreadyExists)
+            return "succeeded";
+
         var reasonLabel = FailureReasonLabel(reason);
-        return reasonLabel.Length > 0 ? $"failed [{reasonLabel}]" : "failed";
+        if (reasonLabel.Length == 0) reasonLabel = "Unknown error";
+        return $"{fallbackStatus} [{reasonLabel}]";
     }
 
     private static string TerminalStatusLabel(SongStateChangedEventDto song)
@@ -576,6 +609,9 @@ public class CliProgressReporter
             return "succeeded";
 
         var reason = FailureReasonLabel(song.FailureReason);
+        if (reason.Length == 0 && song.State is ServerProtocol.JobStates.Failed or ServerProtocol.JobStates.Skipped or ServerProtocol.JobStates.NotFoundLastTime)
+            reason = "Unknown error";
+
         var discovery = song.DiscoveryLockedFileCount > 0 
             ? $" (Found {song.DiscoveryLockedFileCount} locked files)" 
             : "";
@@ -668,7 +704,9 @@ public class CliProgressReporter
             else
             {
                 var reason = FailureReasonLabel(song.FailureReason);
-                if (reason.Length > 0) d.BaseText += $" [{reason}]";
+                if (reason.Length == 0) reason = "Unknown error";
+                if (!d.BaseText.Contains($"[{reason}]"))
+                    d.BaseText += $"[{reason}]";
             }
             if (d.Bar != null)
             {
@@ -706,8 +744,13 @@ public class CliProgressReporter
             d.StateLabel = succeeded ? "Succeeded" : "Failed";
             if (succeeded)
                 d.Pct = 100;
-            else if (song.FailureReason != null)
-                d.BaseText += $" [{FailureReasonLabel(song.FailureReason)}]";
+            else
+            {
+                var reason = FailureReasonLabel(song.FailureReason);
+                if (reason.Length == 0) reason = "Unknown error";
+                if (!d.BaseText.Contains($"[{reason}]"))
+                    d.BaseText += $" [{reason}]";
+            }
             MarkBackendAlbumTrackCompleted(song.JobId);
             if (d.Bar != null)
             {
@@ -1118,7 +1161,8 @@ public class CliProgressReporter
                 var reason = FailureReasonLabel(summary.FailureReason) is { Length: > 0 } summaryReason
                     ? summaryReason
                     : FailureReasonLabel(song.FailureReason);
-                if (reason.Length > 0 && !data.BaseText.Contains($"[{reason}]", StringComparison.Ordinal))
+                if (reason.Length == 0) reason = "Unknown error";
+                if (!data.BaseText.Contains($"[{reason}]", StringComparison.Ordinal))
                     data.BaseText += $" [{reason}]";
             }
 
@@ -1403,10 +1447,22 @@ public class CliProgressReporter
         };
 
         if (dto.State != null && Enum.TryParse<JobState>(dto.State.Value.ToString(), out var state))
-            job.State = state;
-        if (dto.FailureReason != null && Enum.TryParse<FailureReason>(dto.FailureReason.Value.ToString(), out var failureReason))
-            job.FailureReason = failureReason;
-        job.FailureMessage = dto.FailureMessage;
+        {
+            if (state == JobState.Failed)
+            {
+                Enum.TryParse<FailureReason>(dto.FailureReason?.ToString(), out var failureReason);
+                job.Fail(failureReason, dto.FailureMessage);
+            }
+            else if (state is JobState.Skipped or JobState.AlreadyExists or JobState.NotFoundLastTime)
+            {
+                Enum.TryParse<FailureReason>(dto.FailureReason?.ToString(), out var failureReason);
+                job.SetSkipped(state, failureReason);
+            }
+            else
+            {
+                job.UpdateState(state);
+            }
+        }
         job.DownloadPath = dto.DownloadPath;
 
         return job;

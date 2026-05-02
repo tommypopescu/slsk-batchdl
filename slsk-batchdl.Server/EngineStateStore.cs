@@ -180,9 +180,7 @@ public sealed class EngineStateStore
         {
             foreach (var job in jobs.Values.Where(IsActiveJob))
             {
-                job.State = JobState.Failed;
-                job.FailureReason = FailureReason.Other;
-                job.FailureMessage = "Infrastructure failure: " + reason;
+                job.Fail(FailureReason.Other, "Infrastructure failure: " + reason);
                 infrastructureFailedJobs.Add(job.Id);
                 UpdateJobRecord(job);
             }

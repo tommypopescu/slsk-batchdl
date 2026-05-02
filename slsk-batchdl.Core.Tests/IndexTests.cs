@@ -80,10 +80,9 @@ namespace Tests.Index
                 new SongJob(new SongQuery { Artist = "Artist2", Title = "Title2" }),
                 new SongJob(new SongQuery { Artist = "Artist3", Title = "Title3" }),
             };
-            songs[0].State = JobState.Done;
+            songs[0].UpdateState(JobState.Done);
             songs[0].DownloadPath = "path/to/file1";
-            songs[1].State = JobState.Failed;
-            songs[1].FailureReason = FailureReason.NoSuitableFileFound;
+            songs[1].Fail(FailureReason.NoSuitableFileFound);
             // songs[2] stays Pending
 
             var (queue, _, _) = MakeSongQueue(songs);
@@ -131,11 +130,10 @@ namespace Tests.Index
             var editor = new M3uEditor(testM3uPath, queue, M3uOption.Index, true);
 
             // Update album states
-            albumJobs[0].State = JobState.Done;
+            albumJobs[0].UpdateState(JobState.Done);
             albumJobs[0].DownloadPath = "download/path";
-            albumJobs[1].State = JobState.Failed;
-            albumJobs[1].FailureReason = FailureReason.NoSuitableFileFound;
-            albumJobs[2].State = JobState.Skipped;
+            albumJobs[1].Fail(FailureReason.NoSuitableFileFound);
+            albumJobs[2].SetSkipped(JobState.Skipped);
 
             editor.Update();
 
@@ -169,10 +167,9 @@ namespace Tests.Index
                 new SongJob(new SongQuery { Artist = "Artist, with commas", Title = "Title \"with\" quotes" }),
                 new SongJob(new SongQuery { Artist = "Artist; semi", Title = "Title; semi" }),
             };
-            songs[0].State = JobState.Done;
+            songs[0].UpdateState(JobState.Done);
             songs[0].DownloadPath = "path/file.mp3";
-            songs[1].State = JobState.Failed;
-            songs[1].FailureReason = FailureReason.AllDownloadsFailed;
+            songs[1].Fail(FailureReason.AllDownloadsFailed);
 
             var (queue, _, _) = MakeSongQueue(songs);
             File.WriteAllText(testM3uPath, "");
@@ -203,9 +200,8 @@ namespace Tests.Index
                 new SongJob(new SongQuery { Artist = "A1", Title = "T1" }),
                 new SongJob(new SongQuery { Artist = "A2", Title = "T2" }),
             };
-            songs[0].State = JobState.Failed;
-            songs[0].FailureReason = FailureReason.NoSuitableFileFound;
-            songs[1].State = JobState.Done;
+            songs[0].Fail(FailureReason.NoSuitableFileFound);
+            songs[1].UpdateState(JobState.Done);
             songs[1].DownloadPath = "p";
 
             var (queue, _, _) = MakeSongQueue(songs);

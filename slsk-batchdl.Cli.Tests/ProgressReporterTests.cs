@@ -78,9 +78,9 @@ public class CliProgressReporterTests
             var candidate = new FileCandidate(response, file);
             var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Song" })
             {
-                State = JobState.Done,
                 ResolvedTarget = candidate,
             };
+            song.UpdateState(JobState.Done);
 
             InvokePrivate(reporter, "ReportDownloadStart", song, candidate);
             InvokePrivate(reporter, "ReportStateChanged", song);
@@ -107,9 +107,8 @@ public class CliProgressReporterTests
             var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Song" })
             {
                 ResolvedTarget = candidate,
-                State = JobState.Failed,
-                FailureReason = FailureReason.Cancelled,
             };
+            song.Fail(FailureReason.Cancelled);
 
             InvokePrivate(reporter, "ReportDownloadStart", song, candidate);
             var barData = GetBarData(reporter, song);
@@ -138,8 +137,8 @@ public class CliProgressReporterTests
             var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Song" })
             {
                 ResolvedTarget = candidate,
-                State = JobState.Done,
             };
+            song.UpdateState(JobState.Done);
 
             InvokePrivate(reporter, "ReportDownloadStart", song, candidate);
             var barData = GetBarData(reporter, song);

@@ -319,7 +319,12 @@ public static class OnCompleteExecutor
                     if (song.State != newState)
                     {
                         Logger.Info($"Updating song {song} state from {song.State} to {newState} based on stdout.");
-                        song.State = newState;
+                        if (newState == JobState.Failed)
+                            song.Fail(FailureReason.Other, "Failed via on-complete stdout");
+                        else if (newState is JobState.Skipped or JobState.AlreadyExists or JobState.NotFoundLastTime)
+                            song.SetSkipped(newState);
+                        else
+                            song.UpdateState(newState);
                         needsUpdate = true;
                     }
 

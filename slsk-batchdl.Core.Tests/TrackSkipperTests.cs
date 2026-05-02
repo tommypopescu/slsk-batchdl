@@ -98,7 +98,7 @@ namespace Tests.TrackSkipperTests
         public void IndexSkipper_DownloadedTrack_ReturnsTrue()
         {
             var original = new SongJob(new SongQuery { Artist = "Artist1", Title = "Title1" });
-            original.State = JobState.Done;
+            original.UpdateState(JobState.Done);
             original.DownloadPath = "fake/path/file.mp3";
             var editor = CreateEditorWithSong(original);
 
@@ -114,8 +114,7 @@ namespace Tests.TrackSkipperTests
         public void IndexSkipper_FailedTrack_ReturnsFalse()
         {
             var original = new SongJob(new SongQuery { Artist = "Artist2", Title = "Title2" });
-            original.State = JobState.Failed;
-            original.FailureReason = FailureReason.NoSuitableFileFound;
+            original.Fail(FailureReason.NoSuitableFileFound);
             var editor = CreateEditorWithSong(original);
 
             var skipper = new IndexSkipper();

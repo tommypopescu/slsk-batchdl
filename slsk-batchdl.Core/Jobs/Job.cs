@@ -45,7 +45,7 @@ namespace Sldl.Core.Jobs;
         public JobState State
         {
             get => _state;
-            set { if (_state != value) { _state = value; OnPropertyChanged(); } }
+            private set { if (_state != value) { _state = value; OnPropertyChanged(); } }
         }
 
         // Extractor hints — set by extractors, consumed by JobPreparer when preparing this job's
@@ -71,11 +71,34 @@ namespace Sldl.Core.Jobs;
         public FailureReason FailureReason
         {
             get => _failureReason;
-            set { if (_failureReason != value) { _failureReason = value; OnPropertyChanged(); } }
+            private set { if (_failureReason != value) { _failureReason = value; OnPropertyChanged(); } }
         }
 
         // Optional human-readable explanation for the failure (complements FailureReason).
-        public string? FailureMessage { get; set; }
+        public string? FailureMessage { get; private set; }
+
+        public void Fail(FailureReason reason, string? message = null)
+        {
+            FailureMessage = message;
+            FailureReason = reason;
+            State = JobState.Failed;
+        }
+
+        public void UpdateState(JobState state)
+        {
+            if (state == JobState.Failed)
+                throw new InvalidOperationException("Use Fail() to transition to Failed state.");
+            State = state;
+        }
+
+        public void SetSkipped(JobState skipState, FailureReason reason = FailureReason.None)
+        {
+            if (skipState != JobState.Skipped && skipState != JobState.AlreadyExists && skipState != JobState.NotFoundLastTime)
+                throw new ArgumentException("skipState must be a skipped state type.", nameof(skipState));
+            
+            FailureReason = reason;
+            State = skipState;
+        }
 
         // Subclasses declare their default; callers can override with CanBeSkippedOverride.
         protected abstract bool DefaultCanBeSkipped { get; }

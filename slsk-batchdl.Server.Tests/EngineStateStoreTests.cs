@@ -16,10 +16,10 @@ public class EngineStateStoreTests
         var store = new EngineStateStore();
         var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" })
         {
-            State = JobState.Downloading,
             BytesTransferred = 25,
             FileSize = 100,
         };
+        song.UpdateState(JobState.Downloading);
 
         Register(store, song);
 
@@ -35,9 +35,12 @@ public class EngineStateStoreTests
     {
         var store = new EngineStateStore();
         var aggregate = new AggregateJob(new SongQuery { Artist = "Artist" });
-        aggregate.Songs.Add(new SongJob(new SongQuery { Title = "One" }) { State = JobState.Done });
-        aggregate.Songs.Add(new SongJob(new SongQuery { Title = "Two" }) { State = JobState.Failed });
-        aggregate.Songs.Add(new SongJob(new SongQuery { Title = "Three" }) { State = JobState.Downloading });
+        var s1 = new SongJob(new SongQuery { Title = "One" }); s1.UpdateState(JobState.Done);
+        var s2 = new SongJob(new SongQuery { Title = "Two" }); s2.Fail(FailureReason.Other);
+        var s3 = new SongJob(new SongQuery { Title = "Three" }); s3.UpdateState(JobState.Downloading);
+        aggregate.Songs.Add(s1);
+        aggregate.Songs.Add(s2);
+        aggregate.Songs.Add(s3);
 
         Register(store, aggregate);
 
@@ -54,9 +57,12 @@ public class EngineStateStoreTests
     {
         var store = new EngineStateStore();
         var list = new JobList("batch");
-        list.Add(new SongJob(new SongQuery { Title = "One" }) { State = JobState.Done });
-        list.Add(new SongJob(new SongQuery { Title = "Two" }) { State = JobState.Failed });
-        list.Add(new SongJob(new SongQuery { Title = "Three" }) { State = JobState.Searching });
+        var j1 = new SongJob(new SongQuery { Title = "One" }); j1.UpdateState(JobState.Done);
+        var j2 = new SongJob(new SongQuery { Title = "Two" }); j2.Fail(FailureReason.Other);
+        var j3 = new SongJob(new SongQuery { Title = "Three" }); j3.UpdateState(JobState.Searching);
+        list.Add(j1);
+        list.Add(j2);
+        list.Add(j3);
 
         Register(store, list);
 

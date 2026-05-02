@@ -775,11 +775,23 @@ internal static partial class Program
 
     private static void ApplyJobOutcome(Job job, ServerJobState? state, ServerFailureReason? failureReason, string? failureMessage)
     {
-        if (TryToCoreJobState(state, out var parsedState))
-            job.State = parsedState;
-        if (TryToCoreFailureReason(failureReason, out var parsedFailureReason))
-            job.FailureReason = parsedFailureReason;
-        job.FailureMessage = failureMessage;
+        if (!TryToCoreJobState(state, out var parsedState))
+            return;
+
+        TryToCoreFailureReason(failureReason, out var parsedFailureReason);
+
+        if (parsedState == JobState.Failed)
+        {
+            job.Fail(parsedFailureReason, failureMessage);
+        }
+        else if (parsedState is JobState.Skipped or JobState.AlreadyExists or JobState.NotFoundLastTime)
+        {
+            job.SetSkipped(parsedState, parsedFailureReason);
+        }
+        else
+        {
+            job.UpdateState(parsedState);
+        }
     }
 
     private static bool TryToCoreJobState(ServerJobState? state, out JobState coreState)

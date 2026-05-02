@@ -131,7 +131,8 @@ public sealed class ServerProgressLogReporter
             return "Succeeded";
 
         string reason = FailureReasonLabel(job.FailureReason);
-        return reason.Length > 0 ? $"Failed [{reason}]" : "Failed";
+        if (reason.Length == 0) reason = "Unknown error";
+        return $"Failed [{reason}]";
     }
 
     private static string FailureReasonLabel(FailureReason reason)

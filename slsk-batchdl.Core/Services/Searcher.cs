@@ -43,7 +43,7 @@ public partial class Searcher
     public async Task Search(SearchJob job, SearchSettings search, ResponseData responseData, CancellationToken ct, Action? onSearch = null)
     {
         var session = job.Session;
-        job.State = JobState.Searching;
+        job.UpdateState(JobState.Searching);
 
         try
         {
@@ -61,19 +61,16 @@ public partial class Searcher
             finally { concurrencySemaphore.Release(); }
 
             responseData.lockedFilesCount += session.LockedFileCount;
-            job.State = JobState.Done;
+            job.UpdateState(JobState.Done);
         }
         catch (OperationCanceledException)
         {
-            job.State = JobState.Failed;
-            job.FailureReason = FailureReason.Cancelled;
+            job.Fail(FailureReason.Cancelled);
             throw;
         }
         catch (Exception e)
         {
-            job.State = JobState.Failed;
-            job.FailureReason = FailureReason.Other;
-            job.FailureMessage = e.Message;
+            job.Fail(FailureReason.Other, e.Message);
             throw;
         }
         finally
@@ -122,7 +119,7 @@ public partial class Searcher
                 responseFilter: r => r.UploadSpeed > 0 && nec.BannedUsersSatisfies(r),
                 fileFilter: f => nec.FileSatisfies(f, song.Query, null));
 
-        song.State = JobState.Searching;
+        song.UpdateState(JobState.Searching);
         await concurrencySemaphore.WaitAsync(ct);
         try { await RunSearches(song.Query, session.Results, getOpts, responseHandler, search, ct, onSearch); }
         finally { concurrencySemaphore.Release(); }
@@ -156,7 +153,7 @@ public partial class Searcher
     public async Task SearchAlbum(AlbumJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
     {
         var searchJob = new SearchJob(job.Query);
-        job.State = JobState.Searching;
+        job.UpdateState(JobState.Searching);
         await Search(searchJob, search, responseData, ct);
         job.Results = searchJob.GetAlbumFolders(search).Items.ToList();
     }
@@ -177,7 +174,7 @@ public partial class Searcher
                 responseFilter: r => r.UploadSpeed > 0 && nec.BannedUsersSatisfies(r),
                 fileFilter: f => nec.FileSatisfies(f, job.Query, null));
 
-        job.State = JobState.Searching;
+        job.UpdateState(JobState.Searching);
         await concurrencySemaphore.WaitAsync(ct);
         try { await RunSearches(job.Query, session.Results, getOpts, session.AddResponse, search, ct); }
         finally { concurrencySemaphore.Release(); }
@@ -189,7 +186,7 @@ public partial class Searcher
     // Returns new AlbumJobs (one per distinct album version found on the network).
     public async Task<List<AlbumJob>> SearchAggregateAlbum(AlbumAggregateJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
     {
-        job.State = JobState.Searching;
+        job.UpdateState(JobState.Searching);
         var tempJob = new AlbumJob(job.Query);
         await SearchAlbum(tempJob, search, responseData, ct);
         return SearchResultProjector.AggregateAlbums(tempJob.Results, job.Query, search);
