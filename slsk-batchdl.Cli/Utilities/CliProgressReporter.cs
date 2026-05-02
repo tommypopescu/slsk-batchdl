@@ -132,6 +132,8 @@ public class CliProgressReporter
                 ReportJobSearching(job);
             else if (state == JobState.Downloading)
                 ReportJobDownloading(job);
+            else if (state is JobState.Done or JobState.AlreadyExists)
+                ReportJobStatus(job, "done");
             else if (state == JobState.Failed)
                 ReportJobStatus(job, TerminalStatusLabel(state, job.FailureReason));
         }

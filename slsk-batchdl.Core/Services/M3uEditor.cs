@@ -24,8 +24,9 @@ public class IndexEntry
         $"{Artist.ToLower()}\n{Album.ToLower()}\n{Title.ToLower()}\n{Length}";
 }
 
-
-public class M3uEditor // todo: separate into M3uEditor and IndexEditor
+// TODO: This class does two completely different jobs with different file formats.
+// The index file is no longer in M3U format. Separate into PlaylistEditor and IndexEditor.
+public class M3uEditor
 {
     public string path { get; private set; } = null!;
     public M3uOption option = M3uOption.Index;

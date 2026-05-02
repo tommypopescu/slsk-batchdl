@@ -321,16 +321,34 @@ internal static partial class Program
         if (batch.IsNormal && batch.PendingCount == 1 && batch.ExistingCount + batch.NotFoundCount == 0)
             return;
 
-        string notFoundLastTime = batch.NotFoundCount > 0 ? $"{batch.NotFoundCount} not found" : "";
-        string alreadyExist = batch.ExistingCount > 0 ? $"{batch.ExistingCount} already exist" : "";
-        notFoundLastTime = alreadyExist.Length > 0 && notFoundLastTime.Length > 0 ? ", " + notFoundLastTime : notFoundLastTime;
-        string skippedTracks = alreadyExist.Length + notFoundLastTime.Length > 0 ? $" ({alreadyExist}{notFoundLastTime})" : "";
-        bool allSkipped = batch.ExistingCount + batch.NotFoundCount > batch.PendingCount;
-        Logger.Info($"Downloading {batch.PendingCount} tracks{skippedTracks}{(allSkipped ? '.' : ':')}");
+        if (batch.PendingCount > 0)
+        {
+            string notFoundLastTime = batch.NotFoundCount > 0 ? $"{batch.NotFoundCount} not found" : "";
+            string alreadyExist = batch.ExistingCount > 0 ? $"{batch.ExistingCount} already exist" : "";
+            notFoundLastTime = alreadyExist.Length > 0 && notFoundLastTime.Length > 0 ? ", " + notFoundLastTime : notFoundLastTime;
+            string skippedTracks = alreadyExist.Length + notFoundLastTime.Length > 0 ? $" ({alreadyExist}{notFoundLastTime})" : "";
+            bool allSkipped = batch.ExistingCount + batch.NotFoundCount > batch.PendingCount;
+            Logger.Info($"Downloading {batch.PendingCount} tracks{skippedTracks}{(allSkipped ? '.' : ':')}");
 
-        var preview = batch.Pending.Select(ToSongJob).ToList();
-        if (preview.Count > 0)
-            Printing.PrintTracks(preview, 10, fullInfo: false);
+            var preview = batch.Pending.Select(ToSongJob).ToList();
+            if (preview.Count > 0)
+                Printing.PrintTracks(preview, 10, fullInfo: false);
+        }
+
+        // For aggregate batches print the skipped/not-found songs so the user can see what was skipped.
+        if (!batch.IsNormal)
+        {
+            if (batch.ExistingCount > 0)
+            {
+                Logger.Info($"{batch.ExistingCount} tracks already exist:");
+                Printing.PrintTracks([.. batch.Existing.Select(ToSongJob)], int.MaxValue, fullInfo: false);
+            }
+            if (batch.NotFoundCount > 0)
+            {
+                Logger.Info($"{batch.NotFoundCount} tracks were not found in a prior run:");
+                Printing.PrintTracks([.. batch.NotFound.Select(ToSongJob)], int.MaxValue, fullInfo: false);
+            }
+        }
     }
 
     private static bool ShouldAttachHumanProgressReporter(PrintOption printOption)

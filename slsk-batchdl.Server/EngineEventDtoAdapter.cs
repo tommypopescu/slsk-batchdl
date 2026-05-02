@@ -64,6 +64,22 @@ public sealed class EngineEventDtoAdapter
                 else if (state == JobState.Failed)
                     publish("extraction.failed", new ExtractionFailedEventDto(getSummary(extractJob), extractJob.FailureMessage ?? "Extraction failed"));
             }
+            else if (job is AggregateJob ag && state == JobState.Downloading)
+            {
+                var pending   = ag.Songs.Where(s => s.State == JobState.Pending).ToList();
+                var existing  = ag.Songs.Where(s => s.State == JobState.AlreadyExists).ToList();
+                var notFound  = ag.Songs.Where(s => s.FailureReason == FailureReason.NoSuitableFileFound).ToList();
+                publish("track-batch.resolved", new TrackBatchResolvedEventDto(
+                    getSummary(job),
+                    false,
+                    job.Config.PrintOption,
+                    pending.Count,
+                    existing.Count,
+                    notFound.Count,
+                    [.. SelectTrackBatchRows(pending,  job.Config.PrintOption)],
+                    [.. SelectTrackBatchRows(existing, job.Config.PrintOption)],
+                    [.. SelectTrackBatchRows(notFound, job.Config.PrintOption)]));
+            }
             else
             {
                 if (state == JobState.Searching)

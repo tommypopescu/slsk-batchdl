@@ -607,10 +607,6 @@ public class DownloadEngine
 
                 case AggregateJob ag:
                     ag.UpdateState(JobState.Downloading);
-                    Events.RaiseTrackBatchResolved(ag,
-                        ag.Songs.Where(s => s.State == JobState.Pending).ToList(),
-                        [],
-                        []);
                     await ProcessAggregateJob(ag, ctx);
                     break;
             }
