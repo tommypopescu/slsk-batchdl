@@ -640,6 +640,7 @@ public class DownloadEngine
         await DownloadSong(job, job, config, organizer, cts,
             cancelOnFail: false, organize: true);
 
+        Logger.Trace($"ProcessSongJob finished for {job.DisplayId}. Calling IndexEditor Update ({(ctx.IndexEditor != null ? "Yes" : "No")}) and PlaylistEditor Update ({(ctx.PlaylistEditor != null ? "Yes" : "No")})");
         ctx.IndexEditor?.Update();
         ctx.PlaylistEditor?.Update();
     }

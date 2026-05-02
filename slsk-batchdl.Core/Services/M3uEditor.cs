@@ -30,6 +30,7 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
     public M3uOption option = M3uOption.Index;
     string parent = null!;
     List<string> lines = null!;
+    int initialLineCount = 0;
     bool needFirstUpdate = false;
     int offset = 0;
     readonly JobList queue;
@@ -68,6 +69,7 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
         parent    = Utils.NormalizedPath(Path.GetDirectoryName(this.path) ?? "");
 
         lines = ReadAllLines().ToList();
+        initialLineCount = lines.Count;
 
         if (loadPreviousResults)
             LoadPreviousResults();
@@ -179,21 +181,14 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
 
     public void Update()
     {
+        Logger.Trace($"M3uEditor.Update() called for {path} (Option: {option}, Queue length: {queue.Jobs.Count})");
         if (option == M3uOption.None)
             return;
 
         lock (queue) lock (locker)
         {
             bool needUpdate = false;
-            int  index      = 1 + offset;
-
-            bool updateLine(string newLine)
-            {
-                bool changed = index >= lines.Count || newLine != lines[index];
-                while (index >= lines.Count) lines.Add("");
-                lines[index] = newLine;
-                return changed;
-            }
+            var newLines = option == M3uOption.Playlist ? lines.Take(initialLineCount).ToList() : lines;
 
             bool entryChanged(IndexEntry? prev, string downloadPath, JobState state, FailureReason reason)
             {
@@ -216,6 +211,7 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
 
                 if (needUpdate)
                 {
+                    Logger.Trace($"M3uEditor: Updating entry for {key}");
                     if (prev == null)
                     {
                         previousRunData[key] = new IndexEntry
@@ -239,33 +235,42 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
                 }
             }
 
-            foreach (var job in queue.Jobs)
+            foreach (var job in queue.AllJobs())
             {
-                // Job-level entry (for AlbumJob and non-Normal jobs that have their own index row)
-                if (job is AlbumJob albumJob && albumJob.State != JobState.Pending)
+                Logger.Trace($"M3uEditor: Checking job {job.GetType().Name} (ID: {job.DisplayId}, State: {job.State})");
+                var albumJobs = job switch
                 {
-                    var (state, reason) = JobToIndexState(albumJob);
-                    string key = MakeAlbumKey(albumJob.Query.Artist, albumJob.Query.Album);
-                    jobDownloadPaths.TryGetValue(albumJob.Id, out var downloadPath);
-                    updateEntryIfNeeded(key, downloadPath ?? "",
-                        albumJob.Query.Artist, albumJob.Query.Album, "", -1, state, reason, isAlbum: true);
+                    AlbumJob aj => new[] { aj },
+                    AlbumAggregateJob aaj => aaj.Albums,
+                    _ => Enumerable.Empty<AlbumJob>()
+                };
+
+                foreach (var albumJob in albumJobs)
+                {
+                    if (albumJob.State != JobState.Pending)
+                    {
+                        var (state, reason) = JobToIndexState(albumJob);
+                        string key = MakeAlbumKey(albumJob.Query.Artist, albumJob.Query.Album);
+                        jobDownloadPaths.TryGetValue(albumJob.Id, out var downloadPath);
+                        updateEntryIfNeeded(key, downloadPath ?? "",
+                            albumJob.Query.Artist, albumJob.Query.Album, "", -1, state, reason, isAlbum: true);
+                    }
                 }
 
-                // Per-song entries
                 IEnumerable<SongJob> songs = job switch
                 {
-                    JobList jl      => jl.Jobs.OfType<SongJob>(),
-                    AggregateJob ag => ag.Songs,
+                    SongJob sj      => new[] { sj },
+                    AggregateJob ag => ag.Songs.Where(s => s.State == JobState.Done || s.State == JobState.AlreadyExists).DefaultIfEmpty(ag.Songs.FirstOrDefault()!).Where(s => s != null)!,
+                    AlbumJob aj     => aj.ResolvedTarget?.Files ?? Enumerable.Empty<SongJob>(),
+                    AlbumAggregateJob aaj => aaj.Albums.SelectMany(a => a.ResolvedTarget?.Files ?? Enumerable.Empty<SongJob>()),
                     _               => Enumerable.Empty<SongJob>(),
                 };
 
                 foreach (var song in songs)
                 {
+                    Logger.Trace($"M3uEditor: Checking song {song.Query.Title} (State: {song.State}, Path: {song.DownloadPath})");
                     if (song.State == JobState.Pending)
-                    {
-                        index++;
                         continue;
-                    }
 
                     string key = MakeSongKey(song);
                     updateEntryIfNeeded(key, song.DownloadPath ?? "",
@@ -274,16 +279,29 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
 
                     if (option == M3uOption.All || option == M3uOption.Playlist)
                     {
-                        needUpdate |= updateLine(SongToLine(song));
-                        index++;
+                        var line = SongToLine(song);
+                        newLines.Add(line);
+                        Logger.Trace($"M3uEditor: Added line to newLines: {line}");
                     }
                 }
             }
 
+            if (option == M3uOption.Playlist && !newLines.SequenceEqual(lines))
+            {
+                Logger.Trace($"M3uEditor: newLines changed (count: {newLines.Count} vs {lines.Count})");
+                lines = newLines;
+                needUpdate = true;
+            }
+
             if (needUpdate || needFirstUpdate)
             {
+                Logger.Trace($"M3uEditor: Writing all lines (needUpdate: {needUpdate}, needFirstUpdate: {needFirstUpdate})");
                 needFirstUpdate = false;
                 WriteAllLines();
+            }
+            else
+            {
+                Logger.Trace($"M3uEditor: No update needed.");
             }
         }
     }
@@ -298,6 +316,7 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
 
     private void WriteAllLines()
     {
+        Logger.Trace($"M3uEditor: Writing file to {path}");
         if (!Directory.Exists(parent))
             Directory.CreateDirectory(parent);
 
@@ -468,6 +487,9 @@ public class M3uEditor // todo: separate into M3uEditor and IndexEditor
 
     private string[] ReadAllLines()
     {
-        return ReadAllText().TrimEnd().Split('\n');
+        var text = ReadAllText().TrimEnd();
+        if (string.IsNullOrEmpty(text))
+            return Array.Empty<string>();
+        return text.Split('\n');
     }
 }

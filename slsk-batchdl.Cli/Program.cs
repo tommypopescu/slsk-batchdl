@@ -29,7 +29,7 @@ internal static partial class Program
         ConfigManager.ApplyAutoProfileCliSettings(configFile, rootSettings, cliSettings);
 
         if (!string.IsNullOrWhiteSpace(engineSettings.LogFilePath))
-            Logger.AddOrReplaceFile(engineSettings.LogFilePath);
+            Logger.AddOrReplaceFile(engineSettings.LogFilePath, engineSettings.LogLevel < Logger.LogLevel.Debug ? engineSettings.LogLevel : Logger.LogLevel.Debug);
 
         Logger.SetConsoleLogLevel(rootSettings.NonVerbosePrint ? Logger.LogLevel.Error : engineSettings.LogLevel);
 

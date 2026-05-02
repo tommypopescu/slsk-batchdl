@@ -68,6 +68,115 @@ namespace Tests.EndToEnd
         }
 
         [TestMethod]
+        public async Task SingleSong_WritePlaylist_GeneratesCorrectM3uFile()
+        {
+            Console.ResetColor();
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Logger.SetupExceptionHandling();
+            Logger.AddConsole();
+            Logger.SetConsoleLogLevel(Logger.LogLevel.Debug);
+
+            var musicRoot = Path.Combine(Path.GetTempPath(), "slsk-playlist-test-music-" + Guid.NewGuid());
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-playlist-test-out-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(musicRoot);
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            System.IO.File.WriteAllBytes(Path.Combine(musicRoot, "02. Electric Light Orchestra - Twilight.flac"), TestHelpers.EmptyMp3Bytes);
+
+            var testClient = LocalFilesSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var rootSettings = new DownloadSettings();
+                rootSettings.Extraction.Input = "electric light orchestra twilight";
+                rootSettings.Output.ParentDir = outputDir;
+                rootSettings.Output.WritePlaylist = true;
+
+                var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
+                var app = new DownloadEngine(engineSettings, clientManager);
+                
+                // This mimics the CLI: enqueue an ExtractJob which will yield a bare SongJob
+                app.Enqueue(new ExtractJob(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType), rootSettings);
+                app.CompleteEnqueue();
+                
+                await app.RunAsync(CancellationToken.None);
+
+                // Find the playlist file
+                string expectedPlaylistName = "_electric light orchestra twilight.m3u8";
+                string playlistPath = Path.Combine(outputDir, expectedPlaylistName);
+                
+                Assert.IsTrue(System.IO.File.Exists(playlistPath), $"Playlist file was not created at {playlistPath}");
+                
+                var lines = System.IO.File.ReadAllLines(playlistPath);
+                Assert.AreEqual(1, lines.Length, "Playlist should contain exactly one track line.");
+                Assert.AreEqual("02. Electric Light Orchestra - Twilight.flac", lines[0].Replace('\\', '/'), "Playlist should contain the correct relative file path.");
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(musicRoot)) System.IO.Directory.Delete(musicRoot, true);
+                if (System.IO.Directory.Exists(outputDir)) System.IO.Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task SingleSong_WriteIndex_GeneratesCorrectIndexFile()
+        {
+            Console.ResetColor();
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Logger.SetupExceptionHandling();
+            Logger.AddConsole();
+            Logger.SetConsoleLogLevel(Logger.LogLevel.Debug);
+
+            var musicRoot = Path.Combine(Path.GetTempPath(), "slsk-index-test-music-" + Guid.NewGuid());
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-index-test-out-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(musicRoot);
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            System.IO.File.WriteAllBytes(Path.Combine(musicRoot, "01. Test Artist - Test Title.mp3"), TestHelpers.EmptyMp3Bytes);
+
+            var testClient = LocalFilesSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var rootSettings = new DownloadSettings();
+                rootSettings.Extraction.Input = "Test Artist - Test Title";
+                rootSettings.Output.ParentDir = outputDir;
+                rootSettings.Output.WriteIndex = true;
+                rootSettings.Output.HasConfiguredIndex = true;
+                rootSettings.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv"); // Force fixed path to simplify asserting
+
+                var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
+                var app = new DownloadEngine(engineSettings, clientManager);
+                
+                // This mimics the CLI: enqueue an ExtractJob which will yield a bare SongJob
+                app.Enqueue(new ExtractJob(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType), rootSettings);
+                app.CompleteEnqueue();
+                
+                await app.RunAsync(CancellationToken.None);
+
+                string indexPath = Path.Combine(outputDir, "_index.csv");
+                
+                Assert.IsTrue(System.IO.File.Exists(indexPath), $"Index file was not created at {indexPath}");
+                
+                var lines = System.IO.File.ReadAllLines(indexPath);
+                Assert.IsTrue(lines.Length >= 2, "Index should contain at least a header and one track line.");
+                Assert.AreEqual("filepath,artist,album,title,length,tracktype,state,failurereason", lines[0]);
+                
+                // We expect a line like: ./01. Test Artist - Test Title.mp3,Test Artist,,Test Title,-1,0,1,0
+                // Tracktype=0 (Song), State=1 (Done), FailureReason=0 (None)
+                Assert.IsTrue(lines[1].StartsWith("./01. Test Artist - Test Title.mp3,Test Artist,,Test Title,"), $"Unexpected index line format: {lines[1]}");
+                Assert.IsTrue(lines[1].EndsWith(",0,1,0"), $"Unexpected state/failure reason in index line: {lines[1]}");
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(musicRoot)) System.IO.Directory.Delete(musicRoot, true);
+                if (System.IO.Directory.Exists(outputDir)) System.IO.Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task AlbumDownload_E2E()
         {
             Console.ResetColor();

@@ -43,7 +43,7 @@ public static class JobPreparer
 
         // Use a synthetic owner list so index/playlist paths are scoped correctly when
         // root is a bare leaf job (not a JobList).
-        var ownerList = root as JobList ?? new JobList();
+        var ownerList = root as JobList ?? new JobList(null, [root]);
         PrepareJob(root, ownerList, parentConfig, newContexts, editors, skippers, resolver);
         return newContexts;
     }
@@ -159,6 +159,8 @@ public static class JobPreparer
             || (config.Skip.SkipExisting && config.Skip.SkipMode == SkipMode.Index)
             || config.Skip.SkipNotFound;
 
+        Logger.Trace($"SetupIndexEditor: Job {job.DisplayId} ({job.GetType().Name}) - WillWriteIndex={indexOption != M3uOption.None}, NeedIndex={needIndex}");
+
         if (!needIndex) return;
 
         string indexPath;
@@ -183,6 +185,7 @@ public static class JobPreparer
         Dictionary<(string, M3uOption), M3uEditor> editors)
     {
         var config = job.Config;
+        Logger.Trace($"SetupPlaylistEditor: Job {job.DisplayId} ({job.GetType().Name}) - WritePlaylist={config.Output.WritePlaylist}");
         if (!config.Output.WritePlaylist) return;
 
         string m3uPath;

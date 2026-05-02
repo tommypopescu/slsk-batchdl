@@ -456,6 +456,8 @@ public static partial class ConfigManager
                 Engine(e => e.NoModifyShareCount = Bool()); break;
             case "-v": case "--verbose": case "--debug":
                 Engine(e => e.LogLevel = Logger.LogLevel.Debug); break;
+            case "-vv": case "--trace":
+                Engine(e => e.LogLevel = Logger.LogLevel.Trace); break;
             case "--lf": case "--log-file":
                 Engine(e => e.LogFilePath = value); break;
             case "--cto": case "--connect-timeout":
@@ -1152,7 +1154,7 @@ public static partial class ConfigManager
     private static bool IsValuelessOption(string flag) => flag switch
     {
         "--no-listen"
-        or "-v" or "--verbose" or "--debug"
+        or "-v" or "--verbose" or "--debug" or "-vv" or "--trace"
         or "--mock-files-no-read-tags"
         or "--np" or "--no-progress"
         or "--progress"
