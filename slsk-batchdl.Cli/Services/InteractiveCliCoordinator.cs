@@ -79,6 +79,18 @@ internal sealed class InteractiveCliCoordinator
             return;
         }
 
+        if (_interactiveEnabled
+            && result is AlbumAggregateJob albumAggregateJob)
+        {
+            // Null out DefaultFolderProjection so OnJobExecutionCompleted can distinguish
+            // aggregate searches (only DefaultAggregateAlbumProjection set) from single-album
+            // searches (DefaultFolderProjection set), without a side-channel tracking set.
+            var searchJob = new SearchJob(albumAggregateJob.Query) { DefaultFolderProjection = null };
+            searchJob.CopySharedFieldsFrom(albumAggregateJob);
+            EnqueueRoot(searchJob, inheritedSettings);
+            return;
+        }
+
         EnqueueRoot(result, inheritedSettings);
     }
 
@@ -92,9 +104,13 @@ internal sealed class InteractiveCliCoordinator
             if (_appToken.IsCancellationRequested)
                 return;
 
-            if (_interactiveEnabled && job is SearchJob { DefaultFolderProjection: not null } searchJob)
+            if (_interactiveEnabled && job is SearchJob { DefaultFolderProjection: null, DefaultAggregateAlbumProjection: not null } aggregateSearchJob)
             {
-                HandleCompletedAlbumSearch(searchJob);
+                HandleCompletedAggregateAlbumSearch(aggregateSearchJob);
+            }
+            else if (_interactiveEnabled && job is SearchJob { DefaultFolderProjection: not null } folderSearchJob)
+            {
+                HandleCompletedAlbumSearch(folderSearchJob);
             }
             else if (_interactiveAlbumSessions.TryGetValue(job.Id, out var session))
             {
@@ -105,6 +121,39 @@ internal sealed class InteractiveCliCoordinator
         finally
         {
             CompleteRoot(job.Id);
+        }
+    }
+
+    private void HandleCompletedAggregateAlbumSearch(SearchJob searchJob)
+    {
+        if (searchJob.State != JobState.Done || searchJob.DefaultAggregateAlbumProjection == null)
+            return;
+
+        var aggregateResult = _backend.GetAggregateAlbumResultsAsync(searchJob.Id, _appToken).GetAwaiter().GetResult();
+        if (aggregateResult == null || aggregateResult.Items.Count == 0)
+            return;
+
+        foreach (var albumCandidate in aggregateResult.Items)
+        {
+            if (_appToken.IsCancellationRequested || !_interactiveEnabled)
+                break;
+
+            var folderResult = _backend.GetFolderResultsAsync(
+                searchJob.Id,
+                new FolderSearchProjectionRequestDto(albumCandidate.Query, IncludeFiles: true),
+                _appToken).GetAwaiter().GetResult();
+
+            var folders = folderResult?.Items.Select(ToAlbumFolder).ToList() ?? [];
+            if (folders.Count == 0)
+                continue;
+
+            var query   = ToAlbumQuery(albumCandidate.Query);
+            var session = new InteractiveAlbumSession(searchJob.Id, searchJob, query, folders);
+            var selected = PromptForAlbumSelectionAsync(session).GetAwaiter().GetResult();
+            if (selected == null)
+                continue;
+
+            EnqueueInteractiveAlbumJob(session, selected, searchJob.Config);
         }
     }
 
@@ -366,6 +415,16 @@ internal sealed class InteractiveCliCoordinator
                 candidate.Size,
                 candidate.Extension ?? Path.GetExtension(candidate.Filename),
                 candidate.Attributes?.Select(x => new Soulseek.FileAttribute(Enum.Parse<Soulseek.FileAttributeType>(x.Type), x.Value))));
+
+    private static AlbumQuery ToAlbumQuery(AlbumQueryDto dto)
+        => new AlbumQuery
+        {
+            Artist           = dto.Artist ?? "",
+            Album            = dto.Album  ?? "",
+            SearchHint       = dto.SearchHint ?? "",
+            URI              = dto.Uri    ?? "",
+            ArtistMaybeWrong = dto.ArtistMaybeWrong,
+        };
 
     private static AlbumQueryDto ToAlbumQueryDto(AlbumQuery query)
         => new(
