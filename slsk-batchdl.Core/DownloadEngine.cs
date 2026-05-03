@@ -350,6 +350,7 @@ public class DownloadEngine
 
                             if (config.Extraction.RemoveTracksFromSource && extractor != null && song.State == JobState.Done)
                             {
+                                Logger.Debug($"RemoveTrackFromSource: song '{song}' (LineNumber={song.LineNumber})");
                                 try { await extractor.RemoveTrackFromSource(song); }
                                 catch (Exception ex) { Logger.Error($"Error removing track from source: {ex.Message}"); }
                             }
@@ -364,6 +365,7 @@ public class DownloadEngine
                     if (config.Extraction.RemoveTracksFromSource && extractor != null
                         && directSongs.All(s => s.State == JobState.Done || s.State == JobState.AlreadyExists))
                     {
+                        Logger.Debug($"RemoveTrackFromSource: list-level cleanup for '{jl.ItemName}'");
                         try { await extractor.RemoveTrackFromSource(new SongJob(new SongQuery { Title = jl.ItemName ?? "" })); }
                         catch { /* list-level removal is best-effort */ }
                     }

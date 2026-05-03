@@ -299,6 +299,89 @@ namespace Tests.ExtractorTests2
     }
 
     [TestClass]
+    public class CsvRemoveFromSourceTests
+    {
+        private string _tempCsv = "";
+
+        [TestInitialize]
+        public void Setup()
+        {
+            _tempCsv = Path.GetTempFileName() + ".csv";
+        }
+
+        [TestCleanup]
+        public void Cleanup()
+        {
+            if (File.Exists(_tempCsv)) File.Delete(_tempCsv);
+        }
+
+        // Bug: DownloadEngine calls extractor.RemoveTrackFromSource(new SongJob(...)) for list-level
+        // cleanup when all songs in a JobList succeed. SongJob.LineNumber defaults to 1, which maps
+        // to idx=0 in RemoveTrackFromSource, erasing lines[0] = the CSV header.
+        [TestMethod]
+        public async Task RemoveTrackFromSource_ListLevelCleanupJob_DoesNotEraseHeader()
+        {
+            File.WriteAllText(_tempCsv, "artist,title\nArtist1,Song1\n");
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            var extractor = new CsvExtractor(config.Csv);
+            await extractor.GetTracks(_tempCsv, config.Extraction); // sets csvFilePath + csvColumnCount
+
+            // This is what DownloadEngine creates at ~line 367 when all directSongs succeed
+            var listCleanupJob = new SongJob(new SongQuery { Title = "mycsv" });
+            // LineNumber defaults to 1 → idx = 0 → erases lines[0] = header
+            await extractor.RemoveTrackFromSource(listCleanupJob);
+
+            var lines = await File.ReadAllLinesAsync(_tempCsv);
+            Assert.AreEqual("artist,title", lines[0],
+                $"Header was erased by list-level cleanup job. First line is now: '{lines[0]}'");
+        }
+
+        // After individual songs are removed (which is correct), the header must still survive.
+        [TestMethod]
+        public async Task RemoveTrackFromSource_SongsAndListCleanup_HeaderPreserved()
+        {
+            File.WriteAllText(_tempCsv, "artist,title\nArtist1,Song1\nArtist2,Song2\n");
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            var extractor = new CsvExtractor(config.Csv);
+            var result = await extractor.GetTracks(_tempCsv, config.Extraction);
+            var songs = ((JobList)result).AllSongs().ToList();
+
+            foreach (var song in songs)
+                await extractor.RemoveTrackFromSource(song);
+
+            // Simulate the list-level cleanup DownloadEngine makes when all songs succeed
+            await extractor.RemoveTrackFromSource(new SongJob(new SongQuery { Title = "mycsv" }));
+
+            var lines = await File.ReadAllLinesAsync(_tempCsv);
+            Assert.IsTrue(lines[0].Contains("artist") || lines[0].Contains("title"),
+                $"Header was erased. First line: '{lines[0]}'");
+        }
+
+        // Bug: DownloadEngine never calls RemoveTrackFromSource for AlbumJobs — only for SongJobs.
+        // Verified here at the extractor level: the AlbumJob's LineNumber is set correctly,
+        // so a correctly-wired caller would be able to clear the row.
+        // The red test is in EndToEndTests (CsvInput_AlbumSucceeds_RemoveFromSourceClearsAlbumRow).
+        [TestMethod]
+        public async Task GetTracks_AlbumRow_AlbumJobHasCorrectLineNumber()
+        {
+            // header = line 1, album row = line 2  →  LineNumber should be 2
+            File.WriteAllText(_tempCsv, "artist,title,album\nBand,,TheAlbum\n");
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            var extractor = new CsvExtractor(config.Csv);
+
+            var result = await extractor.GetTracks(_tempCsv, config.Extraction);
+
+            // Accept either AlbumJob or AlbumAggregateJob
+            int lineNumber = result switch
+            {
+                AlbumJob aj => aj.LineNumber,
+                _ => throw new AssertFailedException($"Expected AlbumJob, got {result.GetType().Name}")
+            };
+            Assert.AreEqual(2, lineNumber, "AlbumJob.LineNumber must match the 1-based CSV line");
+        }
+    }
+
+    [TestClass]
     public class ExtractorRegistryTests
     {
         private static readonly DownloadSettings _dl = TestHelpers.CreateDefaultSettings().Download;

@@ -556,6 +556,97 @@ namespace Tests.EndToEnd
             }
         }
 
+        // Bug: DownloadEngine calls extractor.RemoveTrackFromSource(new SongJob{...}) when a
+        // JobList's directSongs all succeed. SongJob.LineNumber defaults to 1, so idx = 0,
+        // which erases lines[0] = the CSV header instead of being a no-op.
+        [TestMethod]
+        public async Task CsvInput_SongDownload_RemoveFromSource_PreservesHeader()
+        {
+            Console.ResetColor();
+            Console.OutputEncoding = Encoding.UTF8;
+            Logger.SetupExceptionHandling();
+            Logger.AddConsole();
+            Logger.SetConsoleLogLevel(Logger.LogLevel.Debug);
+
+            var testClient = new ClientTests.MockSoulseekClient(TestHelpers.CreateTestIndex());
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-csv-song-rfs-" + Guid.NewGuid());
+            var csvPath   = Path.GetTempFileName() + ".csv";
+            Directory.CreateDirectory(outputDir);
+            // testartist - testsong is in CreateTestIndex (user3)
+            File.WriteAllText(csvPath, "artist,title\ntestartist,testsong\n");
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var rootSettings = new DownloadSettings();
+                rootSettings.Extraction.Input = csvPath;
+                rootSettings.Extraction.RemoveTracksFromSource = true;
+                rootSettings.Output.ParentDir = outputDir;
+
+                var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
+                var app = new DownloadEngine(engineSettings, clientManager);
+                app.Enqueue(new ExtractJob(csvPath, InputType.None), rootSettings);
+                app.CompleteEnqueue();
+                await app.RunAsync(CancellationToken.None);
+
+                var lines = File.ReadAllLines(csvPath);
+                Assert.IsTrue(lines.Length > 0, "CSV file should not be empty after removal");
+                Assert.IsTrue(lines[0].Contains("artist") || lines[0].Contains("title"),
+                    $"Header was erased by list-level cleanup. First line: '{lines[0]}'");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
+        // Bug: DownloadEngine only calls RemoveTrackFromSource for SongJobs inside a JobList's
+        // directSongs, never for AlbumJobs. An album row in the CSV is never cleared after
+        // a successful album download.
+        [TestMethod]
+        public async Task CsvInput_AlbumDownload_RemoveFromSource_ClearsAlbumRow()
+        {
+            Console.ResetColor();
+            Console.OutputEncoding = Encoding.UTF8;
+            Logger.SetupExceptionHandling();
+            Logger.AddConsole();
+            Logger.SetConsoleLogLevel(Logger.LogLevel.Debug);
+
+            var testClient = new ClientTests.MockSoulseekClient(TestHelpers.CreateTestIndex());
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-csv-album-rfs-" + Guid.NewGuid());
+            var csvPath   = Path.GetTempFileName() + ".csv";
+            Directory.CreateDirectory(outputDir);
+            // testartist / testalbum is in CreateTestIndex (user3, folder "(2011) testalbum [MP3]")
+            File.WriteAllText(csvPath, "artist,title,album\ntestartist,,testalbum\n");
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var rootSettings = new DownloadSettings();
+                rootSettings.Extraction.Input = csvPath;
+                rootSettings.Extraction.RemoveTracksFromSource = true;
+                rootSettings.Output.ParentDir = outputDir;
+
+                var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
+                var app = new DownloadEngine(engineSettings, clientManager);
+                app.Enqueue(new ExtractJob(csvPath, InputType.None), rootSettings);
+                app.CompleteEnqueue();
+                await app.RunAsync(CancellationToken.None);
+
+                var lines = File.ReadAllLines(csvPath);
+                Assert.IsTrue(lines.Length >= 2, "CSV should still have at least 2 lines (header + data)");
+                Assert.AreEqual("artist,title,album", lines[0], "Header must be preserved");
+                Assert.AreEqual(",,", lines[1],
+                    $"Album row should be cleared after successful download, but got: '{lines[1]}'");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+            }
+        }
+
         [TestMethod]
         public async Task AggregateJob_DownloadsResolvedSongCandidatesWithoutResearchingThem()
         {
