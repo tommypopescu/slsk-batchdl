@@ -17,6 +17,8 @@ namespace Tests.ClientTests
         private readonly HashSet<string> failingUsers;
 
         public int SearchesCancelledMidDelay { get; private set; }
+        public int DownloadCallCount;
+        public bool IsDisposed { get; private set; }
 
         public MockSoulseekClient(List<Soulseek.SearchResponse> index, bool slowMode = false, int searchDelayMs = 0, IEnumerable<string>? failingUsers = null)
         {
@@ -259,6 +261,8 @@ namespace Tests.ClientTests
 
         private async Task<Transfer> DownloadAsyncInternal(string username, string remoteFilename, Func<Task<Stream>> outputStreamFactory, long? size = null, long startOffset = 0, int? token = null, TransferOptions? options = null, CancellationToken? cancellationToken = null)
         {
+            Interlocked.Increment(ref DownloadCallCount);
+
             if (failingUsers.Contains(username))
                 throw new SoulseekClientException($"Simulated download failure for user {username}");
 

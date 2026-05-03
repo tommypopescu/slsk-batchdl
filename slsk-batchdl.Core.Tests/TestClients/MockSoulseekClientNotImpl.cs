@@ -285,7 +285,7 @@ namespace Tests.ClientTests
 
         public void Dispose()
         {
-            return;
+            IsDisposed = true;
         }
     }
 }

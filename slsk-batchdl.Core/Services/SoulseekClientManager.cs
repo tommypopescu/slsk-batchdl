@@ -4,7 +4,7 @@ using Sldl.Core.Settings;
 
 namespace Sldl.Core.Services;
 
-public class SoulseekClientManager
+public class SoulseekClientManager : IDisposable
 {
     private readonly EngineSettings _initialSettings;
     private ISoulseekClient? _client;
@@ -246,5 +246,11 @@ public class SoulseekClientManager
                 await Task.Delay(1000, cancellationToken);
             }
         }
+    }
+
+    public void Dispose()
+    {
+        _monitorCts?.Cancel();
+        _client?.Dispose();
     }
 }

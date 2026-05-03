@@ -36,20 +36,36 @@ namespace Sldl.Core;
         }
     }
 
-    public async Task WaitAsync()
+    public async Task WaitAsync(CancellationToken cancellationToken = default)
     {
         TryResetSemaphore();
-        var semaphoreTask = this.semaphore.WaitAsync();
+        var semaphoreTask = this.semaphore.WaitAsync(cancellationToken);
 
         while (!semaphoreTask.IsCompleted)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var ticks = Interlocked.Read(ref this.nextResetTimeTicks);
             var nextResetTime = new DateTimeOffset(new DateTime(ticks, DateTimeKind.Utc));
             var delayTime = nextResetTime - DateTimeOffset.UtcNow;
-            var delayTask = delayTime >= TimeSpan.Zero ? Task.Delay(delayTime) : Task.CompletedTask;
+            
+            Task delayTask;
+            if (delayTime > TimeSpan.Zero)
+                delayTask = Task.Delay(delayTime, cancellationToken);
+            else
+                delayTask = Task.CompletedTask;
 
-            await Task.WhenAny(semaphoreTask, delayTask);
+            try
+            {
+                await Task.WhenAny(semaphoreTask, delayTask);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
             TryResetSemaphore();
         }
+
+        await semaphoreTask;
     }
 }

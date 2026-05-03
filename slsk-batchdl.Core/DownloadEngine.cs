@@ -129,8 +129,10 @@ public class DownloadEngine
         bool servicesInitialized = false;
         var rootTasks = new List<Task>();
 
+        Logger.Trace("RunAsync: Starting to read from job channel.");
         await foreach (var (rootJob, settings) in _jobChannel.Reader.ReadAllAsync(ct))
         {
+            Logger.Trace($"RunAsync: Read root job {rootJob.DisplayId} from channel.");
             Queue.Jobs.Add(rootJob);
 
             foreach (var (id, ctx) in JobPreparer.PrepareSubtree(rootJob, settings, _jobSettingsResolver))
@@ -150,12 +152,14 @@ public class DownloadEngine
             rootTasks.Add(ProcessJob(rootJob));
         }
 
+        Logger.Trace("RunAsync: Channel fully drained. Waiting for rootTasks to complete.");
         await Task.WhenAll(rootTasks);
+        Logger.Trace("RunAsync: All rootTasks completed.");
 
         if (Queue.Jobs.Count > 0 && !Queue.Jobs[^1].Config!.DoNotDownload)
             Events.RaiseEngineCompleted(Queue);
 
-        Logger.Debug("Exiting");
+        Logger.Debug("Exiting RunAsync");
         appCts.Cancel();
     }
 
@@ -182,6 +186,7 @@ public class DownloadEngine
         // recursing into its Result so that the Result is a sibling, not a child, in the hierarchy.
         job.Cts = CancellationTokenSource.CreateLinkedTokenSource(appCts.Token, parentToken);
 
+        Logger.Trace($"ProcessJob: Starting job {job.DisplayId} ({job.GetType().Name})");
         try
         {
             // ── ExtractJob: run extractor, set Result, recurse ───────────────────
@@ -218,7 +223,6 @@ public class DownloadEngine
                 }
 
                 ej.Result = extracted;
-                ej.UpdateState(JobState.Done);
 
                 Logger.Debug("Got tracks");
 
@@ -243,6 +247,8 @@ public class DownloadEngine
                 AssignWorkflowId(extracted, ej.WorkflowId);
 
                 Events.RaiseJobResultCreated(ej, extracted);
+                ej.UpdateState(JobState.Done);
+
                 // ExtractJob completion moment:
                 // - extraction work is finished
                 // - the result job now exists
@@ -287,13 +293,16 @@ public class DownloadEngine
                 // Pass parentToken (not ej.Cts.Token): the Result is a sibling of the ExtractJob in
                 // the CTS hierarchy. Cancelling the ExtractJob after extraction completes has no effect
                 // on the already-running Result; the Result can be cancelled independently.
+                Logger.Trace($"ProcessJob (ExtractJob {job.DisplayId}): Processing extracted job {extracted.DisplayId}");
                 await ProcessJob(extracted, ex, parentToken, parentJob);
 
                 // For single extracted jobs with a source line (e.g. a lone AlbumJob from a CSV row),
                 // trigger removal now that processing is complete. Multi-item results use LineNumber=0
                 // (no source line of their own) and handle per-child removal inside ProcessJob.
+                Logger.Trace($"ProcessJob (ExtractJob {job.DisplayId}): Calling MaybeRemoveFromSource");
                 await MaybeRemoveFromSource(extracted, ex, ej.Config.Extraction);
 
+                Logger.Trace($"ProcessJob (ExtractJob {job.DisplayId}): Extracted job processing complete.");
                 return;
             }
 
@@ -392,6 +401,7 @@ public class DownloadEngine
         }
         finally
         {
+            Logger.Trace($"ProcessJob: Finished job {job.DisplayId} ({job.GetType().Name}). Raising execution completed.");
             RaiseJobExecutionCompleted();
         }
     }
@@ -551,12 +561,14 @@ public class DownloadEngine
                 var newAlbumJobs = await searcher!.SearchAggregateAlbum(aabJob, config.Search, responseData, job.Cts!.Token);
                 aabJob.Albums = newAlbumJobs;
 
-                job.UpdateState(JobState.Done);
                 foundSomething = newAlbumJobs.Count > 0;
                 job.Discovery = new DiscoverySummary { ResultCount = aabJob.Albums.Count, LockedFileCount = responseData.lockedFilesCount };
 
                 if (config.PrintResults)
+                {
+                    job.UpdateState(JobState.Done);
                     return;
+                }
 
                 if (foundSomething)
                 {
@@ -584,7 +596,14 @@ public class DownloadEngine
                         MusicDirSkipper = ctx.MusicDirSkipper,
                         PreprocessTracks = false,
                     };
+
+                    RegisterJob(albumList, job);
+                    job.UpdateState(JobState.Done);
                     await ProcessJob(albumList, null, job.Cts!.Token, job);
+                }
+                else
+                {
+                    job.UpdateState(JobState.Done);
                 }
                 return;
             }
@@ -651,6 +670,8 @@ public class DownloadEngine
                 job.Fail(FailureReason.Cancelled);
             }
         }
+
+        Logger.Trace($"ProcessLeafJob: finished for job {job.DisplayId} ({job.GetType().Name})");
     }
 
     static bool HasPreResolvedAlbumResults(Job job)
@@ -913,6 +934,9 @@ public class DownloadEngine
 
         while (tries > 0)
         {
+            if (song.State == JobState.Done || song.State == JobState.Failed)
+                break;
+
             await _clientManager.WaitUntilReadyAsync(cts.Token);
             cts.Token.ThrowIfCancellationRequested();
 
@@ -1022,8 +1046,10 @@ public class DownloadEngine
                         {
                             Logger.Debug($"Fast-search: starting provisional download from {fc.Username}");
                             string outputPath = organizer.GetSavePath(fc.Filename);
+                            
+                            // Use the main job CTS for the download so cancelling the search doesn't kill the download.
                             fastDownloadTask = downloader!
-                                .DownloadFile(fc, outputPath, song, config.Transfer, config.Output.ParentDir, searchCts.Token)
+                                .DownloadFile(fc, outputPath, song, config.Transfer, config.Output.ParentDir, cts.Token)
                                 .ContinueWith(t =>
                                 {
                                     if (t.IsCompletedSuccessfully)
@@ -1033,28 +1059,34 @@ public class DownloadEngine
                         }
                     });
 
-                // Wait for whichever finishes first.
-                var neverComplete = new TaskCompletionSource<(string, FileCandidate?)>();
-                await Task.WhenAny(fastDownloadTask ?? neverComplete.Task, searchTask);
-
-                if (fastDownloadTask?.IsCompletedSuccessfully == true)
+                while (!searchTask.IsCompleted)
                 {
-                    var (fastPath, fastCandidate) = fastDownloadTask.Result;
+                    if (fastDownloadTask != null && fastDownloadTask.IsCompleted)
+                        break;
+                    await Task.WhenAny(fastDownloadTask ?? searchTask, searchTask);
+                }
+
+                if (fastDownloadTask != null)
+                {
+                    var (fastPath, fastCandidate) = await fastDownloadTask;
                     if (fastPath.Length > 0 && fastCandidate != null)
                     {
-                        // Fast download won — cancel the search. SearchSong will throw
-                        // OperationCanceledException and release the concurrency slot internally.
+                        // Fast download won — cancel the search.
                         searchCts.Cancel();
                         try { await searchTask; } catch (OperationCanceledException) { }
+                        
                         _registry.UserSuccessCounts.AddOrUpdate(fastCandidate.Username, 1, (_, c) => c + 1);
                         Logger.Debug("Fast-search: provisional download succeeded");
                         return (fastPath, fastCandidate.File);
                     }
-                    // Fast download failed — fall through, wait for full search results.
-                    Logger.Debug("Fast-search: provisional download failed, waiting for full search");
+                    
+                    Logger.Debug("Fast-search: provisional download failed, waiting for full search to complete");
+                    await searchTask;
                 }
-
-                await searchTask;
+                else
+                {
+                    await searchTask;
+                }
             }
         }
 

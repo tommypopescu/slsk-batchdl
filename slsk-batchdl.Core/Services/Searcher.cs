@@ -121,10 +121,15 @@ public partial class Searcher
 
         song.UpdateState(JobState.Searching);
         await concurrencySemaphore.WaitAsync(ct);
-        try { await RunSearches(song.Query, session.Results, getOpts, responseHandler, search, ct, onSearch); }
-        finally { concurrencySemaphore.Release(); }
-
-        searchRegistry.Searches.TryRemove(song, out _);
+        try
+        {
+            await RunSearches(song.Query, session.Results, getOpts, responseHandler, search, ct, onSearch);
+        }
+        finally
+        {
+            concurrencySemaphore.Release();
+            searchRegistry.Searches.TryRemove(song, out _);
+        }
 
         responseData.lockedFilesCount += session.LockedFileCount;
 
@@ -551,15 +556,11 @@ public partial class Searcher
     private async Task DoSearch(string search, SearchOptions opts, Action<SearchResponse> rHandler,
         bool noRemoveSpecialChars, CancellationToken? ct = null, Action? onSearch = null)
     {
-        await rateSemaphore.WaitAsync();
-        try
-        {
-            search = CleanSearchString(search, !noRemoveSpecialChars);
-            var q = SearchQuery.FromText(search);
-            onSearch?.Invoke();
-            await client.SearchAsync(q, options: opts, cancellationToken: ct, responseHandler: rHandler);
-        }
-        catch (OperationCanceledException) { }
+        await rateSemaphore.WaitAsync(ct ?? CancellationToken.None);
+        search = CleanSearchString(search, !noRemoveSpecialChars);
+        var q = SearchQuery.FromText(search);
+        onSearch?.Invoke();
+        await client.SearchAsync(q, options: opts, cancellationToken: ct, responseHandler: rHandler);
     }
 
     private static string GetSearchString(SongQuery query, bool isAlbum)

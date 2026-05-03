@@ -230,6 +230,7 @@ internal static partial class Program
         try
         {
             await engine.RunAsync(cts.Token);
+            Logger.Trace("Main: RunAsync returned.");
             Printing.PrintComplete(engine.Queue);
 
             if (rootSettings.DoNotDownload)
@@ -240,10 +241,14 @@ internal static partial class Program
         }
         finally
         {
+            Logger.Trace("Main: Entered finally block. Disposing clientManager...");
             engine.Cancel();
             cts.Cancel();
+            clientManager.Dispose();
+            Logger.Trace("Main: ClientManager disposed.");
             Printing.SetBuffering(false);
             Printing.Flush();
+            Logger.Trace("Main: Exiting.");
         }
     }
 

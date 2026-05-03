@@ -121,5 +121,38 @@ namespace Tests.FastSearch
             Assert.AreEqual("gooduser", song.ChosenCandidate?.Username,
                 "Should have downloaded from gooduser after fast-user failed");
         }
+
+        // ── Test 3: fast-search waits for slow provisional download ──────────
+
+        [TestMethod]
+        public async Task SongDownload_FastSearch_WaitsForProvisionalDownloadToComplete()
+        {
+            // Simulate a scenario where the search completes instantly (searchDelayMs = 0),
+            // but the provisional download takes some time (slowMode = true).
+            // Without the fix, the engine would see the search complete, observe that the 
+            // download task wasn't finished yet, assume it failed, and queue a SECOND download.
+            var client = new ClientTests.MockSoulseekClient(
+                new[] { FastUser() }.ToList(),
+                slowMode: true);
+
+            var (app, outputDir) = CreateApp(client,
+                "testartist - testsong",
+                new[] { "--fast-search", "--fast-search-min-up-speed", "1" });
+
+            try
+            {
+                await app.RunAsync(CancellationToken.None);
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, true);
+            }
+
+            Assert.AreEqual(JobState.Done, app.Queue.AllSongs().Single().State,
+                "Song should be downloaded successfully");
+            Assert.AreEqual(1, client.DownloadCallCount,
+                "Should only call DownloadAsync once. The engine should wait for the provisional download to finish rather than falling through to the fallback list.");
+        }
     }
 }
