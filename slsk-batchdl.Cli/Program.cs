@@ -5,6 +5,7 @@ using Sldl.Core.Services;
 using Sldl.Core.Settings;
 using Sldl.Server;
 using Soulseek;
+using System.Net.Http.Json;
 
 namespace Sldl.Cli;
 
@@ -27,6 +28,49 @@ internal static partial class Program
         var configFile = ConfigManager.Load(configPath);
         var (engineSettings, rootSettings, cliSettings, daemonSettings, remoteSettings) = ConfigManager.BindAll(configFile, bindArgs);
         ConfigManager.ApplyAutoProfileCliSettings(configFile, rootSettings, cliSettings);
+
+        string? profileArg = ConfigManager.ExtractProfileName(bindArgs);
+        if (profileArg != null)
+        {
+            var requestedProfiles = profileArg.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (requestedProfiles.Contains("help", StringComparer.OrdinalIgnoreCase))
+            {
+                if (remoteSettings.IsEnabled)
+                {
+                    try
+                    {
+                        using var http = new HttpClient { BaseAddress = RemoteCliBackend.NormalizeServerUrl(remoteSettings.ServerUrl!) };
+                        var profiles = await http.GetFromJsonAsync<IReadOnlyList<ProfileSummaryDto>>("api/profiles");
+                        
+                        if (profiles == null || profiles.Count == 0)
+                            Console.WriteLine("No profiles found on remote daemon.");
+                        else
+                        {
+                            Console.WriteLine($"Available profiles on remote daemon ({remoteSettings.ServerUrl}):");
+                            foreach (var p in profiles)
+                                Console.WriteLine($"  {p.Name}{(p.IsAutoProfile ? " (auto)" : "")}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Fatal($"Failed to retrieve profiles from remote daemon: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    var profiles = ConfigManager.GetProfileNames(configFile);
+                    if (profiles.Count == 0)
+                        Console.WriteLine("No profiles found in local config.");
+                    else
+                    {
+                        Console.WriteLine("Available profiles:");
+                        foreach (var p in profiles)
+                            Console.WriteLine($"  {p}");
+                    }
+                }
+                return;
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(engineSettings.LogFilePath))
             Logger.AddOrReplaceFile(engineSettings.LogFilePath, engineSettings.LogLevel < Logger.LogLevel.Debug ? engineSettings.LogLevel : Logger.LogLevel.Debug);
@@ -67,10 +111,26 @@ internal static partial class Program
             {
                 Logger.Fatal($"Diagnostic action failed: {ex.Message}");
             }
+
+            if (!rootSettings.PrintOption.HasFlag(PrintOption.Index))
+            {
+                Logger.Fatal("Input error: No input provided.");
+                Help.PrintAndExitIfNeeded([]);
+            }
             return;
         }
 
-        var jobSettingsResolver = ConfigManager.CreateJobSettingsResolver(configFile, bindArgs, cliSettings);
+        IJobSettingsResolver jobSettingsResolver;
+        try
+        {
+            jobSettingsResolver = ConfigManager.CreateJobSettingsResolver(configFile, bindArgs, cliSettings);
+        }
+        catch (ArgumentException ex)
+        {
+            Logger.Fatal(ex.Message);
+            return;
+        }
+
         var engine = new DownloadEngine(engineSettings, clientManager, jobSettingsResolver);
         var backend = new LocalCliBackend(engine, rootSettings);
 

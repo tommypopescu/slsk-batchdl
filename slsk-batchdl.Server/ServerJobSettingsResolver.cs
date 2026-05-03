@@ -63,7 +63,7 @@ internal sealed class ServerJobSettingsResolver : IJobSettingsResolver
             .Where(p => p.Condition != null && ProfileConditionEvaluator.Satisfied(p.Condition, inherited, job, context))
             .ToList();
 
-        var namedProfiles = catalog.ResolveNamedProfiles(options?.ProfileNames, msg => Logger.Warn(msg));
+        var namedProfiles = catalog.ResolveNamedProfiles(options?.ProfileNames);
 
         var settings = SettingsCloner.Clone(baseDefaults);
         catalog.DefaultProfile?.Download.ApplyTo(settings);
@@ -95,7 +95,7 @@ internal sealed class ServerJobSettingsResolver : IJobSettingsResolver
             .Where(p => p.Condition != null && ProfileConditionEvaluator.Satisfied(p.Condition, baseDefaults, job, context))
             .ToList();
 
-        var namedProfiles = catalog.ResolveNamedProfiles(options?.ProfileNames, msg => Logger.Warn(msg));
+        var namedProfiles = catalog.ResolveNamedProfiles(options?.ProfileNames);
 
         var settings = SettingsCloner.Clone(baseDefaults);
         catalog.DefaultProfile?.Download.ApplyTo(settings);

@@ -26,7 +26,7 @@ public sealed class ProfileCatalog
     public IReadOnlyList<string> ProfileNames =>
         NamedProfiles.Select(p => p.Name).OrderBy(x => x).ToList();
 
-    public IReadOnlyList<SettingsProfile> ResolveNamedProfiles(IEnumerable<string>? names, Action<string>? warn = null)
+    public IReadOnlyList<SettingsProfile> ResolveNamedProfiles(IEnumerable<string>? names)
     {
         if (names == null)
             return [];
@@ -39,10 +39,13 @@ public sealed class ProfileCatalog
             if (string.Equals(name, "default", StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            if (string.Equals(name, "help", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             if (byName.TryGetValue(name, out var profile))
                 resolved.Add(profile);
             else
-                warn?.Invoke($"Warning: No profile '{name}' found in config");
+                throw new ArgumentException($"Input error: No profile '{name}' found in config");
         }
 
         return resolved;

@@ -94,7 +94,7 @@ public static partial class ConfigManager
         var context = CreateProfileContext(cli);
 
         var catalog = CreateProfileCatalog(file);
-        var namedProfiles = catalog.ResolveNamedProfiles(SplitProfileNames(profileName), msg => Logger.Warn(msg));
+        var namedProfiles = catalog.ResolveNamedProfiles(SplitProfileNames(profileName));
 
         var cliProfile = ParseTokensAsProfile("<cli>", NormalizeArgs(cliArgs)).Profile;
 
@@ -205,10 +205,12 @@ public static partial class ConfigManager
         foreach (var name in profileName.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             if (name == "default") continue;
+            if (name.Equals("help", StringComparison.OrdinalIgnoreCase) || name.Equals("list", StringComparison.OrdinalIgnoreCase)) continue;
+
             if (file.Profiles.TryGetValue(name, out var prof))
                 yield return prof;
-            else
-                Logger.Warn($"Warning: No profile '{name}' found in config");
+            // We intentionally don't warn here. If the profile is missing, the JobSettingsResolver
+            // (running either locally or on the remote daemon) will log the appropriate warning.
         }
     }
 
