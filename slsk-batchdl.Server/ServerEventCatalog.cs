@@ -27,6 +27,7 @@ public static class ServerEventCatalog
             Activity("album.download-completed", nameof(AlbumDownloadCompletedEventDto)),
             Activity("on-complete.started", nameof(OnCompleteStartedEventDto)),
             Activity("on-complete.ended", nameof(OnCompleteEndedEventDto)),
+            Activity("search.rate-limited", nameof(SearchRateLimitedEventDto)),
             Activity("track-batch.resolved", nameof(TrackBatchResolvedEventDto)),
         }
         .ToDictionary(descriptor => descriptor.Type, StringComparer.Ordinal);

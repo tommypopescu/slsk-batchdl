@@ -82,66 +82,6 @@ public class CliProgressReporter
 
     public void Stop() => _tickCts.Cancel();
 
-    public void Attach(EngineEvents events)
-    {
-        events.DownloadStarted        += ReportDownloadStart;
-        events.JobStatus              += ReportJobStatus;
-        events.DownloadStateChanged   += (song, state) => ReportDownloadStateChanged(song, GetStateLabel(state));
-        events.OnCompleteStart        += ReportOnCompleteStart;
-        events.OnCompleteEnd          += ReportOnCompleteEnd;
-        events.JobStatus              += ReportJobStatus;
-        events.JobStateChanged        += OnJobStateChanged;
-    }
-
-    private void OnJobStateChanged(Job job, JobState state)
-    {
-        if (job is SongJob song)
-        {
-            if (state == JobState.Searching)
-                ReportSongSearching(song);
-            else if (state is JobState.Done or JobState.Failed or JobState.AlreadyExists or JobState.Skipped or JobState.NotFoundLastTime)
-                ReportStateChanged(song);
-        }
-        else if (job is AlbumJob albumJob)
-        {
-            if (state == JobState.Searching)
-                ReportJobSearching(albumJob);
-            else if (state == JobState.Downloading && albumJob.ResolvedTarget != null)
-            {
-                ReportAlbumDownloadStarted(albumJob, albumJob.ResolvedTarget);
-                ReportAlbumTrackDownloadStarted(albumJob, albumJob.ResolvedTarget);
-            }
-            else if (state == JobState.Done)
-                ReportAlbumDownloadCompleted(albumJob);
-            else if (state == JobState.Failed)
-                ReportJobStatus(albumJob, TerminalStatusLabel(state, albumJob.FailureReason));
-        }
-        else if (job is ExtractJob extractJob)
-        {
-            if (state == JobState.Extracting)
-                ReportExtractionStarted(extractJob);
-            else if (state == JobState.Done && extractJob.Result != null)
-                ReportExtractionCompleted(extractJob, extractJob.Result);
-            else if (state == JobState.Failed)
-            {
-                if (extractJob.FailureMessage != null)
-                    ReportExtractionFailed(extractJob, extractJob.FailureMessage);
-                ReportJobStatus(extractJob, TerminalStatusLabel(state, extractJob.FailureReason, "extraction failed"));
-            }
-        }
-        else
-        {
-            if (state == JobState.Searching)
-                ReportJobSearching(job);
-            else if (state == JobState.Downloading)
-                ReportJobDownloading(job);
-            else if (state is JobState.Done or JobState.AlreadyExists)
-                ReportJobStatus(job, "done");
-            else if (state == JobState.Failed)
-                ReportJobStatus(job, TerminalStatusLabel(state, job.FailureReason));
-        }
-    }
-
     internal void Attach(ICliBackend backend)
     {
         backend.EventReceived += envelope =>
@@ -195,6 +135,9 @@ public class CliProgressReporter
                     break;
                 case "on-complete.ended" when envelope.Payload is OnCompleteEndedEventDto e:
                     ReportOnCompleteEnd(e);
+                    break;
+                case "search.rate-limited":
+                    Printing.WriteLine("Search rate limit reached, waiting...", ConsoleColor.DarkGray);
                     break;
             }
         };

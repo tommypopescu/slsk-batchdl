@@ -36,6 +36,10 @@ public class EngineEvents
     // (e.g. "deleting files", "moving").
     public event Action<Job, string>? JobStatus;
 
+    // ── Search ───────────────────────────────────────────────────────────────
+    // Fired once per rate-limit window when the search semaphore is exhausted.
+    public event Action? SearchRateLimited;
+
     // ── Song-level ───────────────────────────────────────────────────────────
     public event Action<SongJob>? OnCompleteStart;
     public event Action<SongJob>? OnCompleteEnd;
@@ -67,6 +71,7 @@ public class EngineEvents
 
 
     internal void RaiseJobStatus(Job job, string status) => JobStatus?.Invoke(job, status);
+    internal void RaiseSearchRateLimited() => SearchRateLimited?.Invoke();
 
     internal void RaiseOnCompleteStart(SongJob song) => OnCompleteStart?.Invoke(song);
     internal void RaiseOnCompleteEnd(SongJob song) => OnCompleteEnd?.Invoke(song);

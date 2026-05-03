@@ -38,7 +38,7 @@ namespace Sldl.Core;
         }
     }
 
-    public async Task WaitAsync(CancellationToken cancellationToken = default, Action? onWaiting = null)
+    public async Task WaitAsync(Action? onWaiting = null, CancellationToken cancellationToken = default)
     {
         TryResetSemaphore();
         var semaphoreTask = this.semaphore.WaitAsync(cancellationToken);

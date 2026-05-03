@@ -876,5 +876,33 @@ namespace Tests.Unit
             Assert.IsTrue(results.Any(r => r.Results[0].Files.Any(f => f.Query.Title.Contains("Blue Sky"))));
             Assert.IsTrue(results.Any(r => r.Results[0].Files.Any(f => f.Query.Title.Contains("Telephone Line"))));
         }
+
+        [TestMethod]
+        public async Task SearchSong_WhenRateLimitExhausted_RaisesSearchRateLimitedEvent()
+        {
+            var client = CreateMockClient([]);
+            var settings = TestHelpers.CreateDefaultSettings().Download;
+            var events = new EngineEvents();
+            var registry = TestHelpers.CreateSessionRegistry();
+
+            // 1 search per 10 seconds — second search will block immediately
+            var searcher = new Searcher(client, registry, registry, events, searchesPerTime: 1, searchRenewTime: 10);
+
+            var song1 = new SongJob(new SongQuery { Artist = "A", Title = "B" });
+            await searcher.SearchSong(song1, settings.Search, new ResponseData(), CancellationToken.None);
+
+            bool fired = false;
+            events.SearchRateLimited += () => fired = true;
+
+            var song2 = new SongJob(new SongQuery { Artist = "C", Title = "D" });
+            using var cts = new CancellationTokenSource();
+            var task2 = searcher.SearchSong(song2, settings.Search, new ResponseData(), cts.Token);
+
+            // onWaiting fires synchronously before WaitAsync yields, so fired is already true
+            Assert.IsTrue(fired, "SearchRateLimited should fire when the rate semaphore is exhausted.");
+
+            cts.Cancel();
+            await Assert.ThrowsExceptionAsync<OperationCanceledException>(async () => await task2);
+        }
     }
 }

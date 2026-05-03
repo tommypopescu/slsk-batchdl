@@ -144,6 +144,11 @@ public sealed record AlbumDownloadCompletedEventDto(
     JobSummaryDto Summary);
 
 /// <summary>
+/// Activity event emitted once per rate-limit window when the search semaphore is exhausted.
+/// </summary>
+public sealed record SearchRateLimitedEventDto();
+
+/// <summary>
 /// Activity event emitted when a job starts retrieving full folder contents.
 /// </summary>
 public sealed record JobFolderRetrievingEventDto(

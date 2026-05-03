@@ -557,7 +557,7 @@ public partial class Searcher
     private async Task DoSearch(string search, SearchOptions opts, Action<SearchResponse> rHandler,
         bool noRemoveSpecialChars, CancellationToken? ct = null, Action? onSearch = null)
     {
-        await rateSemaphore.WaitAsync(ct ?? CancellationToken.None);
+        await rateSemaphore.WaitAsync(events.RaiseSearchRateLimited, ct ?? CancellationToken.None);
         search = CleanSearchString(search, !noRemoveSpecialChars);
         var q = SearchQuery.FromText(search);
         onSearch?.Invoke();
