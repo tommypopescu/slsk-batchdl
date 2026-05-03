@@ -325,6 +325,9 @@ public class DownloadEngine
                         directSongs.Where(s => s.State == JobState.Pending).ToList(),
                         existing,
                         notFound);
+
+                    foreach (var song in existing)
+                        await MaybeRemoveFromSource(song, extractor, config.Extraction);
                 }
 
                 if (config.PrintTracks)
@@ -358,8 +361,7 @@ public class DownloadEngine
                             int fl = directSongs.Count(s => s.State == JobState.Failed);
                             Events.RaiseOverallProgress(dl, fl, directSongs.Count);
 
-                            if (song.State == JobState.Done)
-                                await MaybeRemoveFromSource(song, extractor, config.Extraction);
+                            await MaybeRemoveFromSource(song, extractor, config.Extraction);
                         }
                     }));
 
