@@ -24,10 +24,26 @@ internal static partial class Program
         Logger.SetupExceptionHandling();
         Logger.AddConsole(writer: (msg, color) => Printing.WriteLine(msg, color));
 
-        string configPath = ConfigManager.ExtractConfigPath(bindArgs);
-        var configFile = ConfigManager.Load(configPath);
-        var (engineSettings, rootSettings, cliSettings, daemonSettings, remoteSettings) = ConfigManager.BindAll(configFile, bindArgs);
-        ConfigManager.ApplyAutoProfileCliSettings(configFile, rootSettings, cliSettings);
+        string configPath;
+        ConfigFile configFile;
+        EngineSettings engineSettings;
+        DownloadSettings rootSettings;
+        CliSettings cliSettings;
+        DaemonSettings daemonSettings;
+        RemoteSettings remoteSettings;
+
+        try
+        {
+            configPath = ConfigManager.ExtractConfigPath(bindArgs);
+            configFile = ConfigManager.Load(configPath);
+            (engineSettings, rootSettings, cliSettings, daemonSettings, remoteSettings) = ConfigManager.BindAll(configFile, bindArgs);
+            ConfigManager.ApplyAutoProfileCliSettings(configFile, rootSettings, cliSettings);
+        }
+        catch (Exception ex) when (ex is ArgumentException || ex.Message.StartsWith("Input error:"))
+        {
+            Logger.Fatal(ex.Message);
+            return;
+        }
 
         string? profileArg = ConfigManager.ExtractProfileName(bindArgs);
         if (profileArg != null)
@@ -125,7 +141,7 @@ internal static partial class Program
         {
             jobSettingsResolver = ConfigManager.CreateJobSettingsResolver(configFile, bindArgs, cliSettings);
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is ArgumentException || ex.Message.StartsWith("Input error:"))
         {
             Logger.Fatal(ex.Message);
             return;

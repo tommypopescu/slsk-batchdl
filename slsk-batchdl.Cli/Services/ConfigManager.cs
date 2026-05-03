@@ -557,7 +557,13 @@ public static partial class ConfigManager
                 });
                 break;
             case "--it": case "--input-type":
-                Download(d => d.Extraction.InputType = Enum.Parse<InputType>(value.Replace("-", ""), ignoreCase: true)); break;
+                Download(d =>
+                {
+                    if (!Enum.TryParse<InputType>(value.Replace("-", ""), ignoreCase: true, out var parsed))
+                        throw new Exception($"Input error: Invalid input type '{value}'");
+                    d.Extraction.InputType = parsed;
+                });
+                break;
             case "-n": case "--number":
                 Download(d => d.Extraction.MaxTracks = Int()); break;
             case "-o": case "--offset":
