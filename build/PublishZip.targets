@@ -1,0 +1,78 @@
+<!-- 
+dotnet msbuild build/PublishZip.targets -t:PublishAll
+dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=linux-x64
+dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64 
+-->
+<Project>
+  <PropertyGroup>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RepoRoot>
+    <Framework Condition="'$(Framework)' == ''">net10.0</Framework>
+
+    <ArtifactsDir Condition="'$(ArtifactsDir)' == ''">$(RepoRoot)/artifacts</ArtifactsDir>
+    <PublishRoot>$(ArtifactsDir)/publish</PublishRoot>
+    <PackageDir>$(ArtifactsDir)/packages</PackageDir>
+
+    <CliProject>$(RepoRoot)/slsk-batchdl.Cli/slsk-batchdl.Cli.csproj</CliProject>
+  </PropertyGroup>
+
+  <Target Name="PublishPackage">
+    <Error Condition="'$(RID)' == ''" Text="Set RID, e.g. -p:RID=linux-x64" />
+
+    <PropertyGroup>
+      <SelfContained Condition="'$(SelfContained)' == ''">true</SelfContained>
+      <Trimmed Condition="'$(Trimmed)' == ''">$(SelfContained)</Trimmed>
+      <PublishLabel Condition="'$(PublishLabel)' == ''">$(RID)</PublishLabel>
+      <PublishDir>$(PublishRoot)/$(PublishLabel)</PublishDir>
+      <IsWindowsRid>$([System.String]::Copy('$(RID)').StartsWith('win'))</IsWindowsRid>
+      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' == 'True'">sldl_$(PublishLabel).zip</PackageName>
+      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' != 'True'">sldl_$(PublishLabel).tar.gz</PackageName>
+      <PackagePath>$(PackageDir)/$(PackageName)</PackagePath>
+    </PropertyGroup>
+
+    <RemoveDir Directories="$(PublishDir)" Condition="Exists('$(PublishDir)')" />
+    <MakeDir Directories="$(PublishDir);$(PackageDir)" />
+
+    <Exec Command="dotnet publish &quot;$(CliProject)&quot; -c Release -f $(Framework) -r $(RID) -o &quot;$(PublishDir)&quot; -p:PublishSingleFile=true -p:PublishTrimmed=$(Trimmed) -p:DebugType=embedded -p:DebugSymbols=true -p:IncludeSymbolsInSingleFile=false --self-contained=$(SelfContained)" />
+
+    <Copy SourceFiles="$(RepoRoot)/LICENSE"
+          DestinationFolder="$(PublishDir)"
+          Condition="Exists('$(RepoRoot)/LICENSE')" />
+
+    <ItemGroup>
+      <PublishSidecarsToDelete Include="$(PublishDir)/*.pdb" />
+      <PublishSidecarsToDelete Include="$(PublishDir)/*.runtimeconfig.json" Condition="'$(SelfContained)' == 'true'" />
+      <PublishSidecarsToDelete Include="$(PublishDir)/aspnetcorev2_inprocess.dll" />
+    </ItemGroup>
+
+    <Delete Files="@(PublishSidecarsToDelete)" />
+    <Delete Files="$(PackagePath)" Condition="Exists('$(PackagePath)')" />
+
+    <ZipDirectory Condition="'$(IsWindowsRid)' == 'True'"
+                  SourceDirectory="$(PublishDir)"
+                  DestinationFile="$(PackagePath)"
+                  Overwrite="true" />
+
+    <Exec Condition="'$(IsWindowsRid)' != 'True'"
+          WorkingDirectory="$(PublishDir)"
+          Command="tar -czf &quot;$(PackagePath)&quot; ." />
+  </Target>
+
+  <Target Name="PublishZip" DependsOnTargets="PublishPackage" />
+
+  <Target Name="PublishAll">
+    <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
+             Properties="RID=win-x64;SelfContained=true;Trimmed=true;PublishLabel=win-x64;PackageName=sldl_win-x64.zip" />
+    <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
+             Properties="RID=linux-x64;SelfContained=true;Trimmed=true;PublishLabel=linux-x64;PackageName=sldl_linux-x64.tar.gz" />
+    <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
+             Properties="RID=linux-arm;SelfContained=true;Trimmed=true;PublishLabel=linux-arm;PackageName=sldl_linux-arm.tar.gz" />
+    <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
+             Properties="RID=osx-x64;SelfContained=true;Trimmed=true;PublishLabel=osx-x64;PackageName=sldl_osx-x64.tar.gz" />
+    <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
+             Properties="RID=osx-arm64;SelfContained=true;Trimmed=true;PublishLabel=osx-arm64;PackageName=sldl_osx-arm64.tar.gz" />
+  </Target>
+
+  <Target Name="CleanArtifacts">
+    <RemoveDir Directories="$(ArtifactsDir)" Condition="Exists('$(ArtifactsDir)')" />
+  </Target>
+</Project>
