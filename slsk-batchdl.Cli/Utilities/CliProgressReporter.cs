@@ -107,7 +107,10 @@ public class CliProgressReporter
             if (state == JobState.Searching)
                 ReportJobSearching(albumJob);
             else if (state == JobState.Downloading && albumJob.ResolvedTarget != null)
+            {
+                ReportAlbumDownloadStarted(albumJob, albumJob.ResolvedTarget);
                 ReportAlbumTrackDownloadStarted(albumJob, albumJob.ResolvedTarget);
+            }
             else if (state == JobState.Done)
                 ReportAlbumDownloadCompleted(albumJob);
             else if (state == JobState.Failed)
@@ -953,6 +956,17 @@ public class CliProgressReporter
 
         lock (Printing.ConsoleLock)
         {
+            if (_albumBlocks.TryGetValue(job, out var oldBlock) && !ReferenceEquals(oldBlock.Songs, folder.Files))
+            {
+                _albumBlocks.TryRemove(job, out _);
+                _jobBars.TryRemove(job, out _);
+                foreach (var s in oldBlock.Songs)
+                {
+                    _songToAlbum.TryRemove(s, out _);
+                    _bars.TryRemove(s, out _);
+                }
+            }
+
             var headerBar = _jobBars.GetOrAdd(job, _ => Printing.GetProgressBar());
             _jobStatuses[job] = "downloading";
             try { RefreshOrPrintJobLineWithProfileSuffix(headerBar, 0, job, AlbumHeaderText(job, 0, total, "downloading"), print: true); } catch { }
@@ -1014,6 +1028,20 @@ public class CliProgressReporter
         int total = job.Tracks?.Count ?? job.Folder.Files?.Count ?? 0;
         lock (Printing.ConsoleLock)
         {
+            if (_backendAlbumBlocks.TryGetValue(job.Summary.JobId, out var oldBlock))
+            {
+                _backendAlbumBlocks.TryRemove(job.Summary.JobId, out _);
+                _backendJobBars.TryRemove(job.Summary.JobId, out _);
+                foreach (var s in oldBlock.Songs)
+                {
+                    if (s.JobId.HasValue)
+                    {
+                        _backendSongToAlbum.TryRemove(s.JobId.Value, out _);
+                        _backendBars.TryRemove(s.JobId.Value, out _);
+                    }
+                }
+            }
+
             var headerBar = _backendJobBars.GetOrAdd(job.Summary.JobId, _ => Printing.GetProgressBar());
             _backendJobStatuses[job.Summary.JobId] = "downloading";
             try { RefreshOrPrintJobLineWithProfileSuffix(headerBar, 0, job.Summary, AlbumHeaderText(job.Summary, 0, total, "downloading"), print: true); } catch { }

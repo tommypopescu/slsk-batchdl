@@ -841,6 +841,9 @@ public class DownloadEngine
                 }
 
                 job.Results.RemoveAt(index);
+                
+                // Reset state so the next iteration transitions to Downloading naturally
+                job.UpdateState(JobState.Pending);
             }
         }
 

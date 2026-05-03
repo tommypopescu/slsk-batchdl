@@ -41,6 +41,8 @@ public class EngineEvents
     public event Action<SongJob>? OnCompleteEnd;
 
     // ── Download ─────────────────────────────────────────────────────────────
+    // TODO: Once the engine is refactored to use immutable state snapshots, this event should be removed
+    // and consumers should just read the snapshot from a generic JobStateChanged/TargetChanged event.
     public event Action<SongJob, FileCandidate>? DownloadStarted;
     public event Action<SongJob, long, long>? DownloadProgress;      // transferred, total
     public event Action<SongJob, TransferStates>? DownloadStateChanged;  // raw state, not string
