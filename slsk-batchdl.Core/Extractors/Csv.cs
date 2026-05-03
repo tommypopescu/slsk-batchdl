@@ -73,7 +73,6 @@ namespace Sldl.Core.Extractors;
                         jobs.Add(currentSlj);
                         currentSlj = null;
                     }
-                    albumJob.ItemName              = csvName;
                     albumJob.EnablesIndexByDefault = true;
                     jobs.Add(albumJob);
                 }

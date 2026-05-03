@@ -346,7 +346,6 @@ namespace Sldl.Core.Extractors;
                     var job = new AlbumJob(query)
                     {
                         ItemNumber            = num++,
-                        ItemName              = "Spotify Albums",
                         EnablesIndexByDefault = true,
                         ExtractorFolderCond = new FolderConditionPatch { MinTrackCount = album.TotalTracks },
                     };

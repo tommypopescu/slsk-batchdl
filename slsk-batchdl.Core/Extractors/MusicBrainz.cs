@@ -185,7 +185,6 @@ namespace Sldl.Core.Extractors;
                     var job = new AlbumJob(query)
                     {
                         ItemNumber = offset + count + 1,
-                        ItemName = collectionName,
                         EnablesIndexByDefault = true,
                         ExtractorFolderCond = new FolderConditionPatch { MinTrackCount = trackCount, MaxTrackCount = trackCount },
                     };
