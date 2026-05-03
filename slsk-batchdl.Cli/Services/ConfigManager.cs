@@ -648,7 +648,7 @@ public static partial class ConfigManager
             case "--Mst": case "--stale-time": case "--max-stale-time":
                 Download(d => d.Search.MaxStaleTime = Int()); break;
             case "--Mr": case "--retries": case "--max-retries":
-                Download(d => d.Transfer.MaxRetriesPerTrack = Int()); break;
+                Download(d => d.Transfer.MaxDownloadRetries = Int()); break;
             case "--uer": case "--unknown-error-retries":
                 Download(d => d.Transfer.UnknownErrorRetries = Int()); break;
             case "--fs": case "--fast-search":
@@ -1039,7 +1039,7 @@ public static partial class ConfigManager
             settings.Extraction.SetAlbumMinTrackCount = boolSeed;
             settings.Extraction.SetAlbumMaxTrackCount = boolSeed;
 
-            settings.Transfer.MaxRetriesPerTrack = intSeed;
+            settings.Transfer.MaxDownloadRetries = intSeed;
             settings.Transfer.UnknownErrorRetries = intSeed;
             settings.Transfer.NoIncompleteExt = boolSeed;
             settings.Transfer.AlbumTrackCountMaxRetries = intSeed;

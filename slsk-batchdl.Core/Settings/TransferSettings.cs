@@ -3,8 +3,8 @@ namespace Sldl.Core.Settings;
 /// Controls file transfer behaviour: retries and incomplete-file handling.
 public class TransferSettings
 {
-    /// Maximum number of times to retry downloading a track before giving up.
-    public int MaxRetriesPerTrack { get; set; } = 30;
+    /// Maximum number of times to retry downloading before giving up on the item.
+    public int MaxDownloadRetries { get; set; } = 10;
 
     /// Number of extra attempts when an unknown/transient error occurs during download.
     public int UnknownErrorRetries { get; set; } = 2;

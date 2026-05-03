@@ -107,7 +107,7 @@ public sealed record ExtractionSettingsPatchDto(
     bool? SetAlbumMaxTrackCount = null);
 
 public sealed record TransferSettingsPatchDto(
-    int? MaxRetriesPerTrack = null,
+    int? MaxDownloadRetries = null,
     int? UnknownErrorRetries = null,
     bool? NoIncompleteExt = null,
     int? AlbumTrackCountMaxRetries = null);
@@ -294,7 +294,7 @@ public static class DownloadSettingsPatchDtoMapper
     private static void ApplyTransfer(TransferSettings target, TransferSettingsPatchDto? patch)
     {
         if (patch == null) return;
-        if (patch.MaxRetriesPerTrack is { } maxRetriesPerTrack) target.MaxRetriesPerTrack = maxRetriesPerTrack;
+        if (patch.MaxDownloadRetries is { } maxDownloadRetries) target.MaxDownloadRetries = maxDownloadRetries;
         if (patch.UnknownErrorRetries is { } unknownErrorRetries) target.UnknownErrorRetries = unknownErrorRetries;
         if (patch.NoIncompleteExt is { } noIncompleteExt) target.NoIncompleteExt = noIncompleteExt;
         if (patch.AlbumTrackCountMaxRetries is { } albumTrackCountMaxRetries) target.AlbumTrackCountMaxRetries = albumTrackCountMaxRetries;
@@ -479,7 +479,7 @@ public static class DownloadSettingsPatchDtoMapper
                 case "Extraction.SetAlbumMinTrackCount": Extraction.SetAlbumMinTrackCount = Bool(op); break;
                 case "Extraction.SetAlbumMaxTrackCount": Extraction.SetAlbumMaxTrackCount = Bool(op); break;
 
-                case "Transfer.MaxRetriesPerTrack": Transfer.MaxRetriesPerTrack = Int(op); break;
+                case "Transfer.MaxDownloadRetries": Transfer.MaxDownloadRetries = Int(op); break;
                 case "Transfer.UnknownErrorRetries": Transfer.UnknownErrorRetries = Int(op); break;
                 case "Transfer.NoIncompleteExt": Transfer.NoIncompleteExt = Bool(op); break;
                 case "Transfer.AlbumTrackCountMaxRetries": Transfer.AlbumTrackCountMaxRetries = Int(op); break;
@@ -612,9 +612,9 @@ public static class DownloadSettingsPatchDtoMapper
 
     private sealed class TransferBuilder
     {
-        public int? MaxRetriesPerTrack, UnknownErrorRetries, AlbumTrackCountMaxRetries;
+        public int? MaxDownloadRetries, UnknownErrorRetries, AlbumTrackCountMaxRetries;
         public bool? NoIncompleteExt;
-        public TransferSettingsPatchDto Build() => new(MaxRetriesPerTrack, UnknownErrorRetries, NoIncompleteExt, AlbumTrackCountMaxRetries);
+        public TransferSettingsPatchDto Build() => new(MaxDownloadRetries, UnknownErrorRetries, NoIncompleteExt, AlbumTrackCountMaxRetries);
     }
 
     private sealed class SpotifyBuilder

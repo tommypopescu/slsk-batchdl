@@ -21,7 +21,7 @@ namespace Tests.Core
             var file2 = TestHelpers.CreateSlFile(@"Shares\Artist - Song.mp3", length: 180);
 
             // failuser will throw a simulated download failure
-            var resp1 = new SearchResponse("failuser", 1, true, 1000, 0, [file1]);
+            var resp1 = new SearchResponse("failuser", 1, true, 10000000, 0, [file1]);
             var resp2 = new SearchResponse("gooduser", 1, true, 100, 0, [file2]);
 
             var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], failingUsers: ["failuser"]);
@@ -59,7 +59,7 @@ namespace Tests.Core
             var file1 = TestHelpers.CreateSlFile(@"Music\Album\01. Artist - Song.mp3", length: 180);
             var file2 = TestHelpers.CreateSlFile(@"Shares\Album\01. Artist - Song.mp3", length: 180);
 
-            var resp1 = new SearchResponse("failuser", 1, true, 1000, 0, [file1]);
+            var resp1 = new SearchResponse("failuser", 1, true, 10000000, 0, [file1]);
             var resp2 = new SearchResponse("gooduser", 1, true, 100, 0, [file2]);
 
             var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], failingUsers: ["failuser"]);
@@ -99,7 +99,7 @@ namespace Tests.Core
             var file1 = TestHelpers.CreateSlFile(@"Music\Artist - Song.mp3", length: 180);
             var file2 = TestHelpers.CreateSlFile(@"Shares\Artist - Song.mp3", length: 180);
 
-            var resp1 = new SearchResponse("failuser", 1, true, 1000, 0, [file1]);
+            var resp1 = new SearchResponse("failuser", 1, true, 10000000, 0, [file1]);
             var resp2 = new SearchResponse("gooduser", 1, true, 100, 0, [file2]);
 
             var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], failingUsers: ["failuser"]);
@@ -133,6 +133,84 @@ namespace Tests.Core
         }
 
         [TestMethod]
+        public async Task SongJob_RespectsMaxDownloadRetries()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "sldl-fallback-song-max-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var file1 = TestHelpers.CreateSlFile(@"Music\Artist - Song.mp3", length: 180);
+            var file2 = TestHelpers.CreateSlFile(@"Shares\Artist - Song.mp3", length: 180);
+
+            var resp1 = new SearchResponse("failuser", 1, true, 10000000, 0, [file1]);
+            var resp2 = new SearchResponse("gooduser", 1, true, 100, 0, [file2]);
+
+            var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], failingUsers: ["failuser"]);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var dl = new DownloadSettings();
+                dl.Extraction.Input = "Artist - Song";
+                dl.Output.ParentDir = outputDir;
+                dl.Transfer.MaxDownloadRetries = 1; // Limit to 1 attempt
+
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var songJob = app.Queue.AllSongs().FirstOrDefault();
+                Assert.IsNotNull(songJob);
+                Assert.AreEqual(JobState.Failed, songJob.State, "SongJob should fail since MaxDownloadRetries was 1 and the first candidate failed.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AlbumJob_RespectsMaxDownloadRetries()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "sldl-fallback-album-max-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var file1 = TestHelpers.CreateSlFile(@"Music\Album\01. Artist - Song.mp3", length: 180);
+            var file2 = TestHelpers.CreateSlFile(@"Shares\Album\01. Artist - Song.mp3", length: 180);
+
+            var resp1 = new SearchResponse("failuser", 1, true, 10000000, 0, [file1]);
+            var resp2 = new SearchResponse("gooduser", 1, true, 100, 0, [file2]);
+
+            var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], failingUsers: ["failuser"]);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var dl = new DownloadSettings();
+                dl.Extraction.Input = "artist=Artist, album=Album";
+                dl.Extraction.IsAlbum = true;
+                dl.Search.NoBrowseFolder = true;
+                dl.Output.ParentDir = outputDir;
+                dl.Transfer.MaxDownloadRetries = 1; // Limit to 1 attempt
+
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var albumJob = app.Queue.AllJobs().OfType<AlbumJob>().FirstOrDefault();
+                Assert.IsNotNull(albumJob);
+                Assert.AreEqual(JobState.Failed, albumJob.State, "AlbumJob should fail since MaxDownloadRetries was 1 and the first folder failed.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task AlbumAggregateJob_FallsBackToNextFolder_OnDownloadFailure()
         {
             var outputDir = Path.Combine(Path.GetTempPath(), "sldl-fallback-aggalbum-" + Guid.NewGuid());
@@ -141,7 +219,7 @@ namespace Tests.Core
             var file1 = TestHelpers.CreateSlFile(@"Music\Album\01. Artist - Song.mp3", length: 180);
             var file2 = TestHelpers.CreateSlFile(@"Shares\Album\01. Artist - Song.mp3", length: 180);
 
-            var resp1 = new SearchResponse("failuser", 1, true, 1000, 0, [file1]);
+            var resp1 = new SearchResponse("failuser", 1, true, 10000000, 0, [file1]);
             var resp2 = new SearchResponse("gooduser", 1, true, 100, 0, [file2]);
 
             var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], failingUsers: ["failuser"]);

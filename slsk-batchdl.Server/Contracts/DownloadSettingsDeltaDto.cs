@@ -177,7 +177,7 @@ public static class DownloadSettingsDeltaMapper
             case "Extraction.SetAlbumMinTrackCount": settings.Extraction.SetAlbumMinTrackCount = Bool(op); break;
             case "Extraction.SetAlbumMaxTrackCount": settings.Extraction.SetAlbumMaxTrackCount = Bool(op); break;
 
-            case "Transfer.MaxRetriesPerTrack": settings.Transfer.MaxRetriesPerTrack = Int(op); break;
+            case "Transfer.MaxDownloadRetries": settings.Transfer.MaxDownloadRetries = Int(op); break;
             case "Transfer.UnknownErrorRetries": settings.Transfer.UnknownErrorRetries = Int(op); break;
             case "Transfer.NoIncompleteExt": settings.Transfer.NoIncompleteExt = Bool(op); break;
             case "Transfer.AlbumTrackCountMaxRetries": settings.Transfer.AlbumTrackCountMaxRetries = Int(op); break;
@@ -308,7 +308,7 @@ public static class DownloadSettingsDeltaMapper
 
     private static void AddTransferDiffs(List<DownloadSettingOperationDto> operations, TransferSettings before, TransferSettings after)
     {
-        AddIntDiff(operations, "Transfer.MaxRetriesPerTrack", before.MaxRetriesPerTrack, after.MaxRetriesPerTrack);
+        AddIntDiff(operations, "Transfer.MaxDownloadRetries", before.MaxDownloadRetries, after.MaxDownloadRetries);
         AddIntDiff(operations, "Transfer.UnknownErrorRetries", before.UnknownErrorRetries, after.UnknownErrorRetries);
         AddBoolDiff(operations, "Transfer.NoIncompleteExt", before.NoIncompleteExt, after.NoIncompleteExt);
         AddIntDiff(operations, "Transfer.AlbumTrackCountMaxRetries", before.AlbumTrackCountMaxRetries, after.AlbumTrackCountMaxRetries);

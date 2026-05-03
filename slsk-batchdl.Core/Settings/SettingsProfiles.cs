@@ -416,7 +416,7 @@ public static class SettingsCloner
 
     public static TransferSettings Clone(TransferSettings source) => new()
     {
-        MaxRetriesPerTrack = source.MaxRetriesPerTrack,
+        MaxDownloadRetries = source.MaxDownloadRetries,
         UnknownErrorRetries = source.UnknownErrorRetries,
         NoIncompleteExt = source.NoIncompleteExt,
         AlbumTrackCountMaxRetries = source.AlbumTrackCountMaxRetries,

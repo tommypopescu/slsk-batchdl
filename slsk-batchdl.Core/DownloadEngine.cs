@@ -734,6 +734,7 @@ public class DownloadEngine
             await Task.WhenAll(tasks);
         }
 
+        int tried = 0;
         while (job.Results.Count > 0 && !config.Output.AlbumArtOnly)
         {
             bool wasPreselected = job.ResolvedTarget != null;
@@ -795,6 +796,8 @@ public class DownloadEngine
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(job.Cts!.Token);
 
+            tried++;
+
             try
             {
                 await RunAlbumDownloads(chosenFolder, cts);
@@ -834,12 +837,13 @@ public class DownloadEngine
             if (!succeeded)
             {
                 organizer.SetremoteBaseDir(null);
-                if (wasPreselected)
+                if (wasPreselected || tried >= config.Transfer.MaxDownloadRetries)
                 {
                     job.Fail(FailureReason.AllDownloadsFailed);
                     break;
                 }
 
+                job.ResolvedTarget = null;
                 job.Results.RemoveAt(index);
                 
                 // Reset state so the next iteration transitions to Downloading naturally
@@ -1108,7 +1112,7 @@ public class DownloadEngine
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Logger.DebugError($"Download attempt {tried} failed: {ex.Message}");
-                if (tried >= candidates.Count || tried >= config.Transfer.MaxRetriesPerTrack)
+                if (tried >= candidates.Count || tried >= config.Transfer.MaxDownloadRetries)
                 {
                     throw new AllDownloadsFailedException();
                 }

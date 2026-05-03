@@ -321,6 +321,7 @@ namespace Tests.Eventing
         {
             var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
             var downloadSettings = new DownloadSettings();
+            downloadSettings.Transfer.MaxDownloadRetries = 0; // Fail quickly
             
             var songJob = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" });
             
