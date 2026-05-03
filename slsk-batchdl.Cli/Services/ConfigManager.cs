@@ -183,7 +183,7 @@ public static partial class ConfigManager
     public static IReadOnlyList<string> GetProfileNames(ConfigFile file)
         => file.Profiles.Keys.Where(k => k != "default").OrderBy(k => k).ToList();
 
-    private static IEnumerable<string> SplitProfileNames(string? profileName)
+    private static string[] SplitProfileNames(string? profileName)
         => string.IsNullOrWhiteSpace(profileName)
             ? []
             : profileName.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);

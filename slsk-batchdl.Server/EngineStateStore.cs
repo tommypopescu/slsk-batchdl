@@ -429,7 +429,7 @@ public sealed class EngineStateStore
         return new WorkflowSummaryDto(workflow.Key, title, state, roots, active, failed, completed);
     }
 
-    private static IReadOnlyList<WorkflowJobNodeDto> BuildWorkflowJobTree(IReadOnlyList<JobRecord> sourceRecords)
+    private static List<WorkflowJobNodeDto> BuildWorkflowJobTree(IReadOnlyList<JobRecord> sourceRecords)
     {
         var visibleRecords = sourceRecords
             .OrderBy(record => record.Summary.DisplayId)
@@ -496,7 +496,7 @@ public sealed class EngineStateStore
         return record;
     }
 
-    private IReadOnlyList<JobRecord> UpdateRecordsContainingJob(Guid jobId)
+    private List<JobRecord> UpdateRecordsContainingJob(Guid jobId)
     {
         return jobs.Values
             .Where(job => ContainsNestedJob(job, jobId))

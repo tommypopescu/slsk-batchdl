@@ -424,7 +424,7 @@ public static class DownloadSettingsDeltaMapper
         }
     }
 
-    private static bool RegexRulesEqual(IReadOnlyList<(RegexFields, RegexFields)>? before, IReadOnlyList<(RegexFields, RegexFields)>? after)
+    private static bool RegexRulesEqual(List<(RegexFields, RegexFields)>? before, List<(RegexFields, RegexFields)>? after)
     {
         if (before == null && after == null) return true;
         if (before == null || after == null || before.Count != after.Count) return false;

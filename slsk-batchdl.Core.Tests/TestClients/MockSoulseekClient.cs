@@ -177,7 +177,7 @@ namespace Tests.ClientTests
                     }
                 }
 
-                if (matchingFiles.Any())
+                if (matchingFiles.Count > 0)
                 {
                     var response = new SearchResponse(
                         username: user.Username,

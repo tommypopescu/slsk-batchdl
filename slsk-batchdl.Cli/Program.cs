@@ -752,7 +752,7 @@ internal static partial class Program
         }
     }
 
-    private static IReadOnlyList<JobDetailDto> ChildrenOf(
+    private static List<JobDetailDto> ChildrenOf(
         JobDetailDto detail,
         IReadOnlyDictionary<Guid, JobDetailDto> details)
         => details.Values
@@ -773,7 +773,7 @@ internal static partial class Program
             },
             DownloadSettings: ConfigManager.CreateCliDownloadSettingsPatch(args));
 
-    private static IReadOnlyList<string>? SplitProfileNames(string? names)
+    private static string[]? SplitProfileNames(string? names)
         => string.IsNullOrWhiteSpace(names)
             ? null
             : names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
