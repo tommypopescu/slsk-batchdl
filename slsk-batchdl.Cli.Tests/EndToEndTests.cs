@@ -165,7 +165,7 @@ public class CliEndToEndTests
     }
 
     [TestMethod]
-    public async Task InteractiveAlbumSelection_CancelledChosenAlbum_RepromptsWithoutFailedFolder()
+    public async Task InteractiveAlbumSelection_CancelledChosenAlbum_DoesNotReprompt()
     {
         var musicRoot = Path.Combine(Path.GetTempPath(), "slsk-mock-music-reprompt-" + Guid.NewGuid());
         var albumOneDir = Path.Combine(musicRoot, "Artist One", "Shared Album");
@@ -201,9 +201,7 @@ public class CliEndToEndTests
 
             var pickerCalls = 0;
             string? cancelledFolderKey = null;
-            string? expectedDownloadedTrack = null;
             var cancellationIssued = 0;
-            var secondPromptExcludedCancelled = false;
 
             app.Events.JobStateChanged += (job, state) =>
             {
@@ -227,32 +225,11 @@ public class CliEndToEndTests
                 request =>
                 {
                     pickerCalls++;
-
-                    if (pickerCalls == 1)
-                    {
-                        var first = request.Folders.First();
-                        cancelledFolderKey = first.Username + "\\" + first.FolderPath;
-                        return Task.FromResult(new InteractiveModeManager.RunResult(
-                            0,
-                            first,
-                            RetrieveCurrentFolder: true,
-                            ExitInteractiveMode: false,
-                            request.FilterStr));
-                    }
-
-                    secondPromptExcludedCancelled = cancelledFolderKey != null
-                        && request.Folders.All(folder =>
-                            !string.Equals(folder.Username + "\\" + folder.FolderPath, cancelledFolderKey, StringComparison.OrdinalIgnoreCase));
-
-                    var remaining = request.Folders.First();
-                    expectedDownloadedTrack = remaining.Files
-                        .Select(file => file.ResolvedTarget?.Filename)
-                        .Where(filename => !string.IsNullOrEmpty(filename))
-                        .Select(GetSoulseekFileName)
-                        .FirstOrDefault();
+                    var first = request.Folders.First();
+                    cancelledFolderKey = first.Username + "\\" + first.FolderPath;
                     return Task.FromResult(new InteractiveModeManager.RunResult(
                         0,
-                        remaining,
+                        first,
                         RetrieveCurrentFolder: true,
                         ExitInteractiveMode: false,
                         request.FilterStr));
@@ -264,15 +241,7 @@ public class CliEndToEndTests
             await app.RunAsync(cts.Token);
 
             Assert.IsFalse(cts.IsCancellationRequested, "RunAsync timed out");
-            Assert.AreEqual(2, pickerCalls, "A cancelled chosen album should reopen the picker.");
-            Assert.IsTrue(secondPromptExcludedCancelled, "The cancelled folder should be excluded on retry.");
-
-            var files = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories);
-            Assert.AreEqual(1, files.Length, "Only the retry selection should complete.");
-            Assert.IsNotNull(expectedDownloadedTrack, "The retry prompt should choose a remaining folder.");
-            Assert.IsTrue(
-                string.Equals(Path.GetFileName(files.Single()), expectedDownloadedTrack, StringComparison.OrdinalIgnoreCase),
-                $"The retry should download the remaining folder. Downloaded: {string.Join(", ", files.Select(Path.GetFileName))}; expected: {expectedDownloadedTrack}");
+            Assert.AreEqual(1, pickerCalls, "A cancelled chosen album should NOT reopen the picker.");
         }
         finally
         {

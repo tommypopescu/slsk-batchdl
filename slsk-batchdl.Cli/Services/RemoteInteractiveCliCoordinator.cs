@@ -161,6 +161,9 @@ internal sealed class RemoteInteractiveCliCoordinator
         if (detail?.Summary.State == ServerProtocol.JobStates.Done)
             return;
 
+        if (detail?.Summary.FailureReason == ServerProtocol.FailureReasons.Cancelled)
+            return;
+
         if (detail?.Payload is AlbumJobPayloadDto album
             && !string.IsNullOrWhiteSpace(album.ResolvedFolderUsername)
             && !string.IsNullOrWhiteSpace(album.ResolvedFolderPath))

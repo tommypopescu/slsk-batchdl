@@ -189,6 +189,9 @@ internal sealed class InteractiveCliCoordinator
         if (albumJob.State == JobState.Done)
             return;
 
+        if (albumJob.FailureReason == FailureReason.Cancelled)
+            return;
+
         if (albumJob.ResolvedTarget != null)
             session.ExcludedFolderKeys.Add(FolderKey(albumJob.ResolvedTarget));
 
