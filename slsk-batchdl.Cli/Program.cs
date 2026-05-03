@@ -288,11 +288,14 @@ internal static partial class Program
             }
         };
 
+        Guid workflowId = Guid.NewGuid();
+        await backend.SubscribeWorkflowAsync(workflowId, cts.Token);
+
+        var options = BuildRemoteSubmissionOptions(args, cliSettings) with { WorkflowId = workflowId };
         var request = new SubmitExtractJobRequestDto(
             rootSettings.Extraction.Input,
             rootSettings.Extraction.InputType.ToString(),
-            Options:
-            BuildRemoteSubmissionOptions(args, cliSettings));
+            Options: options);
 
         RemoteInteractiveCliCoordinator? interactiveCoordinator = null;
         JobSummaryDto submission;
@@ -305,8 +308,6 @@ internal static partial class Program
         {
             submission = await backend.SubmitExtractJobAsync(request, cts.Token);
         }
-
-        await backend.SubscribeWorkflowAsync(submission.WorkflowId, cts.Token);
 
         ConsoleInputManager.Reporter = cliReporter;
         ConsoleInputManager.OnCancelRequested = async () =>
