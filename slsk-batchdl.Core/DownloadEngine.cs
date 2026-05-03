@@ -43,6 +43,36 @@ public class DownloadEngine
         .OrderBy(job => job.DisplayId)
         .ToList();
 
+    public bool TryNextCandidate(Guid jobId)
+    {
+        var job = GetJob(jobId);
+        if (job == null) return false;
+
+        var activeDownloads = _registry.Downloads.Values.Where(d => d.Song == job).ToList();
+        
+        if (job is AlbumJob albumJob && albumJob.ResolvedTarget != null)
+        {
+            var songIds = albumJob.ResolvedTarget.Files.Select(f => f.Id).ToHashSet();
+            activeDownloads.AddRange(_registry.Downloads.Values.Where(d => songIds.Contains(d.Song.Id)));
+        }
+        else if (job is AggregateJob aggregateJob)
+        {
+            var songIds = aggregateJob.Songs.Select(f => f.Id).ToHashSet();
+            activeDownloads.AddRange(_registry.Downloads.Values.Where(d => songIds.Contains(d.Song.Id)));
+        }
+
+        if (activeDownloads.Count > 0)
+        {
+            foreach (var ad in activeDownloads)
+            {
+                ad.IsManuallySkipped = true;
+                ad.Cts.Cancel();
+            }
+            return true;
+        }
+        return false;
+    }
+
     private JobContext Ctx(Job job) => _contexts[job.Id];
 
     private void RegisterJob(Job job, Job? parent)
@@ -1108,6 +1138,12 @@ public class DownloadEngine
                 await downloader!.DownloadFile(candidate, outputPath, song, config.Transfer, config.Output.ParentDir, cts.Token);
                 _registry.UserSuccessCounts.AddOrUpdate(candidate.Username, 1, (_, c) => c + 1);
                 return (outputPath, candidate.File);
+            }
+            catch (ManuallySkippedException)
+            {
+                Logger.Debug($"Manually skipped candidate: {candidate.Username}\\{candidate.Filename}");
+                tried--;
+                continue;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

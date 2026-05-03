@@ -126,7 +126,10 @@ public class Downloader
         {
             if (File.Exists(incompleteOutputPath))
                 try { Utils.DeleteFileAndParentsIfEmpty(incompleteOutputPath, parentDir ?? ""); } catch { }
-            downloadRegistry.Downloads.TryRemove(candidate.Filename, out _);
+            
+            if (downloadRegistry.Downloads.TryRemove(candidate.Filename, out var ad) && ad.IsManuallySkipped)
+                throw new ManuallySkippedException();
+
             throw;
         }
 

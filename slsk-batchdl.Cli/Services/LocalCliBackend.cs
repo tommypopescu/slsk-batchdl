@@ -412,6 +412,22 @@ internal sealed class LocalCliBackend
         return Task.FromResult(engine.CancelWorkflow(workflowId));
     }
 
+    public Task<bool> TryNextCandidateAsync(Guid jobId, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(engine.TryNextCandidate(jobId));
+    }
+
+    public Task<bool> TryNextCandidateByDisplayIdAsync(int displayId, Guid? workflowId = null, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var job = engine.GetJob(displayId);
+        if (job == null || (workflowId.HasValue && job.WorkflowId != workflowId.Value))
+            return Task.FromResult(false);
+
+        return Task.FromResult(engine.TryNextCandidate(job.Id));
+    }
+
     private void Publish(string type, object payload)
     {
         var descriptor = ServerEventCatalog.Describe(type);

@@ -247,6 +247,31 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
         return doc.RootElement.TryGetProperty("cancelled", out var cancelled) ? cancelled.GetInt32() : 0;
     }
 
+    public async Task<bool> TryNextCandidateAsync(Guid jobId, CancellationToken ct = default)
+    {
+        using var response = await http.PostAsync($"api/jobs/{jobId}/next-candidate", null, ct);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return false;
+        await EnsureSuccessAsync(response, ct);
+        return true;
+    }
+
+    public async Task<bool> TryNextCandidateByDisplayIdAsync(int displayId, Guid? workflowId = null, CancellationToken ct = default)
+    {
+        if (workflowId is Guid id)
+        {
+            using var response = await http.PostAsync($"api/workflows/{id}/jobs/display/{displayId}/next-candidate", null, ct);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return false;
+            await EnsureSuccessAsync(response, ct);
+            return true;
+        }
+
+        var jobs = await GetJobsAsync(new JobQuery(null, null, null, IncludeAll: true), ct);
+        var match = jobs.FirstOrDefault(job => job.DisplayId == displayId);
+        return match != null && await TryNextCandidateAsync(match.JobId, ct);
+    }
+
     private async Task<JobSummaryDto?> PostOptionalSummaryAsync<T>(string url, T request, CancellationToken ct)
         => await PostOptionalAsync<JobSummaryDto, T>(url, request, ct);
 

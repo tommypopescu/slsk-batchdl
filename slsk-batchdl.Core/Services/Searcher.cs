@@ -672,3 +672,5 @@ public class AllDownloadsFailedException : SearchAndDownloadException
     public AllDownloadsFailedException()
         : base(FailureReason.AllDownloadsFailed, "All downloads failed.") { }
 }
+
+public class ManuallySkippedException : Exception {}

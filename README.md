@@ -590,10 +590,13 @@ on-complete = + 1:h:u: cmd /c if {stdout}==success (del "{path}" & echo "1;{path
 
 <!-- sldl-help:start(shortcuts) -->
 ## Shortcuts & interactive mode
-### Shortcuts
-To cancel a running album download, press `C`.
+### CLI Shortcuts
+```
+c               cancel a job by id or all jobs
+t               try next candidate for a job id
+```
 
-### Interactive mode
+### CLI Interactive Prompt Shortcuts
 Interactive mode for albums can be enabled with `-t`/`--interactive`. It enables users to choose the desired folder or download specific files from it.
 
 Key bindings:

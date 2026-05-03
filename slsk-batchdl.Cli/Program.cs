@@ -225,6 +225,36 @@ internal static partial class Program
             }
         };
 
+        ConsoleInputManager.OnNextCandidateRequested = async () =>
+        {
+            lock (Printing.ConsoleLock)
+            {
+                Printing.WriteLine(force: true);
+                Printing.Write("Try next candidate for job ID or n=Esc: ", ConsoleColor.Yellow, force: true);
+            }
+
+            var result = ConsoleInputManager.ReadCancelPromptResult();
+
+            if (result.Action == ConsoleInputManager.CancelPromptAction.Abort)
+                return;
+
+            if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId is int id)
+            {
+                if (await backend.TryNextCandidateByDisplayIdAsync(id, ct: cts.Token))
+                {
+                    Logger.Info($"Trying next candidate for job [{id}]...");
+                }
+                else
+                {
+                    Logger.Error($"Job ID [{id}] not found or has no active download.");
+                }
+            }
+            else
+            {
+                Logger.Error($"Invalid input '{result.Input}'.");
+            }
+        };
+
         _ = Task.Run(() => ConsoleInputManager.RunLoopAsync(cts.Token), cts.Token);
 
         try
@@ -337,6 +367,32 @@ internal static partial class Program
                     Logger.Info($"Cancelling job [{id}]...");
                 else
                     Logger.Error($"Job ID [{id}] not found.");
+            }
+            else
+            {
+                Logger.Error($"Invalid input '{result.Input}'.");
+            }
+        };
+
+        ConsoleInputManager.OnNextCandidateRequested = async () =>
+        {
+            lock (Printing.ConsoleLock)
+            {
+                Printing.WriteLine(force: true);
+                Printing.Write("Try next candidate for job ID or n=Esc: ", ConsoleColor.Yellow, force: true);
+            }
+
+            var result = ConsoleInputManager.ReadCancelPromptResult();
+
+            if (result.Action == ConsoleInputManager.CancelPromptAction.Abort)
+                return;
+
+            if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId is int id)
+            {
+                if (await backend.TryNextCandidateByDisplayIdAsync(id, submission.WorkflowId, cts.Token))
+                    Logger.Info($"Trying next candidate for job [{id}]...");
+                else
+                    Logger.Error($"Job ID [{id}] not found or has no active download.");
             }
             else
             {

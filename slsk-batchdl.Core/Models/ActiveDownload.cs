@@ -13,6 +13,7 @@ namespace Sldl.Core.Models;
 
         // Set by the Soulseek client stateChanged callback; read by UpdateLoop for stale detection.
         public Transfer? Transfer { get; set; }
+        public bool IsManuallySkipped { get; set; }
 
         public ActiveDownload(SongJob song, FileCandidate candidate, CancellationTokenSource cts)
         {

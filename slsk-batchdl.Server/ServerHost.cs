@@ -318,6 +318,28 @@ public static class ServerHost
             .Produces(StatusCodes.Status202Accepted)
             .Produces(StatusCodes.Status404NotFound);
 
+        app.MapPost("/api/jobs/{jobId:guid}/next-candidate", (Guid jobId, EngineSupervisor supervisor) =>
+        {
+            return supervisor.TryNextCandidate(jobId)
+                ? Results.Accepted($"/api/jobs/{jobId}")
+                : Results.NotFound();
+        })
+            .WithTags("Jobs")
+            .WithSummary("Tries the next candidate for an active job download.")
+            .Produces(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status404NotFound);
+
+        app.MapPost("/api/workflows/{workflowId:guid}/jobs/display/{displayId:int}/next-candidate", (Guid workflowId, int displayId, EngineSupervisor supervisor) =>
+        {
+            return supervisor.TryNextCandidateByDisplayId(workflowId, displayId)
+                ? Results.Accepted($"/api/workflows/{workflowId}")
+                : Results.NotFound();
+        })
+            .WithTags("Workflows")
+            .WithSummary("Tries the next candidate for an active job download by display id.")
+            .Produces(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status404NotFound);
+
         app.MapPost("/api/jobs/extract", async (SubmitExtractJobRequestDto request, EngineSupervisor supervisor, CancellationToken ct) =>
             await SubmitJobAsync(() => supervisor.SubmitExtractJobAsync(request, ct)))
             .WithTags("Job Submission")

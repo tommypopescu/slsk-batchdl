@@ -220,6 +220,28 @@ public sealed class EngineSupervisor
         return engine?.CancelWorkflow(workflowId) ?? 0;
     }
 
+    public bool TryNextCandidate(Guid jobId)
+    {
+        DownloadEngine? engine;
+        lock (engineGate)
+            engine = currentEngine;
+
+        return engine?.TryNextCandidate(jobId) ?? false;
+    }
+
+    public bool TryNextCandidateByDisplayId(Guid workflowId, int displayId)
+    {
+        DownloadEngine? engine;
+        lock (engineGate)
+            engine = currentEngine;
+
+        var job = engine?.GetJob(displayId);
+        if (job == null || job.WorkflowId != workflowId)
+            return false;
+
+        return engine?.TryNextCandidate(job.Id) ?? false;
+    }
+
     public IReadOnlyList<SearchRawResultDto>? GetSearchRawResults(Guid jobId, long afterSequence)
     {
         var searchJob = StateStore.GetJob<SearchJob>(jobId);

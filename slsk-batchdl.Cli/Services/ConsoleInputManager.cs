@@ -18,6 +18,7 @@ public static class ConsoleInputManager
 
     public static bool GlobalCancelEnabled { get; set; } = true;
     public static Func<Task>? OnCancelRequested { get; set; }
+    public static Func<Task>? OnNextCandidateRequested { get; set; }
     public static CliProgressReporter? Reporter { get; set; }
 
     public static async Task RunLoopAsync(CancellationToken ct)
@@ -40,6 +41,18 @@ public static class ConsoleInputManager
                             if (Reporter != null) Reporter.IsPaused = true;
                             Printing.SetBuffering(true);
                             await OnCancelRequested();
+                            Printing.SetBuffering(false);
+                            Printing.Flush();
+                            if (Reporter != null) Reporter.IsPaused = false;
+                        }
+                    }
+                    else if (GlobalCancelEnabled && key.KeyChar == 't')
+                    {
+                        if (OnNextCandidateRequested != null)
+                        {
+                            if (Reporter != null) Reporter.IsPaused = true;
+                            Printing.SetBuffering(true);
+                            await OnNextCandidateRequested();
                             Printing.SetBuffering(false);
                             Printing.Flush();
                             if (Reporter != null) Reporter.IsPaused = false;
