@@ -234,8 +234,10 @@ namespace Tests.ExtractorTests2
             var extractor = new CsvExtractor(config.Csv);
 
             var result = await extractor.GetTracks(_tempCsv, config.Extraction);
+            var list = (JobList)result;
 
-            Assert.IsTrue(result is AlbumJob || result is AlbumAggregateJob);
+            Assert.AreEqual(1, list.Jobs.Count);
+            Assert.IsTrue(list.Jobs[0] is AlbumJob || list.Jobs[0] is AlbumAggregateJob);
         }
 
         [TestMethod]
@@ -370,13 +372,10 @@ namespace Tests.ExtractorTests2
 
             var result = await extractor.GetTracks(_tempCsv, config.Extraction);
 
-            // Accept either AlbumJob or AlbumAggregateJob
-            int lineNumber = result switch
-            {
-                AlbumJob aj => aj.LineNumber,
-                _ => throw new AssertFailedException($"Expected AlbumJob, got {result.GetType().Name}")
-            };
-            Assert.AreEqual(2, lineNumber, "AlbumJob.LineNumber must match the 1-based CSV line");
+            var list = (JobList)result;
+            var album = list.Jobs.OfType<AlbumJob>().Single();
+
+            Assert.AreEqual(2, album.LineNumber, "AlbumJob.LineNumber must match the 1-based CSV line");
         }
     }
 

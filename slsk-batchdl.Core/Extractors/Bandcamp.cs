@@ -162,9 +162,7 @@ namespace Sldl.Core.Extractors;
                     var album  = nameSection.SelectSingleNode(".//h3[contains(@class, 'albumTitle')]/span/a").InnerText.UnHtmlString().Trim();
                     var artist = nameSection.SelectSingleNode(".//h3[contains(@class, 'albumTitle')]/span[last()]/a").InnerText.UnHtmlString().Trim();
                     var songQuery = new SongQuery { Artist = artist, Title = name, Album = album };
-                    var slj = new JobList();
-                    slj.Jobs.Add(new SongJob(songQuery));
-                    jobs.Add(slj);
+                    jobs.Add(new SongJob(songQuery));
                 }
             }
 

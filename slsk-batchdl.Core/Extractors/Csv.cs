@@ -49,9 +49,6 @@ namespace Sldl.Core.Extractors;
             var csvName = Path.GetFileNameWithoutExtension(csvFilePath);
             var jobs = BuildJobList(rows.Skip(offset).Take(maxTracks), csvName);
 
-            if (jobs.Count == 1)
-                return jobs[0];
-
             var list = new JobList { ItemName = csvName, EnablesIndexByDefault = true };
             list.Jobs.AddRange(jobs);
             return list;
@@ -73,7 +70,6 @@ namespace Sldl.Core.Extractors;
                         jobs.Add(currentSlj);
                         currentSlj = null;
                     }
-                    albumJob.EnablesIndexByDefault = true;
                     jobs.Add(albumJob);
                 }
                 else if (row is SongJob song)

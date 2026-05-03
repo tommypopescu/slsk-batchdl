@@ -181,9 +181,14 @@ public static class JobPreparer
 
         string indexPath;
         if (config.Output.IndexFilePath != null)
-            indexPath = config.Output.IndexFilePath.Replace("{playlist-name}", job.ItemNameOrSource().ReplaceInvalidChars(" ").Trim());
+        {
+            string playlistName = (ownerList.ItemName ?? job.ItemNameOrSource()).ReplaceInvalidChars(" ").Trim();
+            indexPath = config.Output.IndexFilePath.Replace("{playlist-name}", playlistName);
+        }
         else
-            indexPath = Path.Join(config.Output.ParentDir, job.DefaultFolderName(), "_index.csv");
+        {
+            indexPath = Path.Join(config.Output.ParentDir, ownerList.DefaultFolderName(), "_index.csv");
+        }
 
         var key = (indexPath, indexOption);
         if (editors.TryGetValue(key, out var existing))
@@ -206,9 +211,15 @@ public static class JobPreparer
 
         string m3uPath;
         if (config.Output.M3uFilePath != null)
-            m3uPath = config.Output.M3uFilePath.Replace("{playlist-name}", job.ItemNameOrSource().ReplaceInvalidChars(" ").Trim());
+        {
+            string playlistName = (ownerList.ItemName ?? job.ItemNameOrSource()).ReplaceInvalidChars(" ").Trim();
+            m3uPath = config.Output.M3uFilePath.Replace("{playlist-name}", playlistName);
+        }
         else
-            m3uPath = Path.Join(config.Output.ParentDir, job.DefaultFolderName(), job.DefaultPlaylistName());
+        {
+            string playlistFileName = ownerList.ItemName != null ? ownerList.DefaultPlaylistName() : job.DefaultPlaylistName();
+            m3uPath = Path.Join(config.Output.ParentDir, ownerList.DefaultFolderName(), playlistFileName);
+        }
 
         var key = (m3uPath, M3uOption.Playlist);
         if (editors.TryGetValue(key, out var existing))
@@ -259,7 +270,7 @@ public static class JobPreparer
     public static bool WillWriteIndex(DownloadSettings dl, JobList? queue = null)
     {
         if (dl.DoNotDownload) return false;
-        if (!dl.Output.HasConfiguredIndex && queue != null && !queue.Jobs.Any(x => x.EnablesIndexByDefault))
+        if (!dl.Output.HasConfiguredIndex && queue != null && !queue.EnablesIndexByDefault && !queue.Jobs.Any(x => x.EnablesIndexByDefault))
             return false;
         return dl.Output.WriteIndex;
     }

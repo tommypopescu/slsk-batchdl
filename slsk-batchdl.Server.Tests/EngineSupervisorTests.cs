@@ -58,7 +58,7 @@ public class EngineSupervisorTests
             Assert.IsNull(detail.Summary.ParentJobId);
             Assert.AreEqual(searchSummary.JobId, detail.Summary.SourceJobId);
 
-            var downloaded = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories);
+            var downloaded = Directory.GetFiles(outputDir, "*.mp3", SearchOption.AllDirectories);
             Assert.AreEqual(1, downloaded.Length);
             Assert.IsTrue(downloaded[0].EndsWith("01. Artist - Track One.mp3", StringComparison.OrdinalIgnoreCase));
 
