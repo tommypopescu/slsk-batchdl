@@ -949,9 +949,17 @@ internal static partial class Program
         {
             job.Fail(parsedFailureReason, failureMessage);
         }
-        else if (parsedState is JobState.Skipped or JobState.AlreadyExists or JobState.NotFoundLastTime)
+        else if (parsedState is JobState.Skipped or JobState.NotFoundLastTime)
         {
             job.SetSkipped(parsedState, parsedFailureReason);
+        }
+        else if (parsedState == JobState.AlreadyExists)
+        {
+            job.SetAlreadyExists();
+        }
+        else if (parsedState == JobState.Done)
+        {
+            job.SetDone();
         }
         else
         {

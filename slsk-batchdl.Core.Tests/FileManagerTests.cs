@@ -296,7 +296,7 @@ namespace Tests.FileManagerTests
                                                    new Soulseek.File(0, @"Artist1\Album1\01. Track1.mp3", 0, "mp3")),
                 DownloadPath = audio1Base,
             };
-            file1.UpdateState(JobState.Done);
+            file1.SetDone();
 
             var file2 = new SongJob(new SongQuery { Artist = "Artist1", Album = "Album1", Title = "Track2" })
             {
@@ -304,7 +304,7 @@ namespace Tests.FileManagerTests
                                                    new Soulseek.File(0, @"Artist1\Album1\02. Track2.mp3", 0, "mp3")),
                 DownloadPath = audio2Base,
             };
-            file2.UpdateState(JobState.Done);
+            file2.SetDone();
 
             var coverFile = new SongJob(new SongQuery())
             {
@@ -312,7 +312,7 @@ namespace Tests.FileManagerTests
                                                    new Soulseek.File(0, @"Artist1\Album1\Cover.jpg", 0, "jpg")),
                 DownloadPath = coverBase,
             };
-            coverFile.UpdateState(JobState.Done);
+            coverFile.SetDone();
 
             var allFiles = new List<SongJob> { file1, file2, coverFile };
 

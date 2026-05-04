@@ -1465,18 +1465,28 @@ public class CliProgressReporter
             {
                 Enum.TryParse<FailureReason>(dto.FailureReason?.ToString(), out var failureReason);
                 job.Fail(failureReason, dto.FailureMessage);
+                job.DownloadPath = dto.DownloadPath;
             }
-            else if (state is JobState.Skipped or JobState.AlreadyExists or JobState.NotFoundLastTime)
+            else if (state is JobState.Skipped or JobState.NotFoundLastTime)
             {
                 Enum.TryParse<FailureReason>(dto.FailureReason?.ToString(), out var failureReason);
                 job.SetSkipped(state, failureReason);
+                job.DownloadPath = dto.DownloadPath;
+            }
+            else if (state == JobState.AlreadyExists)
+            {
+                job.SetAlreadyExists(dto.DownloadPath);
+            }
+            else if (state == JobState.Done)
+            {
+                job.SetDone(dto.DownloadPath);
             }
             else
             {
                 job.UpdateState(state);
+                job.DownloadPath = dto.DownloadPath;
             }
         }
-        job.DownloadPath = dto.DownloadPath;
 
         return job;
     }

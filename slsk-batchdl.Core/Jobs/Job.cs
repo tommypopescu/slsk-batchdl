@@ -86,16 +86,30 @@ namespace Sldl.Core.Jobs;
 
         public void UpdateState(JobState state)
         {
-            if (state == JobState.Failed)
+            if (state is JobState.Failed)
                 throw new InvalidOperationException("Use Fail() to transition to Failed state.");
+            if (state is JobState.Done or JobState.AlreadyExists)
+                throw new InvalidOperationException("Use SetDone() or SetAlreadyExists() to transition to terminal states.");
+            if (state is JobState.Skipped or JobState.NotFoundLastTime)
+                throw new InvalidOperationException("Use SetSkipped() to transition to skipped states.");
             State = state;
+        }
+
+        public virtual void SetDone()
+        {
+            State = JobState.Done;
+        }
+
+        public virtual void SetAlreadyExists()
+        {
+            State = JobState.AlreadyExists;
         }
 
         public void SetSkipped(JobState skipState, FailureReason reason = FailureReason.None)
         {
             if (skipState != JobState.Skipped && skipState != JobState.AlreadyExists && skipState != JobState.NotFoundLastTime)
                 throw new ArgumentException("skipState must be a skipped state type.", nameof(skipState));
-            
+
             FailureReason = reason;
             State = skipState;
         }

@@ -80,7 +80,7 @@ namespace Tests.Index
                 new SongJob(new SongQuery { Artist = "Artist2", Title = "Title2" }),
                 new SongJob(new SongQuery { Artist = "Artist3", Title = "Title3" }),
             };
-            songs[0].UpdateState(JobState.Done);
+            songs[0].SetDone();
             songs[0].DownloadPath = "path/to/file1";
             songs[1].Fail(FailureReason.NoSuitableFileFound);
             // songs[2] stays Pending
@@ -130,7 +130,7 @@ namespace Tests.Index
             var editor = new M3uEditor(testM3uPath, queue, M3uOption.Index, true);
 
             // Update album states
-            albumJobs[0].UpdateState(JobState.Done);
+            albumJobs[0].SetDone();
             albumJobs[0].DownloadPath = "download/path";
             albumJobs[1].Fail(FailureReason.NoSuitableFileFound);
             albumJobs[2].SetSkipped(JobState.Skipped);
@@ -167,7 +167,7 @@ namespace Tests.Index
                 new SongJob(new SongQuery { Artist = "Artist, with commas", Title = "Title \"with\" quotes" }),
                 new SongJob(new SongQuery { Artist = "Artist; semi", Title = "Title; semi" }),
             };
-            songs[0].UpdateState(JobState.Done);
+            songs[0].SetDone();
             songs[0].DownloadPath = "path/file.mp3";
             songs[1].Fail(FailureReason.AllDownloadsFailed);
 
@@ -201,7 +201,7 @@ namespace Tests.Index
                 new SongJob(new SongQuery { Artist = "A2", Title = "T2" }),
             };
             songs[0].Fail(FailureReason.NoSuitableFileFound);
-            songs[1].UpdateState(JobState.Done);
+            songs[1].SetDone();
             songs[1].DownloadPath = "p";
 
             var (queue, _, _) = MakeSongQueue(songs);
@@ -228,17 +228,17 @@ namespace Tests.Index
             
             var audioSong = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" });
             audioSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(1, "Track.mp3", 100, ".mp3"));
-            audioSong.UpdateState(JobState.Done);
+            audioSong.SetDone();
             audioSong.DownloadPath = "Artist/Album/Track.mp3";
 
             var imageSong = new SongJob(new SongQuery());
             imageSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(2, "Cover.jpg", 100, ".jpg"));
-            imageSong.UpdateState(JobState.Done);
+            imageSong.SetDone();
             imageSong.DownloadPath = "Artist/Album/Cover.jpg";
 
             var folder = new AlbumFolder("user", "Artist\\Album", [audioSong, imageSong]);
             album.ResolvedTarget = folder;
-            album.UpdateState(JobState.Done);
+            album.SetDone();
             queue.Add(album);
 
             File.WriteAllText(testM3uPath, "");

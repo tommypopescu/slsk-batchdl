@@ -98,7 +98,7 @@ namespace Tests.TrackSkipperTests
         public void IndexSkipper_DownloadedTrack_ReturnsTrue()
         {
             var original = new SongJob(new SongQuery { Artist = "Artist1", Title = "Title1" });
-            original.UpdateState(JobState.Done);
+            original.SetDone();
             original.DownloadPath = "fake/path/file.mp3";
             var editor = CreateEditorWithSong(original);
 

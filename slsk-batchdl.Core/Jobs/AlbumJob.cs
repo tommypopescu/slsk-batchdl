@@ -48,6 +48,26 @@ namespace Sldl.Core.Jobs;
             set { if (_downloadPath != value) { _downloadPath = value; OnPropertyChanged(); } }
         }
 
+        public override void SetDone()
+            => SetDone(downloadPath: null);
+
+        public void SetDone(string? downloadPath)
+        {
+            if (downloadPath != null)
+                DownloadPath = downloadPath;
+            base.SetDone();
+        }
+
+        public override void SetAlreadyExists()
+            => SetAlreadyExists(path: null);
+
+        public void SetAlreadyExists(string? path)
+        {
+            if (path != null)
+                DownloadPath = path;
+            base.SetAlreadyExists();
+        }
+
         // True only when ALL in-progress files in the resolved folder are stale.
         public bool IsStale(int maxStaleTimeMs)
         {

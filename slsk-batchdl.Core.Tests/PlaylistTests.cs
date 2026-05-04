@@ -31,24 +31,24 @@ namespace Tests.Playlist
             var queue = new JobList("Test Queue");
 
             var song1 = new SongJob(new SongQuery { Artist = "Artist1", Title = "Title1" });
-            song1.UpdateState(JobState.Done);
+            song1.SetDone();
             song1.DownloadPath = "Artist1/Title1.mp3";
             queue.Add(song1);
 
             var album1 = new AlbumJob(new AlbumQuery { Artist = "AlbumArtist", Album = "Album1" });
             var songA = new SongJob(new SongQuery { Artist = "AlbumArtist", Title = "TrackA" });
-            songA.UpdateState(JobState.Done);
+            songA.SetDone();
             songA.DownloadPath = "AlbumArtist/Album1/TrackA.mp3";
             var songB = new SongJob(new SongQuery { Artist = "AlbumArtist", Title = "TrackB" });
-            songB.UpdateState(JobState.Done);
+            songB.SetDone();
             songB.DownloadPath = "AlbumArtist/Album1/TrackB.mp3";
             var folder = new AlbumFolder("user", "AlbumArtist\\Album1", [songA, songB]);
             album1.ResolvedTarget = folder;
-            album1.UpdateState(JobState.Done);
+            album1.SetDone();
             queue.Add(album1);
 
             var song2 = new SongJob(new SongQuery { Artist = "Artist2", Title = "Title2" });
-            song2.UpdateState(JobState.Done);
+            song2.SetDone();
             song2.DownloadPath = "Artist2/Title2.mp3";
             queue.Add(song2);
 
@@ -72,13 +72,13 @@ namespace Tests.Playlist
             var variant1 = new SongJob(new SongQuery { Artist = "Artist", Title = "Title" });
             variant1.Fail(FailureReason.NoSuitableFileFound);
             var variant2 = new SongJob(new SongQuery { Artist = "Artist", Title = "Title (Remix)" });
-            variant2.UpdateState(JobState.Done);
+            variant2.SetDone();
             variant2.DownloadPath = "Artist/Title (Remix).mp3";
             var variant3 = new SongJob(new SongQuery { Artist = "Artist", Title = "Title (Live)" });
             variant3.Fail(FailureReason.AllDownloadsFailed);
 
             agg.Songs.AddRange([variant1, variant2, variant3]);
-            agg.UpdateState(JobState.Done);
+            agg.SetDone();
             queue.Add(agg);
 
             var editor = new M3uEditor(testM3uPath, queue, M3uOption.Playlist, false);
@@ -97,17 +97,17 @@ namespace Tests.Playlist
             
             var audioSong = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" });
             audioSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(1, "Track.mp3", 100, ".mp3"));
-            audioSong.UpdateState(JobState.Done);
+            audioSong.SetDone();
             audioSong.DownloadPath = "Artist/Album/Track.mp3";
 
             var imageSong = new SongJob(new SongQuery());
             imageSong.ResolvedTarget = new FileCandidate(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(2, "Cover.jpg", 100, ".jpg"));
-            imageSong.UpdateState(JobState.Done);
+            imageSong.SetDone();
             imageSong.DownloadPath = "Artist/Album/Cover.jpg";
 
             var folder = new AlbumFolder("user", "Artist\\Album", [audioSong, imageSong]);
             album.ResolvedTarget = folder;
-            album.UpdateState(JobState.Done);
+            album.SetDone();
             queue.Add(album);
 
             var editor = new M3uEditor(testM3uPath, queue, M3uOption.Playlist, false);

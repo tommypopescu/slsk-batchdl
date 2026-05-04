@@ -35,7 +35,7 @@ public class EngineStateStoreTests
     {
         var store = new EngineStateStore();
         var aggregate = new AggregateJob(new SongQuery { Artist = "Artist" });
-        var s1 = new SongJob(new SongQuery { Title = "One" }); s1.UpdateState(JobState.Done);
+        var s1 = new SongJob(new SongQuery { Title = "One" }); s1.SetDone();
         var s2 = new SongJob(new SongQuery { Title = "Two" }); s2.Fail(FailureReason.Other);
         var s3 = new SongJob(new SongQuery { Title = "Three" }); s3.UpdateState(JobState.Downloading);
         aggregate.Songs.Add(s1);
@@ -57,7 +57,7 @@ public class EngineStateStoreTests
     {
         var store = new EngineStateStore();
         var list = new JobList("batch");
-        var j1 = new SongJob(new SongQuery { Title = "One" }); j1.UpdateState(JobState.Done);
+        var j1 = new SongJob(new SongQuery { Title = "One" }); j1.SetDone();
         var j2 = new SongJob(new SongQuery { Title = "Two" }); j2.Fail(FailureReason.Other);
         var j3 = new SongJob(new SongQuery { Title = "Three" }); j3.UpdateState(JobState.Searching);
         list.Add(j1);

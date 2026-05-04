@@ -277,7 +277,7 @@ public class DownloadEngine
                 AssignWorkflowId(extracted, ej.WorkflowId);
 
                 Events.RaiseJobResultCreated(ej, extracted);
-                ej.UpdateState(JobState.Done);
+                ej.SetDone();
 
                 // ExtractJob completion moment:
                 // - extraction work is finished
@@ -517,7 +517,7 @@ public class DownloadEngine
                 int newFilesFound = await searcher!.CompleteFolder(retrieveFolderJob.TargetFolder, job.Cts!.Token);
                 retrieveFolderJob.NewFilesFoundCount = newFilesFound;
                 job.Discovery = new DiscoverySummary { ResultCount = newFilesFound, LockedFileCount = 0 };
-                retrieveFolderJob.UpdateState(JobState.Done);
+                retrieveFolderJob.SetDone();
             }
             catch (OperationCanceledException)
             {
@@ -534,7 +534,7 @@ public class DownloadEngine
             await _clientManager.WaitUntilReadyAsync(job.Cts!.Token);
             await searcher!.SearchSong(printSong, config.Search, new ResponseData(), job.Cts!.Token);
             if (printSong.Candidates?.Count > 0)
-                printSong.UpdateState(JobState.Done);
+                printSong.SetDone();
             else
             {
                 printSong.Fail(FailureReason.NoSuitableFileFound);
@@ -588,7 +588,7 @@ public class DownloadEngine
 
                 if (config.PrintResults)
                 {
-                    job.UpdateState(JobState.Done);
+                    job.SetDone();
                     return;
                 }
 
@@ -620,12 +620,12 @@ public class DownloadEngine
                     };
 
                     RegisterJob(albumList, job);
-                    job.UpdateState(JobState.Done);
+                    job.SetDone();
                     await ProcessJob(albumList, null, job.Cts!.Token, job);
                 }
                 else
                 {
-                    job.UpdateState(JobState.Done);
+                    job.SetDone();
                 }
                 return;
             }
@@ -883,17 +883,20 @@ public class DownloadEngine
 
         if (succeeded && chosenFiles != null)
         {
-            job.UpdateState(JobState.Done);
-
             var downloadedAudio = chosenFiles
                 .Where(af => !af.IsNotAudio && af.State == JobState.Done && !string.IsNullOrEmpty(af.DownloadPath));
 
             if (downloadedAudio.Any())
             {
-                job.DownloadPath = Utils.GreatestCommonDirectory(downloadedAudio.Select(af => af.DownloadPath!));
-                ctx.IndexEditor?.NotifyJobDownloadPath(job.Id, job.DownloadPath);
+                var downloadPath = Utils.GreatestCommonDirectory(downloadedAudio.Select(af => af.DownloadPath!));
+                job.SetDone(downloadPath);
+                ctx.IndexEditor?.NotifyJobDownloadPath(job.Id, downloadPath);
                 // Note: album jobs have no parent extractor reference here; RemoveTrackFromSource
                 // for albums is handled at the JobList fan-out level if needed.
+            }
+            else
+            {
+                job.SetDone();
             }
         }
         else if (index != -1 && job.State != JobState.Failed)
@@ -1227,8 +1230,9 @@ public class DownloadEngine
         if (path != null)
         {
             if (job is AlbumJob albumJob)
-                albumJob.DownloadPath = path;
-            job.SetSkipped(JobState.AlreadyExists);
+                albumJob.SetAlreadyExists(path);
+            else
+                job.SetAlreadyExists();
             ctx.IndexEditor?.NotifyJobDownloadPath(job.Id, path);
         }
 
@@ -1413,7 +1417,7 @@ public class DownloadEngine
         {
             count = await searcher!.CompleteFolder(rfJob.TargetFolder, rfJob.Cts.Token);
             rfJob.NewFilesFoundCount = count;
-            rfJob.UpdateState(JobState.Done);
+            rfJob.SetDone();
             return count;
         }
         catch (OperationCanceledException)

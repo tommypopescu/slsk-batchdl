@@ -80,18 +80,26 @@ namespace Sldl.Core.Jobs;
             Query = query;
         }
 
-        public void SetDone(string downloadPath, FileCandidate? candidate = null)
+        public override void SetDone()
+            => SetDone(downloadPath: null);
+
+        public void SetDone(string? downloadPath, FileCandidate? candidate = null)
         {
             if (candidate != null)
                 ChosenCandidate = candidate;
-            DownloadPath    = downloadPath;
-            UpdateState(JobState.Done);
+            if (downloadPath != null)
+                DownloadPath = downloadPath;
+            base.SetDone();
         }
 
-        public void SetAlreadyExists(string path)
+        public override void SetAlreadyExists()
+            => SetAlreadyExists(path: null);
+
+        public void SetAlreadyExists(string? path)
         {
-            DownloadPath = path;
-            SetSkipped(JobState.AlreadyExists);
+            if (path != null)
+                DownloadPath = path;
+            base.SetAlreadyExists();
         }
 
         public override string ToString(bool noInfo) => Query.ToString(noInfo);

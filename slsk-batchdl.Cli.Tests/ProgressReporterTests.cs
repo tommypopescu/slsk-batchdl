@@ -80,7 +80,7 @@ public class CliProgressReporterTests
             {
                 ResolvedTarget = candidate,
             };
-            song.UpdateState(JobState.Done);
+            song.SetDone();
 
             InvokePrivate(reporter, "ReportDownloadStart", song, candidate);
             InvokePrivate(reporter, "ReportStateChanged", song);
@@ -138,7 +138,7 @@ public class CliProgressReporterTests
             {
                 ResolvedTarget = candidate,
             };
-            song.UpdateState(JobState.Done);
+            song.SetDone();
 
             InvokePrivate(reporter, "ReportDownloadStart", song, candidate);
             var barData = GetBarData(reporter, song);

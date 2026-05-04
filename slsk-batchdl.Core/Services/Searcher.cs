@@ -62,7 +62,7 @@ public partial class Searcher
 
             responseData.lockedFilesCount += session.LockedFileCount;
             job.Discovery = new DiscoverySummary { ResultCount = session.Results.Count, LockedFileCount = session.LockedFileCount };
-            job.UpdateState(JobState.Done);
+            job.SetDone();
         }
         catch (OperationCanceledException)
         {
