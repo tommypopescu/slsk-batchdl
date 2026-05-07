@@ -161,6 +161,385 @@ namespace Tests.Eventing
         }
 
         [TestMethod]
+        public async Task ConcurrentJobs_LimitsDirectSongWorkAcrossJobList()
+        {
+            var index = new List<SearchResponse>
+            {
+                new(
+                    username: "user1",
+                    token: 1,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList: [new Soulseek.File(1, @"Music\Artist\Track One.mp3", 10_000, ".mp3")]),
+                new(
+                    username: "user2",
+                    token: 2,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList: [new Soulseek.File(2, @"Music\Artist\Track Two.mp3", 10_000, ".mp3")]),
+            };
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-concurrent-jobs-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings
+                {
+                    Username = "test_user",
+                    Password = "test_pass",
+                    ConcurrentJobs = 1,
+                    ConcurrentSearches = 10,
+                };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Output.ParentDir = outputDir;
+                downloadSettings.Output.WriteIndex = false;
+                downloadSettings.Output.HasConfiguredIndex = true;
+                downloadSettings.Skip.SkipExisting = false;
+
+                var list = new JobList("test list", new Job[]
+                {
+                    new SongJob(new SongQuery { Artist = "Artist", Title = "Track One" }),
+                    new SongJob(new SongQuery { Artist = "Artist", Title = "Track Two" }),
+                });
+
+                var client = new ClientTests.MockSoulseekClient(index, slowMode: true);
+                var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+                var engine = new DownloadEngine(engineSettings, clientManager);
+
+                var activeSongs = new HashSet<Guid>();
+                int maxActive = 0;
+                object gate = new();
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (job is not SongJob)
+                        return;
+
+                    lock (gate)
+                    {
+                        if (state is JobState.Searching or JobState.Downloading)
+                        {
+                            activeSongs.Add(job.Id);
+                            maxActive = Math.Max(maxActive, activeSongs.Count);
+                        }
+                        else if (state is JobState.Done or JobState.AlreadyExists or JobState.Failed or JobState.Skipped or JobState.NotFoundLastTime)
+                        {
+                            activeSongs.Remove(job.Id);
+                        }
+                    }
+                };
+
+                engine.Enqueue(list, downloadSettings);
+                engine.CompleteEnqueue();
+
+                await engine.RunAsync(CancellationToken.None);
+
+                Assert.AreEqual(1, maxActive, "--concurrent-jobs=1 should serialize concurrently fanned-out song work.");
+                Assert.IsTrue(list.Jobs.OfType<SongJob>().All(song => song.State == JobState.Done));
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task ConcurrentJobs_LimitsAlbumJobsButNotEmbeddedAlbumTracks()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-concurrent-albums-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            SearchResponse Response(string username, int token, params Soulseek.File[] files) =>
+                new(
+                    username: username,
+                    token: token,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList: files);
+
+            var album1File1 = new Soulseek.File(1, @"Music\Artist\Album One\01. Artist - One.mp3", 10_000, ".mp3");
+            var album1File2 = new Soulseek.File(2, @"Music\Artist\Album One\02. Artist - Two.mp3", 10_000, ".mp3");
+            var album2File1 = new Soulseek.File(3, @"Music\Artist\Album Two\01. Artist - Three.mp3", 10_000, ".mp3");
+            var album2File2 = new Soulseek.File(4, @"Music\Artist\Album Two\02. Artist - Four.mp3", 10_000, ".mp3");
+            var response1 = Response("user1", 1, album1File1, album1File2);
+            var response2 = Response("user2", 2, album2File1, album2File2);
+
+            AlbumJob Album(string albumName, SearchResponse response, Soulseek.File file1, Soulseek.File file2)
+            {
+                var songs = new List<SongJob>
+                {
+                    new(new SongQuery { Artist = "Artist", Title = "One", Album = albumName })
+                    {
+                        ResolvedTarget = new FileCandidate(response, file1),
+                    },
+                    new(new SongQuery { Artist = "Artist", Title = "Two", Album = albumName })
+                    {
+                        ResolvedTarget = new FileCandidate(response, file2),
+                    },
+                };
+                var folder = new AlbumFolder(response.Username, Utils.GetDirectoryNameSlsk(file1.Filename), songs);
+                return new AlbumJob(new AlbumQuery { Artist = "Artist", Album = albumName })
+                {
+                    Results = [folder],
+                    ResolvedTarget = folder,
+                };
+            }
+
+            try
+            {
+                var engineSettings = new EngineSettings
+                {
+                    Username = "test_user",
+                    Password = "test_pass",
+                    ConcurrentJobs = 1,
+                    ConcurrentSearches = 10,
+                };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Output.ParentDir = outputDir;
+                downloadSettings.Output.WriteIndex = false;
+                downloadSettings.Output.HasConfiguredIndex = true;
+                downloadSettings.Skip.SkipExisting = false;
+
+                var album1 = Album("Album One", response1, album1File1, album1File2);
+                var album2 = Album("Album Two", response2, album2File1, album2File2);
+                var list = new JobList("album list", [album1, album2]);
+
+                var client = new ClientTests.MockSoulseekClient([response1, response2], slowMode: true);
+                var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+                var engine = new DownloadEngine(engineSettings, clientManager);
+
+                var activeAlbums = new HashSet<Guid>();
+                int maxActiveAlbums = 0;
+                object gate = new();
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (job is not AlbumJob)
+                        return;
+
+                    lock (gate)
+                    {
+                        if (state == JobState.Downloading)
+                        {
+                            activeAlbums.Add(job.Id);
+                            maxActiveAlbums = Math.Max(maxActiveAlbums, activeAlbums.Count);
+                        }
+                        else if (state is JobState.Done or JobState.AlreadyExists or JobState.Failed or JobState.Skipped or JobState.NotFoundLastTime)
+                        {
+                            activeAlbums.Remove(job.Id);
+                        }
+                    }
+                };
+
+                engine.Enqueue(list, downloadSettings);
+                engine.CompleteEnqueue();
+
+                var runTask = engine.RunAsync(CancellationToken.None);
+                var completed = await Task.WhenAny(runTask, Task.Delay(TimeSpan.FromSeconds(20)));
+                Assert.AreSame(runTask, completed, "Album child tracks must not consume the parent album's global job slot.");
+                await runTask;
+
+                Assert.AreEqual(1, maxActiveAlbums, "--concurrent-jobs=1 should allow only one album job to download at a time.");
+                Assert.IsTrue(new[] { album1, album2 }.All(album => album.State == JobState.Done));
+                Assert.IsTrue(new[] { album1, album2 }.SelectMany(album => album.ResolvedTarget!.Files).All(song => song.State == JobState.Done));
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task ConcurrentJobs_LimitsSongsWithinAggregateJob()
+        {
+            var index = new List<SearchResponse>
+            {
+                new(
+                    username: "user1",
+                    token: 1,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList: [TestHelpers.CreateSlFile(@"Music\ELO\Time\Blue Sky.mp3", length: 180)]),
+                new(
+                    username: "user2",
+                    token: 2,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList: [TestHelpers.CreateSlFile(@"Shares\Electric Light Orchestra\ELO - Blue Sky.mp3", length: 181)]),
+                new(
+                    username: "user3",
+                    token: 3,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList: [TestHelpers.CreateSlFile(@"Live\ELO - Blue Sky (Live).mp3", length: 300)]),
+            };
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-concurrent-aggregate-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings
+                {
+                    Username = "test_user",
+                    Password = "test_pass",
+                    ConcurrentJobs = 1,
+                    ConcurrentSearches = 10,
+                };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Output.ParentDir = outputDir;
+                downloadSettings.Output.WriteIndex = false;
+                downloadSettings.Output.HasConfiguredIndex = true;
+                downloadSettings.Search.MinSharesAggregate = 1;
+                downloadSettings.Skip.SkipExisting = false;
+
+                var aggregateJob = new AggregateJob(new SongQuery { Artist = "ELO", Title = "Blue Sky" });
+                var client = new ClientTests.MockSoulseekClient(index, slowMode: true);
+                var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+                var engine = new DownloadEngine(engineSettings, clientManager);
+
+                var activeSongs = new HashSet<Guid>();
+                int maxActiveSongs = 0;
+                object gate = new();
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (job is not SongJob)
+                        return;
+
+                    lock (gate)
+                    {
+                        if (state == JobState.Downloading)
+                        {
+                            activeSongs.Add(job.Id);
+                            maxActiveSongs = Math.Max(maxActiveSongs, activeSongs.Count);
+                        }
+                        else if (state is JobState.Done or JobState.AlreadyExists or JobState.Failed or JobState.Skipped or JobState.NotFoundLastTime)
+                        {
+                            activeSongs.Remove(job.Id);
+                        }
+                    }
+                };
+
+                engine.Enqueue(aggregateJob, downloadSettings);
+                engine.CompleteEnqueue();
+
+                await engine.RunAsync(CancellationToken.None);
+
+                Assert.IsTrue(aggregateJob.Songs.Count >= 2, "Aggregate should produce multiple song jobs for this test.");
+                Assert.AreEqual(1, maxActiveSongs, "--concurrent-jobs=1 should allow only one aggregate child song to download at a time.");
+                Assert.IsTrue(aggregateJob.Songs.All(song => song.State == JobState.Done));
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task ConcurrentJobs_LimitsAlbumsWithinAlbumAggregateJob()
+        {
+            var index = new List<SearchResponse>
+            {
+                new(
+                    username: "user1",
+                    token: 1,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList:
+                    [
+                        TestHelpers.CreateSlFile(@"Music\ELO\Album One\01. ELO - One.mp3", length: 180),
+                        TestHelpers.CreateSlFile(@"Music\ELO\Album One\02. ELO - Two.mp3", length: 181),
+                    ]),
+                new(
+                    username: "user2",
+                    token: 2,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList:
+                    [
+                        TestHelpers.CreateSlFile(@"Shares\Electric Light Orchestra\Album Two\01. ELO - Three.mp3", length: 240),
+                        TestHelpers.CreateSlFile(@"Shares\Electric Light Orchestra\Album Two\02. ELO - Four.mp3", length: 241),
+                    ]),
+            };
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-concurrent-album-aggregate-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings
+                {
+                    Username = "test_user",
+                    Password = "test_pass",
+                    ConcurrentJobs = 1,
+                    ConcurrentSearches = 10,
+                };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Output.ParentDir = outputDir;
+                downloadSettings.Output.WriteIndex = false;
+                downloadSettings.Output.HasConfiguredIndex = true;
+                downloadSettings.Search.MinSharesAggregate = 1;
+                downloadSettings.Search.NoBrowseFolder = true;
+                downloadSettings.Skip.SkipExisting = false;
+
+                var aggregateJob = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
+                var client = new ClientTests.MockSoulseekClient(index, slowMode: true);
+                var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+                var engine = new DownloadEngine(engineSettings, clientManager);
+
+                var activeAlbums = new HashSet<Guid>();
+                int maxActiveAlbums = 0;
+                object gate = new();
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (job is not AlbumJob)
+                        return;
+
+                    lock (gate)
+                    {
+                        if (state == JobState.Downloading)
+                        {
+                            activeAlbums.Add(job.Id);
+                            maxActiveAlbums = Math.Max(maxActiveAlbums, activeAlbums.Count);
+                        }
+                        else if (state is JobState.Done or JobState.AlreadyExists or JobState.Failed or JobState.Skipped or JobState.NotFoundLastTime)
+                        {
+                            activeAlbums.Remove(job.Id);
+                        }
+                    }
+                };
+
+                engine.Enqueue(aggregateJob, downloadSettings);
+                engine.CompleteEnqueue();
+
+                await engine.RunAsync(CancellationToken.None);
+
+                Assert.IsTrue(aggregateJob.Albums.Count >= 2, "Album aggregate should produce multiple album jobs for this test.");
+                Assert.AreEqual(1, maxActiveAlbums, "--concurrent-jobs=1 should allow only one album-aggregate child album to download at a time.");
+                Assert.IsTrue(aggregateJob.Albums.All(album => album.State == JobState.Done));
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task EngineEvents_AlbumJob_ExposesResolvedTarget_OnDownloadingState()
         {
             var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };

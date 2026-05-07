@@ -397,6 +397,13 @@ namespace Tests.ConfigParsingTests
         }
 
         [TestMethod]
+        public void ConcurrentJobs_SetsEngineLimit()
+        {
+            var (eng, _, _) = Bind("--concurrent-jobs", "3");
+            Assert.AreEqual(3, eng.ConcurrentJobs);
+        }
+
+        [TestMethod]
         public void Verbose_SetsLogLevelDebug()
         {
             var (eng, _, _) = Bind("-v");

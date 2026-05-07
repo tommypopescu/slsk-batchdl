@@ -306,6 +306,7 @@ public static class SettingsCloner
         SharedFolders = source.SharedFolders,
         UserDescription = source.UserDescription,
         NoModifyShareCount = source.NoModifyShareCount,
+        ConcurrentJobs = source.ConcurrentJobs,
         ConcurrentSearches = source.ConcurrentSearches,
         ConcurrentExtractors = source.ConcurrentExtractors,
         SearchesPerTime = source.SearchesPerTime,

@@ -106,6 +106,7 @@ public class DownloadEngine
     // Limits simultaneous extractor runs to avoid API rate limits.
     // Search concurrency is handled inside Searcher (concurrencySemaphore).
     private readonly SemaphoreSlim _extractorSemaphore;
+    private readonly SemaphoreSlim _jobSemaphore;
 
     // ── job channel ──────────────────────────────────────────────────────────
 
@@ -148,7 +149,36 @@ public class DownloadEngine
         engineSettings = settings;
         _clientManager = clientManager;
         _jobSettingsResolver = jobSettingsResolver ?? DefaultJobSettingsResolver.Instance;
+        if (settings.ConcurrentJobs <= 0)
+            throw new ArgumentOutOfRangeException(nameof(settings.ConcurrentJobs), "ConcurrentJobs must be greater than zero.");
+        _jobSemaphore = new SemaphoreSlim(settings.ConcurrentJobs);
         _extractorSemaphore = new SemaphoreSlim(settings.ConcurrentExtractors);
+    }
+
+    private async Task WithJobSlot(CancellationToken ct, Func<Task> action)
+    {
+        await _jobSemaphore.WaitAsync(ct);
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            _jobSemaphore.Release();
+        }
+    }
+
+    private async Task<T> WithJobSlot<T>(CancellationToken ct, Func<Task<T>> action)
+    {
+        await _jobSemaphore.WaitAsync(ct);
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            _jobSemaphore.Release();
+        }
     }
 
 
@@ -236,20 +266,23 @@ public class DownloadEngine
 
                 ej.InputType = inputType;
                 Job extracted;
-                await _extractorSemaphore.WaitAsync(ej.Cts!.Token);
                 try
                 {
-                ej.UpdateState(JobState.Extracting);
-                extracted = await ex.GetTracks(ej.Input, ej.Config.Extraction);
+                    await _extractorSemaphore.WaitAsync(ej.Cts!.Token);
+                    try
+                    {
+                        ej.UpdateState(JobState.Extracting);
+                        extracted = await ex.GetTracks(ej.Input, ej.Config.Extraction);
+                    }
+                    finally
+                    {
+                        _extractorSemaphore.Release();
+                    }
                 }
-                catch (Exception e)
+                catch (Exception e) when (e is not OperationCanceledException)
                 {
                     ej.Fail(FailureReason.ExtractionFailed, e.Message);
                     return;
-                }
-                finally
-                {
-                    _extractorSemaphore.Release();
                 }
 
                 ej.Result = extracted;
@@ -510,18 +543,21 @@ public class DownloadEngine
             await _clientManager.WaitUntilReadyAsync(job.Cts!.Token);
 
             var responseData = new ResponseData();
-            await searcher!.Search(searchJob, config.Search, responseData, job.Cts!.Token);
+            await WithJobSlot(job.Cts!.Token, () => searcher!.Search(searchJob, config.Search, responseData, job.Cts!.Token));
             return;
         }
 
         if (job is RetrieveFolderJob retrieveFolderJob)
         {
             await _clientManager.WaitUntilReadyAsync(job.Cts!.Token);
-            retrieveFolderJob.UpdateState(JobState.Searching);
             
             try
             {
-                int newFilesFound = await searcher!.CompleteFolder(retrieveFolderJob.TargetFolder, job.Cts!.Token);
+                int newFilesFound = await WithJobSlot(job.Cts!.Token, async () =>
+                {
+                    retrieveFolderJob.UpdateState(JobState.Searching);
+                    return await searcher!.CompleteFolder(retrieveFolderJob.TargetFolder, job.Cts!.Token);
+                });
                 retrieveFolderJob.NewFilesFoundCount = newFilesFound;
                 job.Discovery = new DiscoverySummary { ResultCount = newFilesFound, LockedFileCount = 0 };
                 retrieveFolderJob.SetDone();
@@ -539,7 +575,7 @@ public class DownloadEngine
         if (job is SongJob printSong && config.PrintResults)
         {
             await _clientManager.WaitUntilReadyAsync(job.Cts!.Token);
-            await searcher!.SearchSong(printSong, config.Search, new ResponseData(), job.Cts!.Token);
+            await WithJobSlot(job.Cts!.Token, () => searcher!.SearchSong(printSong, config.Search, new ResponseData(), job.Cts!.Token));
             if (printSong.Candidates?.Count > 0)
                 printSong.SetDone();
             else
@@ -577,7 +613,7 @@ public class DownloadEngine
                 else if (albumJob.Results.Count > 0)
                     foundSomething = true;
                 else
-                    await searcher!.SearchAlbum(albumJob, config.Search, responseData, job.Cts!.Token);
+                    await WithJobSlot(job.Cts!.Token, () => searcher!.SearchAlbum(albumJob, config.Search, responseData, job.Cts!.Token));
                 foundSomething = albumJob.Results.Count > 0;
             }
             else if (job is AggregateJob aggJob)
@@ -679,11 +715,11 @@ public class DownloadEngine
             switch (job)
             {
                 case SongJob sj:
-                    await ProcessSongJob(sj, ctx);
+                    await WithJobSlot(job.Cts!.Token, () => ProcessSongJob(sj, ctx));
                     break;
 
                 case AlbumJob aj:
-                    await ProcessAlbumJob(aj, ctx);
+                    await WithJobSlot(job.Cts!.Token, () => ProcessAlbumJob(aj, ctx));
                     break;
 
                 case AggregateJob ag:
@@ -738,7 +774,8 @@ public class DownloadEngine
         var downloadTasks = songs.Select(async song =>
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(job.Cts!.Token);
-            await DownloadEmbeddedSong(song, job, config, organizer, cts, cancelGroupOnFail: false, organize: true);
+            await WithJobSlot(job.Cts!.Token, () =>
+                DownloadEmbeddedSong(song, job, config, organizer, cts, cancelGroupOnFail: false, organize: true));
             ctx.IndexEditor?.Update();
             ctx.PlaylistEditor?.Update();
         });
@@ -802,7 +839,8 @@ public class DownloadEngine
                     if (!chosenFolder.IsFullyRetrieved && !retrievedFolders.Contains(chosenFolder.FolderPath))
                     {
                         await ProcessFolderRetrieval(chosenFolder, job,
-                            "Verifying album track count.\n    Retrieving full folder contents...");
+                            "Verifying album track count.\n    Retrieving full folder contents...",
+                            consumeJobSlot: false);
                         retrievedFolders.Add(chosenFolder.FolderPath);
                     }
                     int newCount = chosenFolder.Files.Count(af => !af.IsNotAudio);
@@ -841,7 +879,7 @@ public class DownloadEngine
 
                 if (!config.Search.NoBrowseFolder && retrieveCurrent && !chosenFolder.IsFullyRetrieved && !retrievedFolders.Contains(chosenFolder.FolderPath))
                 {
-                    var newFilesFound = await ProcessFolderRetrieval(chosenFolder, job);
+                    var newFilesFound = await ProcessFolderRetrieval(chosenFolder, job, consumeJobSlot: false);
                     retrievedFolders.Add(chosenFolder.FolderPath);
                     if (newFilesFound > 0)
                     {
@@ -1409,7 +1447,11 @@ public class DownloadEngine
 
     // ── folder retrieval ──────────────────────────────────────────────────────
 
-    public async Task<int> ProcessFolderRetrieval(AlbumFolder folder, Job parentJob, string? customMessage = null)
+    public async Task<int> ProcessFolderRetrieval(
+        AlbumFolder folder,
+        Job parentJob,
+        string? customMessage = null,
+        bool consumeJobSlot = true)
     {
         if (folder.IsFullyRetrieved)
             return 0;
@@ -1422,7 +1464,15 @@ public class DownloadEngine
         int count = 0;
         try
         {
-            count = await searcher!.CompleteFolder(rfJob.TargetFolder, rfJob.Cts.Token);
+            async Task<int> CompleteFolder()
+            {
+                rfJob.UpdateState(JobState.Searching);
+                return await searcher!.CompleteFolder(rfJob.TargetFolder, rfJob.Cts.Token);
+            }
+
+            count = consumeJobSlot
+                ? await WithJobSlot(rfJob.Cts.Token, CompleteFolder)
+                : await CompleteFolder();
             rfJob.NewFilesFoundCount = count;
             rfJob.SetDone();
             return count;

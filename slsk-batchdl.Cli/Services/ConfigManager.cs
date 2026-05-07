@@ -446,6 +446,8 @@ public static partial class ConfigManager
                 Engine(e => e.ListenPort = Int()); break;
             case "--no-listen":
                 Engine(e => e.ListenPort = null); break;
+            case "--concurrent-jobs":
+                Engine(e => e.ConcurrentJobs = Int()); break;
             case "--cp": case "--concurrent-searches":
                 Engine(e => e.ConcurrentSearches = Int()); break;
             case "--concurrent-extractors":
