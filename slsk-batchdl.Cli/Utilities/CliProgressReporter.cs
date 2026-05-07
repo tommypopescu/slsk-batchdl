@@ -494,11 +494,17 @@ public class CliProgressReporter
     {
         var chosen = song.ChosenCandidate;
         if (chosen != null)
-            return $"{chosen.Username}\\..\\{Path.GetFileName(chosen.Filename)}";
+            return CandidateDisplay(chosen);
         if (!string.IsNullOrEmpty(song.DownloadPath))
             return $"{SongQueryText(song.Query)} at {song.DownloadPath}";
         return SongQueryText(song.Query);
     }
+
+    private static string CandidateDisplay(FileCandidateRefDto candidate)
+        => $"{candidate.Username}\\..\\{candidate.Filename.Replace('/', '\\').TrimStart('\\')}";
+
+    private static string CandidateDisplay(FileCandidateDto candidate)
+        => CandidateDisplay(candidate.Ref);
 
     private static string SongQueryText(SongQueryDto query)
     {
@@ -613,7 +619,7 @@ public class CliProgressReporter
                 song.DisplayId,
                 song.Query,
                 "downloading",
-                $"{song.Candidate.Username}\\..\\{System.IO.Path.GetFileName(song.Candidate.Filename)}");
+                CandidateDisplay(song.Candidate));
             return;
         }
 
@@ -623,7 +629,7 @@ public class CliProgressReporter
         var d = _backendBars.GetOrAdd(song.JobId, _ => new BarData { Bar = Printing.GetProgressBar() });
         d.JobPrefix = IsBackendInlineChild(song.JobId) ? null : $"[{song.DisplayId}] SongJob: ";
         d.StateLabel = "Queued";
-        d.BaseText = $"{song.Candidate.Username}\\..\\{System.IO.Path.GetFileName(song.Candidate.Filename)}";
+        d.BaseText = CandidateDisplay(song.Candidate);
         bool isCompact = _cli.AlbumCompactProgress && _backendSongToAlbum.ContainsKey(song.JobId);
         UpdateLastUpdatedBackend(song.JobId);
         Printing.RefreshOrPrint(d.Bar, 0, BuildText(d, indent: isCompact), print: !IsBackendInlineChild(song.JobId) && d.Bar != null);

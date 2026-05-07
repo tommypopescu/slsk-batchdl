@@ -30,11 +30,29 @@ public static class Printing
             _barHighWaterMark = y;
     }
 
+    private static bool CanUseConsoleCursor()
+    {
+        if (Console.IsOutputRedirected)
+            return false;
+
+        try
+        {
+            _ = Console.CursorTop;
+            _ = Console.WindowTop;
+            _ = Console.WindowWidth;
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     // Move the cursor below all bar rows so normal console output doesn't overwrite them.
     // Must be called inside ConsoleLock.
     private static void EnsureCursorBelowBars()
     {
-        if (_barHighWaterMark < 0 || Console.IsOutputRedirected) return;
+        if (_barHighWaterMark < 0 || !CanUseConsoleCursor()) return;
         int needed = _barHighWaterMark + 1;
         if (Console.CursorTop < needed)
         {
@@ -120,7 +138,7 @@ public static class Printing
                 if (!_initialized)
                     Initialize();
 
-                if (Console.IsOutputRedirected) return;
+                if (!CanUseConsoleCursor()) return;
 
                 int windowWidth = Console.WindowWidth;
                 if (windowWidth <= 10 || _y < Console.WindowTop) return;
@@ -852,14 +870,15 @@ public static class Printing
 
         lock (ConsoleLock)
         {
-            if (progress != null && !Console.IsOutputRedirected && (refreshIfOffscreen || progress.Y >= Console.WindowTop))
+            bool canUseCursor = CanUseConsoleCursor();
+            if (progress != null && canUseCursor && (refreshIfOffscreen || progress.Y >= Console.WindowTop))
             {
                 progress.Refresh(current, item);
 
                 if (print)
                     Logger.LogNonConsole(Logger.LogLevel.Info, item);
             }
-            else if ((progress == null || Console.IsOutputRedirected) && print)
+            else if ((progress == null || !canUseCursor) && print)
             {
                 Logger.Info(item);
             }
@@ -902,6 +921,9 @@ public static class Printing
 
     public static IProgressBar? GetProgressBar()
     {
+        if (!CanUseConsoleCursor())
+            return null;
+
         return new BufferedProgressBar();
     }
 
