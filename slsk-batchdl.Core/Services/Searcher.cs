@@ -240,14 +240,13 @@ public partial class Searcher
 
             foreach (var (dir, file) in allFiles)
             {
-                // file.Filename from BrowseAsync is already the full path (same as in search
-                // results), not just the basename — do not prepend dir again.
-                if (existing.Contains(file.Filename.Replace('/', '\\'))) continue;
+                string filename = GetBrowseFilePath(dir, file.Filename);
+                if (existing.Contains(filename)) continue;
 
                 newFiles++;
-                var slFile = new SlFile(file.Code, file.Filename, file.Size, file.Extension, file.Attributes);
+                var slFile = new SlFile(file.Code, filename, file.Size, file.Extension, file.Attributes);
                 var candidate = new FileCandidate(firstResp, slFile);
-                var info = InferSongQuery(file.Filename, new SongQuery { Artist = firstInfo.Artist, Album = firstInfo.Album });
+                var info = InferSongQuery(filename, new SongQuery { Artist = firstInfo.Artist, Album = firstInfo.Album });
                 folder.Files.Add(new SongJob(info) { ResolvedTarget = candidate });
             }
 
@@ -262,6 +261,17 @@ public partial class Searcher
             Logger.Error($"Error completing folder: {ex}");
         }
         return newFiles;
+    }
+
+    internal static string GetBrowseFilePath(string dir, string filename)
+    {
+        string normalizedDir = dir.Replace('/', '\\').TrimEnd('\\');
+        string normalizedFilename = filename.Replace('/', '\\');
+
+        if (normalizedDir.Length == 0 || normalizedFilename.StartsWith(normalizedDir + "\\", StringComparison.OrdinalIgnoreCase))
+            return normalizedFilename;
+
+        return normalizedDir + "\\" + normalizedFilename.TrimStart('\\');
     }
 
     // ── query inference ───────────────────────────────────────────────────────

@@ -366,6 +366,32 @@ namespace Tests.Unit
         }
 
         [TestMethod]
+        public async Task CompleteFolder_PrependsBrowseDirectory_WhenBrowseFilesAreBasenames()
+        {
+            var track1 = TestHelpers.CreateSlFile(@"ELO\Time\01. Twilight.mp3", length: 209);
+            var track2 = TestHelpers.CreateSlFile(@"ELO\Time\02. Yours Truly 2095.mp3", length: 201);
+            var response = new SearchResponse("User1", 1, true, 100, 0, [track1, track2]);
+            var client = new MockSoulseekClient([response]) { BrowseReturnsBasenames = true };
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            var searcher = CreateSearcher(client, config);
+            var folder = new AlbumFolder(
+                "User1",
+                @"ELO\Time",
+                [
+                    new SongJob(new SongQuery { Artist = "ELO", Album = "Time", Title = "Twilight" })
+                    {
+                        ResolvedTarget = new FileCandidate(response, track1),
+                    },
+                ]);
+
+            int newFiles = await searcher.CompleteFolder(folder, CancellationToken.None);
+
+            Assert.AreEqual(1, newFiles);
+            Assert.AreEqual(2, folder.Files.Count);
+            Assert.AreEqual(@"ELO\Time\02. Yours Truly 2095.mp3", folder.Files[1].ResolvedTarget!.Filename);
+        }
+
+        [TestMethod]
         public async Task SearchAlbum_RequiredTrackTitles_RequiresEverySourceTrack()
         {
             var index = new List<SearchResponse>

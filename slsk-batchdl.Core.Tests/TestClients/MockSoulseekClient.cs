@@ -21,6 +21,7 @@ namespace Tests.ClientTests
         public int DownloadCallCountAtFirstBrowse = -1;
         public Action? BrowseStarted;
         public Func<string, string, CancellationToken, Task>? BeforeDownloadCompletesAsync;
+        public bool BrowseReturnsBasenames { get; set; }
         public bool IsDisposed { get; private set; }
 
         public MockSoulseekClient(List<Soulseek.SearchResponse> index, int searchDelayMs = 0, IEnumerable<string>? failingUsers = null)
@@ -142,7 +143,7 @@ namespace Tests.ClientTests
                     g.Key.Replace('/', '\\'), // Soulseek ALWAYS returns paths with separator \, regardless of OS.
                     g.Select(f => new Soulseek.File(
                         f.Code,
-                        f.Filename.Replace('/', '\\'),
+                        BrowseReturnsBasenames ? Path.GetFileName(f.Filename.Replace('/', '\\')) : f.Filename.Replace('/', '\\'),
                         f.Size,
                         f.Extension,
                         f.Attributes

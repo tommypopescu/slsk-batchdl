@@ -66,7 +66,7 @@ public class Downloader
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         string incompleteOutputPath = transfer.NoIncompleteExt ? outputPath : outputPath + ".incomplete";
 
-        Logger.Debug($"Downloading: {song} to '{incompleteOutputPath}'");
+        Logger.Debug($"Downloading: {song} from '{candidate.Username}\\{candidate.Filename}' to '{incompleteOutputPath}'");
 
         var transferOptions = new TransferOptions(
             disposeOutputStreamOnCompletion: false,
@@ -115,7 +115,7 @@ public class Downloader
                 catch (SoulseekClientException e)
                 {
                     retryCount++;
-                    Logger.DebugError($"Error while downloading: {e}");
+                    Logger.DebugError($"Error while downloading '{candidate.Username}\\{candidate.Filename}' to '{incompleteOutputPath}' (attempt {retryCount}/{maxRetries}): {e}");
                     if (retryCount >= maxRetries || clientManager.IsConnectedAndLoggedIn)
                         throw;
                     await clientManager.WaitUntilReadyAsync(downloadCts.Token);

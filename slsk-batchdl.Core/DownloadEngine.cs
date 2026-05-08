@@ -1235,7 +1235,7 @@ public class DownloadEngine
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                Logger.DebugError($"Download attempt {tried} failed: {ex.Message}");
+                Logger.DebugError($"Download attempt {tried} failed for '{candidate.Username}\\{candidate.Filename}' to '{outputPath}': {ex.Message}");
                 if (tried >= candidates.Count || tried >= config.Transfer.MaxDownloadRetries)
                 {
                     throw new AllDownloadsFailedException();
