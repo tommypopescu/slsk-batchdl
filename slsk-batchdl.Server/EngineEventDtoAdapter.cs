@@ -64,7 +64,7 @@ public sealed class EngineEventDtoAdapter
                 else if (state == JobState.Failed)
                     publish("extraction.failed", new ExtractionFailedEventDto(getSummary(extractJob), extractJob.FailureMessage ?? "Extraction failed"));
             }
-            else if (job is AggregateJob ag && state == JobState.Downloading)
+            else if (job is AggregateJob ag && state == JobState.Running)
             {
                 publish("job.status", new JobStatusEventDto(getSummary(job), "downloading"));
                 var pending   = ag.Songs.Where(s => s.State == JobState.Pending).ToList();

@@ -61,6 +61,8 @@ public enum ServerJobState
     Downloading,
     /// <summary>Job is extracting input into follow-up jobs.</summary>
     Extracting,
+    /// <summary>Container job has active descendants.</summary>
+    Running,
 }
 
 /// <summary>
@@ -197,6 +199,7 @@ public static class ServerProtocol
         public const ServerJobState Searching = ServerJobState.Searching;
         public const ServerJobState Downloading = ServerJobState.Downloading;
         public const ServerJobState Extracting = ServerJobState.Extracting;
+        public const ServerJobState Running = ServerJobState.Running;
     }
 
     /// <summary>

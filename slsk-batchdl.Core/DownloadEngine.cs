@@ -383,6 +383,7 @@ public class DownloadEngine
             {
                 var ctx = _contexts.TryGetValue(jl.Id, out var c) ? c : null;
                 var config = jl.Config!;
+                jl.UpdateState(JobState.Running);
 
                 if (ctx?.PreprocessTracks == true)
                 {
@@ -669,8 +670,9 @@ public class DownloadEngine
                     };
 
                     RegisterJob(albumList, job);
-                    job.SetDone();
+                    job.UpdateState(JobState.Running);
                     await ProcessJob(albumList, null, job.Cts!.Token, job);
+                    job.SetDone();
                 }
                 else
                 {
@@ -729,7 +731,7 @@ public class DownloadEngine
                     break;
 
                 case AggregateJob ag:
-                    ag.UpdateState(JobState.Downloading);
+                    ag.UpdateState(JobState.Running);
                     await ProcessAggregateJob(ag, ctx);
                     break;
             }

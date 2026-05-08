@@ -285,8 +285,12 @@ public sealed class EngineStateStore
             }
             else
             {
-                var record = UpdateJobRecord(job);
-                summaries = [record.Summary];
+                var changedRecords = UpdateRecordsContainingJob(job.Id);
+                changedRecords.Add(UpdateJobRecord(job));
+                summaries = changedRecords
+                    .DistinctBy(record => record.Id)
+                    .Select(record => record.Summary)
+                    .ToList();
                 workflowSummaries = [BuildWorkflowSummary(job.WorkflowId)];
             }
         }
@@ -526,7 +530,7 @@ public sealed class EngineStateStore
             job.DisplayId,
             job.WorkflowId,
             GetJobKind(job),
-            ToServerJobState(EffectiveState(job)),
+            EffectiveServerState(job),
             job.ItemName,
             job.ToString(noInfo: true),
             ToServerFailureReason(job.FailureReason),
@@ -720,6 +724,9 @@ public sealed class EngineStateStore
             ? JobState.Done
             : job.State;
 
+    private ServerJobState EffectiveServerState(Job job)
+        => ToServerJobState(EffectiveState(job));
+
     private bool IsActiveJob(Job job)
         => IsActiveJobState(EffectiveState(job));
 
@@ -743,7 +750,11 @@ public sealed class EngineStateStore
         => record.Summary.State == ToServerJobState(state);
 
     private static bool IsActiveServerJobState(ServerJobState state)
-        => state is ServerJobState.Pending or ServerJobState.Searching or ServerJobState.Downloading or ServerJobState.Extracting;
+        => state is ServerJobState.Pending
+            or ServerJobState.Searching
+            or ServerJobState.Downloading
+            or ServerJobState.Extracting
+            or ServerJobState.Running;
 
     public static ServerJobState ToServerJobState(JobState state)
         => Enum.Parse<ServerJobState>(state.ToString());
@@ -757,7 +768,11 @@ public sealed class EngineStateStore
         => Enum.Parse<ServerFolderRetrievalOutcome>(outcome.ToString());
 
     private static bool IsActiveJobState(JobState state)
-        => state is JobState.Pending or JobState.Searching or JobState.Downloading or JobState.Extracting;
+        => state is JobState.Pending
+            or JobState.Searching
+            or JobState.Downloading
+            or JobState.Extracting
+            or JobState.Running;
 
     private static bool IsTerminalJob(Job job)
         => !IsActiveJobState(job.State);

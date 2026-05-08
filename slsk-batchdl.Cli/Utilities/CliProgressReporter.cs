@@ -188,6 +188,13 @@ public class CliProgressReporter
             return;
         }
 
+        if (LiveMode && IsContainerJobKind(summary.Kind))
+        {
+            _jobStatuses.TryGetValue(summary.JobId, out var containerStatus);
+            UpsertLiveJob(summary, containerStatus ?? summary.State.ToString().ToLowerInvariant());
+            return;
+        }
+
         if (summary.State == ServerProtocol.JobStates.Failed && summary.Kind != ServerJobKind.Song && summary.Kind != ServerJobKind.Extract)
             ReportJobStatus(new JobStatusEventDto(summary, TerminalStatusLabel(summary.State, summary.FailureReason)));
 
@@ -303,6 +310,15 @@ public class CliProgressReporter
         => kind is ServerJobKind.Extract or ServerJobKind.JobList or ServerJobKind.RetrieveFolder
             or ServerJobKind.Aggregate or ServerJobKind.AlbumAggregate;
 
+    private static bool IsContainerJobKind(ServerJobKind kind)
+        => kind is ServerJobKind.JobList or ServerJobKind.Aggregate or ServerJobKind.AlbumAggregate;
+
+    private string? GetContainerParentId(Guid jobId)
+        => _parentJobIds.TryGetValue(jobId, out var parentId)
+            && _jobKinds.TryGetValue(parentId, out var parentKind)
+            && IsContainerJobKind(parentKind)
+            ? parentId.ToString() : null;
+
     private static string GetJobTypePrefix(ServerJobKind kind)
     {
         if (kind == ServerJobKind.RetrieveFolder)
@@ -341,7 +357,14 @@ public class CliProgressReporter
             percent,
             done,
             total,
-            children));
+            children,
+            ParentId: GetContainerParentId(summary.JobId)));
+    }
+
+    private void UpsertLiveSong(Guid jobId, int displayId, string name, string state, int? percent = null)
+    {
+        _live?.Upsert(new JobView(jobId.ToString(), displayId, "SongJob", name, state, percent,
+            ParentId: GetContainerParentId(jobId)));
     }
 
     private void RemoveLiveJob(Guid jobId) => _live?.Remove(jobId.ToString());
@@ -595,7 +618,7 @@ public class CliProgressReporter
 
             var songName = WithName(SongQueryText(song.Query), CandidateDisplay(song.Candidate));
             _liveSongInfo[song.JobId] = (song.DisplayId, songName);
-            _live?.Upsert(new JobView(song.JobId.ToString(), song.DisplayId, "SongJob", songName, "queued", 0));
+            UpsertLiveSong(song.JobId, song.DisplayId, songName, "queued", 0);
             return;
         }
 
@@ -625,7 +648,7 @@ public class CliProgressReporter
                 UpsertLiveAlbum(albumId, block);
             }
             else if (!IsInlineChild(progress.JobId) && _liveSongInfo.TryGetValue(progress.JobId, out var info))
-                _live?.Upsert(new JobView(progress.JobId.ToString(), info.DisplayId, "SongJob", info.Name, "downloading", pct));
+                UpsertLiveSong(progress.JobId, info.DisplayId, info.Name, "downloading", pct);
             return;
         }
 
@@ -810,7 +833,7 @@ public class CliProgressReporter
             else if (!IsInlineChild(song.JobId))
             {
                 _liveSongInfo[song.JobId] = (song.DisplayId, name);
-                _live?.Upsert(new JobView(song.JobId.ToString(), song.DisplayId, "SongJob", name, "searching"));
+                UpsertLiveSong(song.JobId, song.DisplayId, name, "searching");
             }
             return;
         }
@@ -847,7 +870,7 @@ public class CliProgressReporter
             if (_songToAlbum.TryGetValue(song.JobId, out var albumId) && _albumBlocks.TryGetValue(albumId, out var block))
                 UpsertLiveAlbum(albumId, block);
             else if (_liveSongInfo.TryGetValue(song.JobId, out var info))
-                _live?.Upsert(new JobView(song.JobId.ToString(), info.DisplayId, "SongJob", info.Name, stateLabel.ToLowerInvariant()));
+                UpsertLiveSong(song.JobId, info.DisplayId, info.Name, stateLabel.ToLowerInvariant());
             return;
         }
 
@@ -869,7 +892,7 @@ public class CliProgressReporter
         {
             var name = SongQueryText(song.Query);
             _liveSongInfo[song.JobId] = (song.DisplayId, name);
-            _live?.Upsert(new JobView(song.JobId.ToString(), song.DisplayId, "SongJob", name, "on-complete"));
+            UpsertLiveSong(song.JobId, song.DisplayId, name, "on-complete");
             return;
         }
 
@@ -889,7 +912,7 @@ public class CliProgressReporter
         if (LiveMode)
         {
             if (_liveSongInfo.TryGetValue(song.JobId, out var info))
-                _live?.Upsert(new JobView(song.JobId.ToString(), info.DisplayId, "SongJob", info.Name, "downloading"));
+                UpsertLiveSong(song.JobId, info.DisplayId, info.Name, "downloading");
             return;
         }
 

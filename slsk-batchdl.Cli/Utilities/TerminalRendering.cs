@@ -216,8 +216,17 @@ internal sealed class TerminalLiveRenderer : IDisposable
     private List<string> BuildRows()
     {
         int maxRows = MaxLiveRows();
-        var jobs = _jobs.Values
+        var allJobs = _jobs.Values.ToDictionary(job => job.Id, StringComparer.Ordinal);
+        var visibleIds = allJobs.Values
             .Where(job => IsLiveState(job.State))
+            .Select(job => job.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var id in visibleIds.ToArray())
+            AddVisibleAncestors(id, allJobs, visibleIds);
+
+        var jobs = allJobs.Values
+            .Where(job => visibleIds.Contains(job.Id))
             .OrderBy(job => job.ParentId ?? job.Id, StringComparer.Ordinal)
             .ThenBy(job => job.ParentId == null ? 0 : 1)
             .ThenBy(job => job.DisplayId)
@@ -238,9 +247,10 @@ internal sealed class TerminalLiveRenderer : IDisposable
 
         foreach (var job in jobs)
         {
-            lines.Add(FormatJob(job));
+            var indent = job.ParentId != null ? "  " : "";
+            lines.Add(indent + FormatJob(job));
             foreach (var child in job.Children.Where(child => IsLiveState(child.State)))
-                lines.Add($"    {FormatChild(child)}");
+                lines.Add($"  {indent}  {FormatChild(child)}");
         }
 
         if (lines.Count == 2)
@@ -256,6 +266,23 @@ internal sealed class TerminalLiveRenderer : IDisposable
             $"... {omitted} active rows hidden ...",
             ..lines.Skip(lines.Count - Math.Max(1, keep - 2)).Take(maxRows - 3),
         ];
+    }
+
+    private static void AddVisibleAncestors(
+        string id,
+        IReadOnlyDictionary<string, JobView> jobs,
+        ISet<string> visibleIds)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        while (jobs.TryGetValue(id, out var job)
+            && job.ParentId is string parentId
+            && jobs.ContainsKey(parentId)
+            && seen.Add(parentId))
+        {
+            visibleIds.Add(parentId);
+            id = parentId;
+        }
     }
 
     private static bool IsLiveState(string state)

@@ -76,6 +76,25 @@ public class EngineStateStoreTests
     }
 
     [TestMethod]
+    public void JobListSummary_UsesCoreRunningState()
+    {
+        var store = new EngineStateStore();
+        var list = new JobList("batch");
+        var child = new SongJob(new SongQuery { Title = "One" });
+        list.Add(child);
+
+        Register(store, list);
+        Register(store, child, list);
+
+        list.UpdateState(JobState.Running);
+        UpdateState(store, list);
+
+        var summary = store.GetJobSummary(list.Id);
+        Assert.IsNotNull(summary);
+        Assert.AreEqual(ServerJobState.Running, summary.State);
+    }
+
+    [TestMethod]
     public void AlbumAggregatePayload_CountsProducedAlbumDescendants()
     {
         var store = new EngineStateStore();
@@ -101,5 +120,12 @@ public class EngineStateStoreTests
         typeof(EngineStateStore)
             .GetMethod("OnJobRegistered", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(store, [job, parent]);
+    }
+
+    private static void UpdateState(EngineStateStore store, Job job)
+    {
+        typeof(EngineStateStore)
+            .GetMethod("OnJobStateChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(store, [job, job.State]);
     }
 }

@@ -175,8 +175,8 @@ def generate(root: Path, seed: int) -> None:
     print(f"Created albums CSV: {albums_csv}")
     print()
     print("Example commands:")
-    print(f'  sldl "{tracks_csv}" --mock-files-dir "{library_dir}" --mock-files-no-read-tags')
-    print(f'  sldl "{albums_csv}" -a --mock-files-dir "{library_dir}" --mock-files-no-read-tags')
+    print(f'  sldl "{tracks_csv}" --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
+    print(f'  sldl "{albums_csv}" --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
 
 
 def main() -> None:

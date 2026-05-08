@@ -367,5 +367,6 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
         => state is ServerJobState.Pending
             or ServerJobState.Searching
             or ServerJobState.Downloading
-            or ServerJobState.Extracting;
+            or ServerJobState.Extracting
+            or ServerJobState.Running;
 }

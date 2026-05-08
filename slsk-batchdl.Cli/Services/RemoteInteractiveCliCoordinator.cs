@@ -354,7 +354,8 @@ internal sealed class RemoteInteractiveCliCoordinator
         => state is ServerProtocol.JobStates.Pending
             or ServerProtocol.JobStates.Extracting
             or ServerProtocol.JobStates.Searching
-            or ServerProtocol.JobStates.Downloading;
+            or ServerProtocol.JobStates.Downloading
+            or ServerProtocol.JobStates.Running;
 
     private static bool IsCompleted(ServerJobState state)
         => state is ServerProtocol.JobStates.Done
