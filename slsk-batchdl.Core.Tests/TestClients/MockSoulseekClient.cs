@@ -12,7 +12,6 @@ namespace Tests.ClientTests
         public SoulseekClientOptions Options => throw new NotImplementedException();
 
         private List<Soulseek.SearchResponse> index;
-        private readonly bool slowMode;
         private readonly int searchDelayMs;
         private readonly HashSet<string> failingUsers;
 
@@ -21,17 +20,17 @@ namespace Tests.ClientTests
         public int BrowseCallCount;
         public int DownloadCallCountAtFirstBrowse = -1;
         public Action? BrowseStarted;
+        public Func<string, string, CancellationToken, Task>? BeforeDownloadCompletesAsync;
         public bool IsDisposed { get; private set; }
 
-        public MockSoulseekClient(List<Soulseek.SearchResponse> index, bool slowMode = false, int searchDelayMs = 0, IEnumerable<string>? failingUsers = null)
+        public MockSoulseekClient(List<Soulseek.SearchResponse> index, int searchDelayMs = 0, IEnumerable<string>? failingUsers = null)
         {
             this.index         = index;
-            this.slowMode      = slowMode;
             this.searchDelayMs = searchDelayMs;
             this.failingUsers  = new HashSet<string>(failingUsers ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         }
 
-        public static MockSoulseekClient FromLocalPaths(bool useTags, bool slowMode, params string[] localPaths)
+        public static MockSoulseekClient FromLocalPaths(bool useTags, params string[] localPaths)
         {
             if (useTags)
                 Logger.Info($"Reading tags from mock files dir, this may take a while. Use --mock-files-no-read-tags if tags are not needed.");
@@ -101,7 +100,7 @@ namespace Tests.ClientTests
                 )
             };
 
-            return new MockSoulseekClient(index, slowMode);
+            return new MockSoulseekClient(index);
         }
 
 
@@ -352,10 +351,6 @@ namespace Tests.ClientTests
                     {
 
                     // Initialising — peer has accepted the transfer
-                    if (slowMode)
-                    {
-                        await Task.Delay(Random.Shared.Next(50, 150), ct);
-                    }
                     FireState(TransferStates.Initializing);
 
                     using var outputStream = await outputStreamFactory();
@@ -365,44 +360,10 @@ namespace Tests.ClientTests
 
                     FireState(TransferStates.InProgress, bytesTransferred, 0, startTime);
 
-                    if (slowMode)
-                    {
-                        // Spread file transfer over 0.5–1.5 s regardless of actual file size.
-                        int totalMs = Random.Shared.Next(500, 1500);
-                        int steps   = 20;
-                        int stepMs  = totalMs / steps;
+                    if (BeforeDownloadCompletesAsync != null)
+                        await BeforeDownloadCompletesAsync(username, remoteFilename, ct);
 
-                        if (startOffset > 0 && sourceFilePath != null)
-                        {
-                            // Seek real file but don't stream it byte-by-byte in slow mode.
-                        }
-
-                        for (int step = 1; step <= steps; step++)
-                        {
-                            ct.ThrowIfCancellationRequested();
-                            await Task.Delay(stepMs, ct);
-
-                            bytesTransferred = startOffset + (long)(fileSize - startOffset) * step / steps;
-                            var stepElapsed = DateTime.UtcNow - startTime;
-                            var speed       = stepElapsed.TotalSeconds > 0 ? bytesTransferred / stepElapsed.TotalSeconds : 0;
-                            long prev       = startOffset + (long)(fileSize - startOffset) * (step - 1) / steps;
-                            FireProgress(bytesTransferred, prev, speed, startTime);
-                        }
-
-                        // Write placeholder bytes so the file actually exists on disk.
-                        if (sourceFilePath != null)
-                        {
-                            using var src = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read);
-                            await src.CopyToAsync(outputStream, ct);
-                        }
-                        else
-                        {
-                            var dummy = new byte[Math.Max(1, fileSize)];
-                            await outputStream.WriteAsync(dummy, 0, dummy.Length, ct);
-                        }
-                        bytesTransferred = fileSize;
-                    }
-                    else if (sourceFilePath != null)
+                    if (sourceFilePath != null)
                     {
                         // Copy from local file immediately.
                         using var sourceStream = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read);

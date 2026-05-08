@@ -34,7 +34,7 @@ namespace Tests.EndToEnd
                 File.WriteAllBytes(Path.Combine(musicRoot, fileName), TestHelpers.EmptyMp3Bytes);
                 File.WriteAllBytes(existingFilePath, TestHelpers.EmptyMp3Bytes);
 
-                var testClient = MockSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+                var testClient = MockSoulseekClient.FromLocalPaths(useTags: false, musicRoot);
 
                 var eng = new EngineSettings { Username = "test_user", Password = "test_pass" };
                 var dl = new DownloadSettings();

@@ -568,7 +568,7 @@ namespace Tests.EndToEnd
             File.WriteAllBytes(Path.Combine(albumDir, "01. Artist - Track One.mp3"), TestHelpers.EmptyMp3Bytes);
             File.WriteAllBytes(Path.Combine(albumDir, "02. Artist - Track Two.mp3"), TestHelpers.EmptyMp3Bytes);
 
-            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, musicRoot);
 
             try
             {
@@ -628,7 +628,7 @@ namespace Tests.EndToEnd
 
             File.WriteAllBytes(Path.Combine(songDir, "Artist - Real Track.mp3"), TestHelpers.EmptyMp3Bytes);
 
-            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, musicRoot);
 
             try
             {
@@ -985,7 +985,7 @@ namespace Tests.EndToEnd
             File.WriteAllBytes(Path.Combine(musicRoot, "Artist - Track.mp3"), TestHelpers.EmptyMp3Bytes);
             File.WriteAllText(csvPath, "artist,title\nArtist,Track\n");
 
-            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, musicRoot);
 
             try
             {
@@ -1048,7 +1048,7 @@ namespace Tests.EndToEnd
             File.WriteAllBytes(Path.Combine(albumDir, "02. TestArtist - Track2.mp3"), TestHelpers.EmptyMp3Bytes);
             File.WriteAllText(csvPath, "artist,title,album\nTestArtist,,TestAlbum\n");
 
-            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+            var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, musicRoot);
 
             try
             {

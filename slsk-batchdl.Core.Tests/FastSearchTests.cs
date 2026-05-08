@@ -128,12 +128,15 @@ namespace Tests.FastSearch
         public async Task SongDownload_FastSearch_WaitsForProvisionalDownloadToComplete()
         {
             // Simulate a scenario where the search completes instantly (searchDelayMs = 0),
-            // but the provisional download takes some time (slowMode = true).
-            // Without the fix, the engine would see the search complete, observe that the 
-            // download task wasn't finished yet, assume it failed, and queue a SECOND download.
+            // but the provisional download is still in progress. Without the fix, the engine
+            // would see the search complete, observe that the download task wasn't finished
+            // yet, assume it failed, and queue a SECOND download.
+            var downloadGate = new TestHelpers.DownloadGate();
             var client = new ClientTests.MockSoulseekClient(
-                new[] { FastUser() }.ToList(),
-                slowMode: true);
+                new[] { FastUser() }.ToList())
+            {
+                BeforeDownloadCompletesAsync = downloadGate.BlockAsync,
+            };
 
             var (app, outputDir) = CreateApp(client,
                 "testartist - testsong",
@@ -141,7 +144,13 @@ namespace Tests.FastSearch
 
             try
             {
-                await app.RunAsync(CancellationToken.None);
+                var runTask = app.RunAsync(CancellationToken.None);
+                await downloadGate.WaitForStartedCountAsync(1);
+                await Task.Delay(50);
+                Assert.AreEqual(1, client.DownloadCallCount,
+                    "The engine should wait for the in-progress provisional download rather than starting a fallback download.");
+                downloadGate.ReleaseAll();
+                await runTask;
             }
             finally
             {

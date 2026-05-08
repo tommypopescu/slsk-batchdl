@@ -17,6 +17,18 @@ namespace Tests.Eventing
             Logger.AddConsole(Logger.LogLevel.Fatal);
         }
 
+        private static async Task CompleteRunWithBlockedDownloads(TestHelpers.DownloadGate downloadGate, Task runTask)
+        {
+            while (!runTask.IsCompleted)
+            {
+                downloadGate.ReleaseAll();
+                await Task.WhenAny(runTask, Task.Delay(10));
+            }
+
+            downloadGate.ReleaseAll();
+            await runTask;
+        }
+
         [TestMethod]
         public async Task EngineEvents_ReportGraphStateChangesAndCompletion()
         {
@@ -205,7 +217,11 @@ namespace Tests.Eventing
                     new SongJob(new SongQuery { Artist = "Artist", Title = "Track Two" }),
                 });
 
-                var client = new ClientTests.MockSoulseekClient(index, slowMode: true);
+                var downloadGate = new TestHelpers.DownloadGate();
+                var client = new ClientTests.MockSoulseekClient(index)
+                {
+                    BeforeDownloadCompletesAsync = downloadGate.BlockAsync,
+                };
                 var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
                 var engine = new DownloadEngine(engineSettings, clientManager);
 
@@ -235,7 +251,11 @@ namespace Tests.Eventing
                 engine.Enqueue(list, downloadSettings);
                 engine.CompleteEnqueue();
 
-                await engine.RunAsync(CancellationToken.None);
+                var runTask = engine.RunAsync(CancellationToken.None);
+                await downloadGate.WaitForStartedCountAsync(1);
+                await Task.Delay(50);
+                Assert.AreEqual(1, downloadGate.StartedCount, "A second song download must not start while the first leaf job holds the global job slot.");
+                await CompleteRunWithBlockedDownloads(downloadGate, runTask);
 
                 Assert.AreEqual(1, maxActive, "--concurrent-jobs=1 should serialize concurrently fanned-out song work.");
                 Assert.IsTrue(list.Jobs.OfType<SongJob>().All(song => song.State == JobState.Done));
@@ -309,7 +329,11 @@ namespace Tests.Eventing
                 var album2 = Album("Album Two", response2, album2File1, album2File2);
                 var list = new JobList("album list", [album1, album2]);
 
-                var client = new ClientTests.MockSoulseekClient([response1, response2], slowMode: true);
+                var downloadGate = new TestHelpers.DownloadGate();
+                var client = new ClientTests.MockSoulseekClient([response1, response2])
+                {
+                    BeforeDownloadCompletesAsync = downloadGate.BlockAsync,
+                };
                 var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
                 var engine = new DownloadEngine(engineSettings, clientManager);
 
@@ -340,9 +364,10 @@ namespace Tests.Eventing
                 engine.CompleteEnqueue();
 
                 var runTask = engine.RunAsync(CancellationToken.None);
-                var completed = await Task.WhenAny(runTask, Task.Delay(TimeSpan.FromSeconds(20)));
-                Assert.AreSame(runTask, completed, "Album child tracks must not consume the parent album's global job slot.");
-                await runTask;
+                await downloadGate.WaitForStartedCountAsync(1);
+                await Task.Delay(50);
+                Assert.AreEqual(1, downloadGate.StartedCount, "A second album must not start while the first album job holds the global job slot.");
+                await CompleteRunWithBlockedDownloads(downloadGate, runTask);
 
                 Assert.AreEqual(1, maxActiveAlbums, "--concurrent-jobs=1 should allow only one album job to download at a time.");
                 Assert.IsTrue(new[] { album1, album2 }.All(album => album.State == JobState.Done));
@@ -403,7 +428,11 @@ namespace Tests.Eventing
                 downloadSettings.Skip.SkipExisting = false;
 
                 var aggregateJob = new AggregateJob(new SongQuery { Artist = "ELO", Title = "Blue Sky" });
-                var client = new ClientTests.MockSoulseekClient(index, slowMode: true);
+                var downloadGate = new TestHelpers.DownloadGate();
+                var client = new ClientTests.MockSoulseekClient(index)
+                {
+                    BeforeDownloadCompletesAsync = downloadGate.BlockAsync,
+                };
                 var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
                 var engine = new DownloadEngine(engineSettings, clientManager);
 
@@ -433,7 +462,11 @@ namespace Tests.Eventing
                 engine.Enqueue(aggregateJob, downloadSettings);
                 engine.CompleteEnqueue();
 
-                await engine.RunAsync(CancellationToken.None);
+                var runTask = engine.RunAsync(CancellationToken.None);
+                await downloadGate.WaitForStartedCountAsync(1);
+                await Task.Delay(50);
+                Assert.AreEqual(1, downloadGate.StartedCount, "A second aggregate song must not start while the first holds the global job slot.");
+                await CompleteRunWithBlockedDownloads(downloadGate, runTask);
 
                 Assert.IsTrue(aggregateJob.Songs.Count >= 2, "Aggregate should produce multiple song jobs for this test.");
                 Assert.AreEqual(1, maxActiveSongs, "--concurrent-jobs=1 should allow only one aggregate child song to download at a time.");
@@ -496,7 +529,11 @@ namespace Tests.Eventing
                 downloadSettings.Skip.SkipExisting = false;
 
                 var aggregateJob = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
-                var client = new ClientTests.MockSoulseekClient(index, slowMode: true);
+                var downloadGate = new TestHelpers.DownloadGate();
+                var client = new ClientTests.MockSoulseekClient(index)
+                {
+                    BeforeDownloadCompletesAsync = downloadGate.BlockAsync,
+                };
                 var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
                 var engine = new DownloadEngine(engineSettings, clientManager);
 
@@ -526,7 +563,11 @@ namespace Tests.Eventing
                 engine.Enqueue(aggregateJob, downloadSettings);
                 engine.CompleteEnqueue();
 
-                await engine.RunAsync(CancellationToken.None);
+                var runTask = engine.RunAsync(CancellationToken.None);
+                await downloadGate.WaitForStartedCountAsync(1);
+                await Task.Delay(50);
+                Assert.AreEqual(1, downloadGate.StartedCount, "A second aggregate album must not start while the first album job holds the global job slot.");
+                await CompleteRunWithBlockedDownloads(downloadGate, runTask);
 
                 Assert.IsTrue(aggregateJob.Albums.Count >= 2, "Album aggregate should produce multiple album jobs for this test.");
                 Assert.AreEqual(1, maxActiveAlbums, "--concurrent-jobs=1 should allow only one album-aggregate child album to download at a time.");

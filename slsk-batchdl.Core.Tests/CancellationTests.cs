@@ -363,8 +363,11 @@ namespace Tests.Cancellation
             var resp1 = new SearchResponse("user1", 1, true, 1000, 0, [file1]);
             var resp2 = new SearchResponse("user2", 1, true, 100, 0, [file2]);
 
-            // slowMode = true so we can catch it downloading
-            var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], slowMode: true);
+            var downloadGate = new TestHelpers.DownloadGate();
+            var testClient = new ClientTests.MockSoulseekClient([resp1, resp2])
+            {
+                BeforeDownloadCompletesAsync = downloadGate.BlockAsync,
+            };
 
             try
             {
@@ -414,7 +417,11 @@ namespace Tests.Cancellation
             var resp1 = new SearchResponse("user1", 1, true, 1000, 0, [file1]);
             var resp2 = new SearchResponse("user2", 1, true, 100, 0, [file2]);
 
-            var testClient = new ClientTests.MockSoulseekClient([resp1, resp2], slowMode: true);
+            var downloadGate = new TestHelpers.DownloadGate();
+            var testClient = new ClientTests.MockSoulseekClient([resp1, resp2])
+            {
+                BeforeDownloadCompletesAsync = downloadGate.BlockAsync,
+            };
 
             try
             {
@@ -474,9 +481,7 @@ namespace Tests.Cancellation
                 {
                     Username = "u",
                     Password = "p",
-                    MockFilesDir = musicRoot,
                     MockFilesReadTags = false,
-                    MockFilesSlow = true,
                 };
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = "Artist Album";
@@ -485,7 +490,10 @@ namespace Tests.Cancellation
                 dl.Output.ParentDir = outputDir;
                 dl.Output.NameFormat = "{foldername}/{filename}";
 
-                var clientManager = new SoulseekClientManager(eng);
+                var testClient = ClientTests.MockSoulseekClient.FromLocalPaths(useTags: false, musicRoot);
+                var downloadGate = new TestHelpers.DownloadGate();
+                testClient.BeforeDownloadCompletesAsync = downloadGate.BlockAsync;
+                var clientManager = TestHelpers.CreateMockClientManager(testClient, eng);
                 var engine = new DownloadEngine(eng, clientManager);
 
                 AlbumJob? albumJob = null;

@@ -5,11 +5,72 @@ using Sldl.Core;
 using Soulseek;
 using File = Soulseek.File;
 using Sldl.Core.Settings;
+using System.Collections.Concurrent;
 
 namespace Tests
 {
     public static class TestHelpers
     {
+        public sealed class DownloadGate
+        {
+            private readonly ConcurrentQueue<TaskCompletionSource> releases = new();
+            private readonly object gate = new();
+            private readonly List<(int Count, TaskCompletionSource Tcs)> waiters = new();
+            private int startedCount;
+
+            public int StartedCount => Volatile.Read(ref startedCount);
+
+            public Task BlockAsync(string username, string filename, CancellationToken ct)
+            {
+                var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                releases.Enqueue(release);
+
+                int count = Interlocked.Increment(ref startedCount);
+                lock (gate)
+                {
+                    for (int i = waiters.Count - 1; i >= 0; i--)
+                    {
+                        if (count < waiters[i].Count)
+                            continue;
+
+                        waiters[i].Tcs.TrySetResult();
+                        waiters.RemoveAt(i);
+                    }
+                }
+
+                return release.Task.WaitAsync(ct);
+            }
+
+            public Task WaitForStartedCountAsync(int count, int timeoutMs = 1000)
+            {
+                if (StartedCount >= count)
+                    return Task.CompletedTask;
+
+                TaskCompletionSource tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                lock (gate)
+                {
+                    if (StartedCount >= count)
+                        tcs.TrySetResult();
+                    else
+                        waiters.Add((count, tcs));
+                }
+
+                return tcs.Task.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs));
+            }
+
+            public void ReleaseOne()
+            {
+                if (releases.TryDequeue(out var release))
+                    release.TrySetResult();
+            }
+
+            public void ReleaseAll()
+            {
+                while (releases.TryDequeue(out var release))
+                    release.TrySetResult();
+            }
+        }
+
         public static List<SearchResponse> CreateTestIndex()
         {
             var user1SearchResponse = new SearchResponse(
