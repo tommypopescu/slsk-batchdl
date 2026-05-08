@@ -205,12 +205,12 @@ public partial class Searcher
     public async Task<List<(string dir, SlFile file)>> GetAllFilesInFolder(string user, string folderPrefix, CancellationToken? ct = null)
     {
         var res = new List<(string dir, SlFile file)>();
-        folderPrefix = folderPrefix.TrimEnd('\\') + '\\';
+        folderPrefix = folderPrefix.Replace('/', '\\').TrimEnd('\\') + '\\';
         var userFileList = await client.BrowseAsync(user, new BrowseOptions(), ct);
         foreach (var dir in userFileList.Directories)
         {
-            string dirname = dir.Name.TrimEnd('\\') + '\\';
-            if (dirname.StartsWith(folderPrefix))
+            string dirname = dir.Name.Replace('/', '\\').TrimEnd('\\') + '\\';
+            if (dirname.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase))
                 res.AddRange(dir.Files.Select(x => (dir.Name, x)));
         }
         return res;
@@ -231,7 +231,9 @@ public partial class Searcher
             catch (OperationCanceledException) { throw; }
             catch (Exception e) { Logger.Error($"Error getting all files in '{folder.FolderPath}': {e}"); return 0; }
 
-            var existing = folder.Files.Select(f => f.ResolvedTarget!.Filename).ToHashSet();
+            var existing = folder.Files
+                .Select(f => f.ResolvedTarget!.Filename.Replace('/', '\\'))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var firstInfo = folder.Files.FirstOrDefault(f => !f.IsNotAudio)?.Query ?? new SongQuery();
             var firstResp = folder.Files.FirstOrDefault()?.ResolvedTarget?.Response
                             ?? new SearchResponse(folder.Username, -1, false, -1, -1, null);
@@ -240,7 +242,7 @@ public partial class Searcher
             {
                 // file.Filename from BrowseAsync is already the full path (same as in search
                 // results), not just the basename — do not prepend dir again.
-                if (existing.Contains(file.Filename)) continue;
+                if (existing.Contains(file.Filename.Replace('/', '\\'))) continue;
 
                 newFiles++;
                 var slFile = new SlFile(file.Code, file.Filename, file.Size, file.Extension, file.Attributes);
