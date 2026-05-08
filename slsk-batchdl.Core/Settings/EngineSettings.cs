@@ -52,6 +52,8 @@ public class EngineSettings
     /// --verbose / -v / --debug are special cases handled by ConfigManager that set this to Debug.
     public Logger.LogLevel LogLevel { get; set; } = Logger.LogLevel.Info;
 
+    public bool ReportIntervalProgress { get; set; } = true;
+
     public string? LogFilePath { get; set; }
 
     // ── Testing / mock ────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ public static class Printing
 {
     public static readonly object ConsoleLock = new();
     public static bool IsBuffering { get; private set; }
+    internal static Action<string, ConsoleColor>? LiveWriteLine { get; set; }
     private static readonly System.Collections.Concurrent.ConcurrentQueue<Action> _buffer = new();
 
     // Highest row occupied by any progress bar — cursor must be below this before normal output.
@@ -888,6 +889,12 @@ public static class Printing
         if (IsBuffering && !force)
         {
             _buffer.Enqueue(() => WriteLine(value, color, force));
+            return;
+        }
+
+        if (!force && LiveWriteLine is { } liveWriteLine)
+        {
+            liveWriteLine(value, color);
             return;
         }
 

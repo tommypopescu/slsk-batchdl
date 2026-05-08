@@ -92,6 +92,8 @@ internal static partial class Program
             Logger.AddOrReplaceFile(engineSettings.LogFilePath, engineSettings.LogLevel < Logger.LogLevel.Debug ? engineSettings.LogLevel : Logger.LogLevel.Debug);
 
         Logger.SetConsoleLogLevel(rootSettings.NonVerbosePrint ? Logger.LogLevel.Error : engineSettings.LogLevel);
+        if (ShouldUseLiveRendering(cliSettings))
+            engineSettings.ReportIntervalProgress = false;
 
         if (daemonMode)
         {
@@ -163,7 +165,8 @@ internal static partial class Program
             if (envelope.Type == "track-batch.resolved"
                 && envelope.Payload is TrackBatchResolvedEventDto batch
                 && !batch.PrintOption.HasFlag(PrintOption.Tracks)
-                && ShouldPrintHumanBatchPreview(batch.PrintOption))
+                && ShouldPrintHumanBatchPreview(batch.PrintOption)
+                && cliReporter?.UsesLiveRendering != true)
             {
                 PrintTrackBatchResolved(batch);
             }
@@ -261,6 +264,8 @@ internal static partial class Program
         {
             await engine.RunAsync(cts.Token);
             Logger.Trace("Main: RunAsync returned.");
+            cliReporter?.Stop();
+            cliReporter = null;
             Printing.PrintComplete(engine.Queue);
 
             if (rootSettings.DoNotDownload)
@@ -274,6 +279,7 @@ internal static partial class Program
             Logger.Trace("Main: Entered finally block. Disposing clientManager...");
             engine.Cancel();
             cts.Cancel();
+            cliReporter?.Stop();
             clientManager.Dispose();
             Logger.Trace("Main: ClientManager disposed.");
             Printing.SetBuffering(false);
@@ -312,7 +318,8 @@ internal static partial class Program
             if (envelope.Type == "track-batch.resolved"
                 && envelope.Payload is TrackBatchResolvedEventDto batch
                 && !batch.PrintOption.HasFlag(PrintOption.Tracks)
-                && ShouldPrintHumanBatchPreview(batch.PrintOption))
+                && ShouldPrintHumanBatchPreview(batch.PrintOption)
+                && cliReporter?.UsesLiveRendering != true)
             {
                 PrintTrackBatchResolved(batch);
             }
@@ -408,6 +415,9 @@ internal static partial class Program
                 await interactiveCoordinator.RunUntilCompleteAsync(submission.WorkflowId, cts.Token);
             else
                 await WaitForRemoteWorkflowAsync(backend, submission.WorkflowId, cts.Token);
+
+            cliReporter?.Stop();
+            cliReporter = null;
 
             if (!rootSettings.DoNotDownload)
                 await PrintRemoteCompleteAsync(backend, submission.WorkflowId, cts.Token);
@@ -839,6 +849,11 @@ internal static partial class Program
         => string.IsNullOrWhiteSpace(names)
             ? null
             : names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool ShouldUseLiveRendering(CliSettings cliSettings)
+        => !cliSettings.NoProgress
+            && !cliSettings.ProgressJson
+            && !Console.IsOutputRedirected;
 
     private static async Task RunDaemonAsync(
         string[] args,

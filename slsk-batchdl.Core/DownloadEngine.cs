@@ -433,7 +433,9 @@ public class DownloadEngine
                 // ── fan-out ───────────────────────────────────────────────────────
                 if (directSongs.Count > 0)
                 {
-                    var intervalReporter = new IntervalProgressReporter(TimeSpan.FromSeconds(30), 5, directSongs);
+                    var intervalReporter = engineSettings.ReportIntervalProgress
+                        ? new IntervalProgressReporter(TimeSpan.FromSeconds(30), 5, directSongs)
+                        : null;
 
                     await Task.WhenAll(jl.Jobs.ToList().Select(async child =>
                     {
@@ -444,7 +446,7 @@ public class DownloadEngine
                         {
                             ctx?.IndexEditor?.Update();
                             ctx?.PlaylistEditor?.Update();
-                            intervalReporter.MaybeReport(song.State);
+                            intervalReporter?.MaybeReport(song.State);
                             int dl = directSongs.Count(s => s.State == JobState.Done || s.State == JobState.AlreadyExists);
                             int fl = directSongs.Count(s => s.State == JobState.Failed);
                             Events.RaiseOverallProgress(dl, fl, directSongs.Count);

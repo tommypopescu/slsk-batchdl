@@ -149,6 +149,11 @@ public sealed record AlbumDownloadCompletedEventDto(
 public sealed record SearchRateLimitedEventDto();
 
 /// <summary>
+/// Activity event emitted when the rate-limit window resets and searching resumes.
+/// </summary>
+public sealed record SearchResumedEventDto();
+
+/// <summary>
 /// Activity event emitted when a job starts retrieving full folder contents.
 /// </summary>
 public sealed record JobFolderRetrievingEventDto(

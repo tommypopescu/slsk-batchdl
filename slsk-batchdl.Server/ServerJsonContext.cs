@@ -114,6 +114,7 @@ namespace Sldl.Server;
 [JsonSerializable(typeof(AlbumTrackDownloadStartedEventDto))]
 [JsonSerializable(typeof(AlbumDownloadCompletedEventDto))]
 [JsonSerializable(typeof(SearchRateLimitedEventDto))]
+[JsonSerializable(typeof(SearchResumedEventDto))]
 [JsonSerializable(typeof(JobFolderRetrievingEventDto))]
 [JsonSerializable(typeof(OnCompleteStartedEventDto))]
 [JsonSerializable(typeof(OnCompleteEndedEventDto))]

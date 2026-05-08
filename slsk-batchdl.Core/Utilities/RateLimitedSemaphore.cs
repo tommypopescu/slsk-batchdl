@@ -38,13 +38,17 @@ namespace Sldl.Core;
         }
     }
 
-    public async Task WaitAsync(Action? onWaiting = null, CancellationToken cancellationToken = default)
+    public async Task WaitAsync(Action? onWaiting = null, Action? onResumed = null, CancellationToken cancellationToken = default)
     {
         TryResetSemaphore();
         var semaphoreTask = this.semaphore.WaitAsync(cancellationToken);
 
-        if (!semaphoreTask.IsCompleted && onWaiting != null && Interlocked.Exchange(ref _limitedNotified, 1) == 0)
-            onWaiting();
+        bool firedWaiting = !semaphoreTask.IsCompleted
+            && onWaiting != null
+            && Interlocked.Exchange(ref _limitedNotified, 1) == 0;
+
+        if (firedWaiting)
+            onWaiting!();
 
         while (!semaphoreTask.IsCompleted)
         {
@@ -72,5 +76,8 @@ namespace Sldl.Core;
         }
 
         await semaphoreTask;
+
+        if (firedWaiting)
+            onResumed?.Invoke();
     }
 }
