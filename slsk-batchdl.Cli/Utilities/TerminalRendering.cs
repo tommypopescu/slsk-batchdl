@@ -34,7 +34,8 @@ internal sealed record JobChildView(
     int DisplayId,
     string State,
     string Name,
-    int? Percent = null);
+    int? Percent = null,
+    bool IsMostRecent = false);
 
 internal sealed record JobView(
     string Id,
@@ -77,6 +78,7 @@ internal sealed class TerminalLiveRenderer : IDisposable
     private bool _disposed;
 
     private sealed record LiveRow(IRenderable Renderable);
+    private static readonly Style DimIdStyle = new(foreground: Color.Grey);
 
     private static readonly IReadOnlyList<string> SpinFrames = SupportsUnicodeSpinner()
         ? Spinner.Known.Dots.Frames
@@ -230,7 +232,7 @@ internal sealed class TerminalLiveRenderer : IDisposable
             .ThenBy(job => job.DisplayId)
             .ToList();
 
-        var counts = CountKnownJobs(jobs.Count);
+        var counts = CountKnownJobs(CountVisibleJobs(jobs, allJobs));
         var spin = SpinFrames[_spinFrame++ % SpinFrames.Count];
 
         var statusLine = $"{spin} {BuildCountsMarkup(counts)}";
@@ -243,11 +245,14 @@ internal sealed class TerminalLiveRenderer : IDisposable
             TextRow(""),
         };
 
+        var childLimits = AllocateChildLimits(jobs, maxRows - rows.Count - jobs.Count);
         foreach (var job in jobs)
         {
             var indent = job.ParentId != null ? "  " : "";
-            rows.Add(JobRow(indent, job));
-            foreach (var child in job.Children.Where(child => IsLiveState(child.State)))
+            var children = VisibleChildren(job, childLimits.GetValueOrDefault(job.Id));
+            var hiddenChildren = job.Children.Count(child => IsLiveState(child.State)) - children.Count;
+            rows.Add(JobRow(indent, job, hiddenChildren));
+            foreach (var child in children)
                 rows.Add(ChildRow($"  {indent}  ", child));
         }
 
@@ -272,13 +277,69 @@ internal sealed class TerminalLiveRenderer : IDisposable
     private static LiveRow TextRow(string text)
         => new(new Text(text));
 
-    private static LiveRow JobRow(string indent, JobView job)
-        => HangingTextRow($"{indent}[{job.DisplayId}] ", FormatJobBody(job));
+    private static LiveRow JobRow(string indent, JobView job, int hiddenChildren)
+        => HangingTextRow($"{indent}{FormatDisplayId(job.DisplayId)}", FormatJobBody(job, hiddenChildren), dimPrefix: true);
 
     private static LiveRow ChildRow(string indent, JobChildView child)
         => HangingTextRow(indent, FormatChild(child));
 
-    private static LiveRow HangingTextRow(string prefix, string text)
+    private static Dictionary<string, int> AllocateChildLimits(IReadOnlyList<JobView> jobs, int availableRows)
+    {
+        var jobsWithChildren = jobs
+            .Select(job => (Job: job, ChildCount: job.Children.Count(child => IsLiveState(child.State))))
+            .Where(entry => entry.ChildCount > 0)
+            .ToList();
+
+        if (jobsWithChildren.Count == 0 || availableRows <= 0)
+            return new Dictionary<string, int>(StringComparer.Ordinal);
+
+        var limits = jobsWithChildren.ToDictionary(
+            entry => entry.Job.Id,
+            _ => 0,
+            StringComparer.Ordinal);
+
+        while (availableRows > 0)
+        {
+            var changed = false;
+            foreach (var (job, childCount) in jobsWithChildren)
+            {
+                if (availableRows == 0)
+                    break;
+                if (limits[job.Id] >= childCount)
+                    continue;
+
+                limits[job.Id]++;
+                availableRows--;
+                changed = true;
+            }
+
+            if (!changed)
+                break;
+        }
+
+        return limits;
+    }
+
+    private static IReadOnlyList<JobChildView> VisibleChildren(JobView job, int limit)
+    {
+        var children = job.Children.Where(child => IsLiveState(child.State)).ToList();
+        if (children.Count == 0 || limit <= 0)
+            return [];
+        if (children.Count <= limit)
+            return children;
+
+        var visibleIds = children.Take(limit).Select(child => child.Id).ToHashSet(StringComparer.Ordinal);
+        var recent = children.LastOrDefault(child => child.IsMostRecent);
+        if (recent != null && !visibleIds.Contains(recent.Id))
+        {
+            visibleIds.Remove(children.Take(limit).Last().Id);
+            visibleIds.Add(recent.Id);
+        }
+
+        return children.Where(child => visibleIds.Contains(child.Id)).ToList();
+    }
+
+    private static LiveRow HangingTextRow(string prefix, string text, bool dimPrefix = false)
     {
         var grid = new Grid
         {
@@ -295,7 +356,7 @@ internal sealed class TerminalLiveRenderer : IDisposable
         {
             Padding = new Padding(0, 0, 0, 0),
         });
-        grid.AddRow(new Text(prefix), new Text(text));
+        grid.AddRow(dimPrefix ? new Text(prefix, DimIdStyle) : new Text(prefix), new Text(text));
 
         return new LiveRow(grid);
     }
@@ -332,6 +393,7 @@ internal sealed class TerminalLiveRenderer : IDisposable
         if (records.Length == 0)
             return (liveJobCount, 0, 0, 0);
 
+        var recordsById = records.ToDictionary(record => record.Id, StringComparer.Ordinal);
         int queued = 0;
         int active = 0;
         int completed = 0;
@@ -339,6 +401,9 @@ internal sealed class TerminalLiveRenderer : IDisposable
 
         foreach (var record in records)
         {
+            if (IsAlbumChild(record, recordsById))
+                continue;
+
             if (IsQueuedState(record.State))
                 queued++;
             else if (IsSuccessfulTerminalState(record.State))
@@ -351,6 +416,29 @@ internal sealed class TerminalLiveRenderer : IDisposable
 
         return (Math.Max(active, liveJobCount), queued, completed, failed);
     }
+
+    private static int CountVisibleJobs(
+        IEnumerable<JobView> jobs,
+        IReadOnlyDictionary<string, JobView> jobsById)
+        => jobs.Count(job => !IsAlbumChild(job, jobsById));
+
+    private static bool IsAlbumChild(
+        TerminalJobRecord record,
+        IReadOnlyDictionary<string, TerminalJobRecord> recordsById)
+        => record.ParentId is string parentId
+            && recordsById.TryGetValue(parentId, out var parent)
+            && IsAlbumKind(parent.Kind);
+
+    private static bool IsAlbumChild(
+        JobView job,
+        IReadOnlyDictionary<string, JobView> jobsById)
+        => job.ParentId is string parentId
+            && jobsById.TryGetValue(parentId, out var parent)
+            && IsAlbumKind(parent.Kind);
+
+    private static bool IsAlbumKind(string kind)
+        => string.Equals(kind, "Album", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(kind, "AlbumJob", StringComparison.OrdinalIgnoreCase);
 
     private static string BuildCountsMarkup((int Active, int Queued, int Completed, int Failed) counts)
     {
@@ -389,21 +477,34 @@ internal sealed class TerminalLiveRenderer : IDisposable
         }
     }
 
-    private static string FormatJobBody(JobView job)
+    private static string FormatJobBody(JobView job, int hiddenChildren)
     {
-        var suffix = job.Percent is int pct ? $" {pct}%" : "";
+        var prefix = FormatPercentPrefix(job.State, job.Percent);
+        var suffix = "";
         if (job.TotalChildren is int total)
             suffix += $" [{job.DoneChildren ?? 0}/{total}]";
+        if (hiddenChildren > 0)
+            suffix += $" (+{hiddenChildren} hidden)";
 
-        return $"{job.Kind}: {job.State}: {job.Name}{suffix}";
+        return $"{job.Kind}: {FormatStateLine(job.State, job.Name, prefix, suffix)}";
     }
 
     private static string FormatChild(JobChildView child)
+        => FormatStateLine(child.State, child.Name, FormatPercentPrefix(child.State, child.Percent));
+
+    private static string FormatStateLine(string state, string name, string prefix = "", string suffix = "")
+        => $"{prefix}{state}: {name}{suffix}";
+
+    private static string FormatPercentPrefix(string state, int? percent)
     {
-        var prefix = child.Percent is int pct ? $"({pct}%) " : "";
-        return $"{prefix}{child.State}: {child.Name}";
+        return percent is int pct && string.Equals(state, "downloading", StringComparison.OrdinalIgnoreCase)
+            ? $"({pct,2}%) "
+            : "";
     }
 
     private static string FormatLog(TerminalLogLine line)
-        => $"[{line.DisplayId}] {line.JobType}: {line.Message}";
+        => $"{FormatDisplayId(line.DisplayId)}{line.JobType}: {line.Message}";
+
+    private static string FormatDisplayId(int displayId)
+        => $"[{displayId:000}] ";
 }
