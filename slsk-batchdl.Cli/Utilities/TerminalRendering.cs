@@ -76,6 +76,8 @@ internal sealed class TerminalLiveRenderer : IDisposable
     private int _spinFrame;
     private bool _disposed;
 
+    private sealed record LiveRow(IRenderable Renderable);
+
     private static readonly IReadOnlyList<string> SpinFrames = SupportsUnicodeSpinner()
         ? Spinner.Known.Dots.Frames
         : ["|", "/", "-", "\\"];
@@ -205,15 +207,11 @@ internal sealed class TerminalLiveRenderer : IDisposable
     private Rows Render()
     {
         var rows = BuildRows();
-        // First row is the status line and uses markup; the rest are plain text
-        // (job names may contain '[' which would break markup parsing).
-        var renderables = rows.Select((row, i) => i == 0
-            ? (IRenderable)new Markup(row)
-            : new Text(row));
+        var renderables = rows.Select(row => row.Renderable);
         return new Rows(renderables);
     }
 
-    private List<string> BuildRows()
+    private List<LiveRow> BuildRows()
     {
         int maxRows = MaxLiveRows();
         var allJobs = _jobs.Values.ToDictionary(job => job.Id, StringComparer.Ordinal);
@@ -239,33 +237,67 @@ internal sealed class TerminalLiveRenderer : IDisposable
         if (_statusMessage is string msg)
             statusLine += $" | [bold yellow]{Markup.Escape(msg)}[/]";
 
-        var lines = new List<string>
+        var rows = new List<LiveRow>
         {
-            statusLine,
-            "",
+            MarkupRow(statusLine),
+            TextRow(""),
         };
 
         foreach (var job in jobs)
         {
             var indent = job.ParentId != null ? "  " : "";
-            lines.Add(indent + FormatJob(job));
+            rows.Add(JobRow(indent, job));
             foreach (var child in job.Children.Where(child => IsLiveState(child.State)))
-                lines.Add($"  {indent}  {FormatChild(child)}");
+                rows.Add(ChildRow($"  {indent}  ", child));
         }
 
-        if (lines.Count == 2)
-            lines.Add("(none)");
+        if (rows.Count == 2)
+            rows.Add(TextRow("(none)"));
 
-        if (lines.Count <= maxRows)
-            return lines;
+        if (rows.Count <= maxRows)
+            return rows;
 
         int keep = Math.Max(3, maxRows - 1);
-        int omitted = lines.Count - keep;
+        int omitted = rows.Count - keep;
         return [
-            ..lines.Take(2),
-            $"... {omitted} active rows hidden ...",
-            ..lines.Skip(lines.Count - Math.Max(1, keep - 2)).Take(maxRows - 3),
+            ..rows.Take(2),
+            TextRow($"... {omitted} active rows hidden ..."),
+            ..rows.Skip(rows.Count - Math.Max(1, keep - 2)).Take(maxRows - 3),
         ];
+    }
+
+    private static LiveRow MarkupRow(string markup)
+        => new(new Markup(markup));
+
+    private static LiveRow TextRow(string text)
+        => new(new Text(text));
+
+    private static LiveRow JobRow(string indent, JobView job)
+        => HangingTextRow($"{indent}[{job.DisplayId}] ", FormatJobBody(job));
+
+    private static LiveRow ChildRow(string indent, JobChildView child)
+        => HangingTextRow(indent, FormatChild(child));
+
+    private static LiveRow HangingTextRow(string prefix, string text)
+    {
+        var grid = new Grid
+        {
+            Expand = true,
+        };
+
+        grid.AddColumn(new GridColumn
+        {
+            Width = prefix.Length,
+            NoWrap = true,
+            Padding = new Padding(0, 0, 0, 0),
+        });
+        grid.AddColumn(new GridColumn
+        {
+            Padding = new Padding(0, 0, 0, 0),
+        });
+        grid.AddRow(new Text(prefix), new Text(text));
+
+        return new LiveRow(grid);
     }
 
     private static void AddVisibleAncestors(
@@ -357,13 +389,13 @@ internal sealed class TerminalLiveRenderer : IDisposable
         }
     }
 
-    private static string FormatJob(JobView job)
+    private static string FormatJobBody(JobView job)
     {
         var suffix = job.Percent is int pct ? $" {pct}%" : "";
         if (job.TotalChildren is int total)
             suffix += $" [{job.DoneChildren ?? 0}/{total}]";
 
-        return $"[{job.DisplayId}] {job.Kind}: {job.State}: {job.Name}{suffix}";
+        return $"{job.Kind}: {job.State}: {job.Name}{suffix}";
     }
 
     private static string FormatChild(JobChildView child)
