@@ -379,6 +379,7 @@ public class M3uEditor
             string p = val.DownloadPath;
             if (Utils.NormalizedPath(p).StartsWith(parent))
                 p = "./" + System.IO.Path.GetRelativePath(parent, p);
+            p = p.Replace('\\', '/');
 
             // tracktype: 1 for album entries, 0 for song entries (backward-compat with old readers)
             int tracktype = val.IsAlbum || val.Title.Length == 0 ? 1 : 0;

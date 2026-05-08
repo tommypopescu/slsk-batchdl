@@ -113,6 +113,25 @@ namespace Tests.Index
         }
 
         [TestMethod]
+        public void Index_SerializesFilePathsWithForwardSlashes()
+        {
+            var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Title" });
+            song.SetDone();
+            song.DownloadPath = Path.Combine(Path.GetDirectoryName(testM3uPath)!, "nested", "song.mp3");
+
+            var (queue, _, _) = MakeSongQueue([song]);
+            File.WriteAllText(testM3uPath, "");
+            var editor = new M3uEditor(testM3uPath, queue, M3uOption.Index, true);
+            editor.Update();
+
+            var lines = File.ReadAllLines(testM3uPath);
+            Assert.IsTrue(lines.Any(line => line.StartsWith("./nested/song.mp3,")),
+                string.Join(Environment.NewLine, lines));
+            Assert.IsFalse(lines.Any(line => line.StartsWith(@".\nested\song.mp3,")),
+                "Index paths should use forward slashes even on Windows.");
+        }
+
+        [TestMethod]
         public void Index_WithAlbumJobs_RoundTripsCorrectly()
         {
             var albumJobs = new List<AlbumJob>

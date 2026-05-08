@@ -177,6 +177,199 @@ namespace Tests.EndToEnd
         }
 
         [TestMethod]
+        public async Task SingleSong_WriteIndex_UsesNameFormattedPath()
+        {
+            var musicRoot = Path.Combine(Path.GetTempPath(), "slsk-index-song-format-music-" + Guid.NewGuid());
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-index-song-format-out-" + Guid.NewGuid());
+            Directory.CreateDirectory(musicRoot);
+            Directory.CreateDirectory(outputDir);
+
+            File.WriteAllBytes(Path.Combine(musicRoot, "01. Test Artist - Test Title.mp3"), TestHelpers.EmptyMp3Bytes);
+            var testClient = LocalFilesSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var settings = new DownloadSettings();
+                settings.Extraction.Input = "Test Artist - Test Title";
+                settings.Output.ParentDir = outputDir;
+                settings.Output.NameFormat = "Renamed/{sartist} - {stitle}";
+                settings.Output.WriteIndex = true;
+                settings.Output.HasConfiguredIndex = true;
+                settings.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv");
+
+                var app = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(testClient, engineSettings));
+                app.Enqueue(new ExtractJob(settings.Extraction.Input!, settings.Extraction.InputType), settings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var lines = File.ReadAllLines(settings.Output.IndexFilePath);
+                Assert.AreEqual("filepath,artist,album,title,length,tracktype,state,failurereason", lines[0]);
+                var normalizedLines = lines.Select(line => line.Replace('\\', '/')).ToList();
+                Assert.IsTrue(normalizedLines.Any(line => line.StartsWith("./Renamed/Test Artist - Test Title.mp3,Test Artist,,Test Title,")
+                    && line.EndsWith(",0,1,0")), string.Join(Environment.NewLine, lines));
+            }
+            finally
+            {
+                if (Directory.Exists(musicRoot)) Directory.Delete(musicRoot, true);
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AlbumDownload_WriteIndex_UsesNameFormattedAlbumPath()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-index-album-format-out-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var response = new Soulseek.SearchResponse(
+                username: "user",
+                token: 1,
+                hasFreeUploadSlot: true,
+                uploadSpeed: 100_000,
+                queueLength: 0,
+                fileList:
+                [
+                    TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\01. Test Artist - First.mp3", length: 180),
+                    TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\02. Test Artist - Second.mp3", length: 181),
+                ]);
+            var testClient = new ClientTests.MockSoulseekClient([response]);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var settings = new DownloadSettings();
+                settings.Extraction.Input = "artist=Test Artist, album=Test Album";
+                settings.Extraction.IsAlbum = true;
+                settings.Search.NoBrowseFolder = true;
+                settings.Output.ParentDir = outputDir;
+                settings.Output.NameFormat = "Renamed/{foldername}/{filename}";
+                settings.Output.WriteIndex = true;
+                settings.Output.HasConfiguredIndex = true;
+                settings.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv");
+
+                var app = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(testClient, engineSettings));
+                app.Enqueue(new ExtractJob(settings.Extraction.Input!, settings.Extraction.InputType), settings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var lines = File.ReadAllLines(settings.Output.IndexFilePath);
+                Assert.AreEqual("filepath,artist,album,title,length,tracktype,state,failurereason", lines[0]);
+                var normalizedLines = lines.Select(line => line.Replace('\\', '/')).ToList();
+                Assert.IsTrue(normalizedLines.Any(line => line == "./Renamed/Test Album,Test Artist,Test Album,,-1,1,1,0"),
+                    string.Join(Environment.NewLine, lines));
+                Assert.IsFalse(lines.Any(line => line.Contains("First.mp3") || line.Contains("Second.mp3")),
+                    "Album child songs should not be written as index entries.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task SingleSong_WriteIndex_FailedDownloadStoresFailureWithoutPath()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-index-song-fail-out-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var response = new Soulseek.SearchResponse(
+                "failuser", 1, true, 100_000, 0,
+                [TestHelpers.CreateSlFile(@"Music\Test Artist - Test Title.mp3", length: 180)]);
+            var testClient = new ClientTests.MockSoulseekClient([response], failingUsers: ["failuser"]);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var settings = new DownloadSettings();
+                settings.Extraction.Input = "Test Artist - Test Title";
+                settings.Output.ParentDir = outputDir;
+                settings.Output.WriteIndex = true;
+                settings.Output.HasConfiguredIndex = true;
+                settings.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv");
+                settings.Transfer.MaxDownloadRetries = 1;
+
+                var app = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(testClient, engineSettings));
+                app.Enqueue(new ExtractJob(settings.Extraction.Input!, settings.Extraction.InputType), settings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var lines = File.ReadAllLines(settings.Output.IndexFilePath);
+                Assert.IsTrue(lines.Any(line => line == ",Test Artist,,Test Title,-1,0,2,4"),
+                    string.Join(Environment.NewLine, lines));
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AlbumDownload_WriteIndex_FailedDownloadStoresFailureWithoutPath()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-index-album-fail-out-" + Guid.NewGuid());
+            var failedDir = Path.Combine(Path.GetTempPath(), "slsk-index-album-fail-failed-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+            Directory.CreateDirectory(failedDir);
+
+            var response = new Soulseek.SearchResponse(
+                "user", 1, true, 100_000, 0,
+                [
+                    TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\01. Test Artist - First.mp3", length: 180),
+                    TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\02. Test Artist - Second.mp3", length: 181),
+                ]);
+            var testClient = new ClientTests.MockSoulseekClient([response])
+            {
+                BeforeDownloadCompletesAsync = (_, remoteFilename, _) =>
+                {
+                    if (remoteFilename.Contains("Second.mp3", StringComparison.OrdinalIgnoreCase))
+                        throw new Soulseek.SoulseekClientException("Simulated partial album failure");
+
+                    return Task.CompletedTask;
+                },
+            };
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var settings = new DownloadSettings();
+                settings.Extraction.Input = "artist=Test Artist, album=Test Album";
+                settings.Extraction.IsAlbum = true;
+                settings.Search.NoBrowseFolder = true;
+                settings.Output.ParentDir = outputDir;
+                settings.Output.FailedAlbumPath = failedDir;
+                settings.Output.WriteIndex = true;
+                settings.Output.HasConfiguredIndex = true;
+                settings.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv");
+                settings.Transfer.MaxDownloadRetries = 1;
+
+                var app = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(testClient, engineSettings));
+                app.Enqueue(new ExtractJob(settings.Extraction.Input!, settings.Extraction.InputType), settings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                Assert.IsTrue(Directory.GetFiles(failedDir, "*", SearchOption.AllDirectories)
+                        .Any(path => Path.GetFileName(path) == "01. Test Artist - First.mp3"),
+                    "The already-downloaded album file should have been moved to failed-album-path.");
+
+                var lines = File.ReadAllLines(settings.Output.IndexFilePath);
+                Assert.IsTrue(lines.Any(line => line == ",Test Artist,Test Album,,-1,1,2,4"),
+                    string.Join(Environment.NewLine, lines));
+                Assert.IsFalse(lines.Any(line => line.Contains(failedDir) || line.Contains("First.mp3")),
+                    "Failed album index entry should record only album failure, not failed-album-path or child files.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+                if (Directory.Exists(failedDir)) Directory.Delete(failedDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task AlbumDownload_E2E()
         {
             Console.ResetColor();
