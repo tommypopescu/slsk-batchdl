@@ -7,66 +7,21 @@ using Sldl.Core.Settings;
 
 namespace Sldl.Cli;
 
-public interface IProgressBar
-{
-    int Y { get; }
-    string? Line1 { get; }
-    int Current { get; }
-    void Refresh(int current, string item);
-}
-
 public static class Printing
 {
     public static readonly object ConsoleLock = new();
-    public static bool IsBuffering { get; private set; }
     internal static Action<string, ConsoleColor>? LiveWriteLine { get; set; }
-    private static readonly System.Collections.Concurrent.ConcurrentQueue<Action> _buffer = new();
 
-    // Highest row occupied by any progress bar — cursor must be below this before normal output.
-    private static int _barHighWaterMark = -1;
+    private static bool _isBuffering;
+    private static readonly List<(string value, ConsoleColor color, bool isNewLine)> _buffer = new();
 
-    internal static void UpdateBarHighWaterMark(int y)
-    {
-        if (y > _barHighWaterMark)
-            _barHighWaterMark = y;
-    }
-
-    private static bool CanUseConsoleCursor()
-    {
-        if (Console.IsOutputRedirected)
-            return false;
-
-        try
-        {
-            _ = Console.CursorTop;
-            _ = Console.WindowTop;
-            _ = Console.WindowWidth;
-            return true;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-    }
-
-    // Move the cursor below all bar rows so normal console output doesn't overwrite them.
-    // Must be called inside ConsoleLock.
-    private static void EnsureCursorBelowBars()
-    {
-        if (_barHighWaterMark < 0 || !CanUseConsoleCursor()) return;
-        int needed = _barHighWaterMark + 1;
-        if (Console.CursorTop < needed)
-        {
-            Console.CursorTop  = needed;
-            Console.CursorLeft = 0;
-        }
-    }
-
-    public static void SetBuffering(bool enable)
+    public static void SetBuffering(bool value)
     {
         lock (ConsoleLock)
         {
-            IsBuffering = enable;
+            if (_isBuffering && !value)
+                Flush();
+            _isBuffering = value;
         }
     }
 
@@ -74,140 +29,15 @@ public static class Printing
     {
         lock (ConsoleLock)
         {
-            while (_buffer.TryDequeue(out var action))
-                action();
-        }
-    }
-
-    internal static void Enqueue(Action action) => _buffer.Enqueue(action);
-
-    private class BufferedProgressBar : IProgressBar
-    {
-        private int     _y;
-        private bool    _initialized;
-        private int     _lastCurrent;
-        private string  _lastItem = "";
-        private bool    _isQueued;
-        private ConsoleColor _textColor;
-        private ConsoleColor _bgColor;
-
-        public int     Y       => _initialized ? _y : Console.CursorTop;
-        public string? Line1   => _lastItem;
-        public int     Current => _lastCurrent;
-
-        public BufferedProgressBar()
-        {
-            if (!IsBuffering)
-                lock (ConsoleLock) { Initialize(); }
-        }
-
-        private void Initialize()
-        {
-            _y = Console.CursorTop;
-            _textColor = Console.ForegroundColor;
-            _bgColor   = Console.BackgroundColor;
-            Console.WriteLine("");
-            UpdateBarHighWaterMark(_y);
-            _initialized = true;
-        }
-
-        public void Refresh(int current, string item)
-        {
-            if (current == _lastCurrent && item == _lastItem)
-                return;
-
-            _lastCurrent = current;
-            _lastItem    = item;
-
-            if (IsBuffering)
+            foreach (var (value, color, isNewLine) in _buffer)
             {
-                if (!_isQueued)
-                {
-                    _isQueued = true;
-                    Enqueue(() => { _isQueued = false; RealRefresh(); });
-                }
-                return;
+                if (isNewLine)
+                    WriteLine(value, color, force: true);
+                else
+                    Write(value, color, force: true);
             }
-
-            RealRefresh();
+            _buffer.Clear();
         }
-
-        private void RealRefresh()
-        {
-            lock (ConsoleLock)
-            {
-                if (!_initialized)
-                    Initialize();
-
-                if (!CanUseConsoleCursor()) return;
-
-                int windowWidth = Console.WindowWidth;
-                if (windowWidth <= 10 || _y < Console.WindowTop) return;
-
-                int textWidth = windowWidth - 10;
-                string text   = _lastItem;
-
-                // Truncate text to textWidth display columns, counting wide chars as 2.
-                int displayW = 0, cutAt = text.Length;
-                for (int i = 0; i < text.Length; i++)
-                {
-                    int cw = IsWide(text[i]) ? 2 : 1;
-                    if (displayW + cw > textWidth) { cutAt = i; break; }
-                    displayW += cw;
-                }
-
-                int pct  = Math.Clamp(_lastCurrent, 0, 100);
-                int num2 = Math.Max(0, windowWidth - textWidth - 8); // progress bar chars (= 2)
-
-                // Save cursor so we can restore it after writing the bar; the cursor stays
-                // at the natural "below all bars" position.
-                int savedTop  = Console.CursorTop;
-                int savedLeft = Console.CursorLeft;
-                var prevFg    = Console.ForegroundColor;
-                var prevBg    = Console.BackgroundColor;
-                try
-                {
-                    Console.CursorTop       = _y;
-                    Console.CursorLeft      = 0;
-                    Console.ForegroundColor = _textColor;
-                    Console.BackgroundColor = _bgColor;
-                    Console.Write(text[..cutAt]);
-                    Console.Write(new string(' ', textWidth - displayW)); // pad to textWidth display cols
-                    Console.Write($" ({pct,-3}%) ");                      // 8 chars
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.Write(new string(' ', num2));                  // progress bar area
-                }
-                catch { }
-                finally
-                {
-                    // Restore all console state (color + cursor) to what it was before we
-                    // jumped to _y.
-                    try
-                    {
-                        Console.ForegroundColor = prevFg;
-                        Console.BackgroundColor = prevBg;
-                        Console.CursorTop  = savedTop;
-                        Console.CursorLeft = savedLeft;
-                    }
-                    catch { }
-                }
-            }
-        }
-
-        // East Asian double-width Unicode ranges.
-        private static bool IsWide(char c) =>
-            (c >= '\u1100' && c <= '\u115F') ||
-            (c >= '\u2E80' && c <= '\u303E') ||
-            (c >= '\u3041' && c <= '\u33BF') ||
-            (c >= '\u3400' && c <= '\u4DBF') ||
-            (c >= '\u4E00' && c <= '\u9FFF') ||
-            (c >= '\uAC00' && c <= '\uD7AF') ||
-            (c >= '\uF900' && c <= '\uFAFF') ||
-            (c >= '\uFE10' && c <= '\uFE1F') ||
-            (c >= '\uFE30' && c <= '\uFE4F') ||
-            (c >= '\uFE50' && c <= '\uFE6F') ||
-            (c >= '\uFF01' && c <= '\uFF60') ||
-            (c >= '\uFFE0' && c <= '\uFFE6');
     }
 
     public static string DisplayString(SongQuery query, Soulseek.File? file = null, SearchResponse? response = null,
@@ -269,61 +99,59 @@ public static class Printing
                 {
                     if (indices)
                     {
-                        Console.ForegroundColor = ConsoleColor.DarkGray;
-                        Console.Write($" [{i + 1:D2}]");
-                        Console.ResetColor();
+                        Write($" [{i + 1:D2}]", ConsoleColor.DarkGray);
                     }
                     if (ancestor.Length == 0)
-                        Console.WriteLine("    " + DisplayString(songList[i].Query, c.File, c.Response, infoFirst: infoFirst, showUser: showUser));
+                        WriteLine("    " + DisplayString(songList[i].Query, c.File, c.Response, infoFirst: infoFirst, showUser: showUser));
                     else
-                        Console.WriteLine("    " + DisplayString(songList[i].Query, c.File, c.Response, customPath: c.File.Filename.Replace(ancestor, "").TrimStart('\\'), infoFirst: infoFirst, showUser: showUser));
+                        WriteLine("    " + DisplayString(songList[i].Query, c.File, c.Response, customPath: c.File.Filename.Replace(ancestor, "").TrimStart('\\'), infoFirst: infoFirst, showUser: showUser));
                 }
             }
         }
         else if (!fullInfo)
         {
             for (int i = 0; i < number; i++)
-                Console.WriteLine($"  {songList[i]}");
+                WriteLine($"  {songList[i]}");
         }
         else
         {
             for (int i = 0; i < number; i++)
             {
                 var s = songList[i];
-                Console.WriteLine($"  Artist:             {s.Query.Artist}");
-                Console.WriteLine($"  Title:              {s.Query.Title}");
+                WriteLine($"  Artist:             {s.Query.Artist}");
+                WriteLine($"  Title:              {s.Query.Title}");
                 if (!string.IsNullOrEmpty(s.Query.Album))
-                    Console.WriteLine($"  Album:              {s.Query.Album}");
+                    WriteLine($"  Album:              {s.Query.Album}");
                 if (s.Query.Length > -1)
-                    Console.WriteLine($"  Length:             {s.Query.Length}s");
+                    WriteLine($"  Length:             {s.Query.Length}s");
                 if (!string.IsNullOrEmpty(s.DownloadPath))
-                    Console.WriteLine($"  Local path:         {s.DownloadPath}");
+                    WriteLine($"  Local path:         {s.DownloadPath}");
                 if (!string.IsNullOrEmpty(s.Query.URI))
-                    Console.WriteLine($"  URL/ID:             {s.Query.URI}");
+                    WriteLine($"  URL/ID:             {s.Query.URI}");
                 if (!string.IsNullOrEmpty(s.Other))
-                    Console.WriteLine($"  Other:              {s.Other}");
+                    WriteLine($"  Other:              {s.Other}");
                 if (s.Query.ArtistMaybeWrong)
-                    Console.WriteLine($"  Artist maybe wrong: {s.Query.ArtistMaybeWrong}");
+                    WriteLine($"  Artist maybe wrong: {s.Query.ArtistMaybeWrong}");
                 if (s.Candidates != null)
                 {
-                    Console.WriteLine($"  Shares:             {s.Candidates.Count}");
+                    WriteLine($"  Shares:             {s.Candidates.Count}");
                     foreach (var c in s.Candidates)
                     {
                         if (ancestor.Length == 0)
-                            Console.WriteLine("    " + DisplayString(s.Query, c.File, c.Response, infoFirst: infoFirst, showUser: showUser));
+                            WriteLine("    " + DisplayString(s.Query, c.File, c.Response, infoFirst: infoFirst, showUser: showUser));
                         else
-                            Console.WriteLine("    " + DisplayString(s.Query, c.File, c.Response, customPath: c.File.Filename.Replace(ancestor, "").TrimStart('\\'), infoFirst: infoFirst, showUser: showUser));
+                            WriteLine("    " + DisplayString(s.Query, c.File, c.Response, customPath: c.File.Filename.Replace(ancestor, "").TrimStart('\\'), infoFirst: infoFirst, showUser: showUser));
                     }
-                    if (s.Candidates.Count > 0) Console.WriteLine();
+                    if (s.Candidates.Count > 0) WriteLine();
                 }
 
                 if (i < number - 1)
-                    Console.WriteLine();
+                    WriteLine();
             }
         }
 
         if (number < songList.Count)
-            Console.WriteLine($"  ... (etc)");
+            WriteLine($"  ... (etc)");
     }
 
 
@@ -336,7 +164,7 @@ public static class Printing
             {
                 PrintSongResults(song, printOption, search);
                 if (!nonVerbose)
-                    Console.WriteLine();
+                    WriteLine();
             }
         }
         else if (job is SongJob songJob)
@@ -359,7 +187,7 @@ public static class Printing
             }
             else
             {
-                Console.WriteLine($"Results for aggregate {job.ToString(true)}:");
+                WriteLine($"Results for aggregate {job.ToString(true)}:");
                 PrintTracksTbd(ag.Songs.Where(s => s.State == JobState.Pending).ToList(), existing, notFound, false, printOption);
             }
         }
@@ -371,7 +199,7 @@ public static class Printing
         {
             if (albumAggregateJob.Albums.Count == 0)
             {
-                Console.WriteLine("No results.");
+                WriteLine("No results.");
                 return;
             }
 
@@ -387,12 +215,12 @@ public static class Printing
                     aggregateDisplayName: albumAggregateJob.ToString(true));
 
                 if (!nonVerbose)
-                    Console.WriteLine();
+                    WriteLine();
             }
         }
         else
         {
-            Console.WriteLine("No results.");
+            WriteLine("No results.");
         }
     }
 
@@ -420,16 +248,16 @@ public static class Printing
         {
             string displayName = aggregateDisplayName ?? albumJob.ToString(true);
             if (aggregateResultIndex is { } resultIndex && aggregateResultCount is { } resultCount)
-                Console.WriteLine($"Result {resultIndex} of {resultCount} for album {displayName}:");
+                WriteLine($"Result {resultIndex} of {resultCount} for album {displayName}:");
             else if (!printOption.HasFlag(PrintOption.Full))
-                Console.WriteLine($"Result 1 of {albumJob.Results.Count} for album {displayName}:");
+                WriteLine($"Result 1 of {albumJob.Results.Count} for album {displayName}:");
             else
-                Console.WriteLine($"Results ({albumJob.Results.Count}) for album {displayName}:");
+                WriteLine($"Results ({albumJob.Results.Count}) for album {displayName}:");
 
             if (albumJob.Results.Count > 0)
             {
                 if (!search.NoBrowseFolder)
-                    Console.WriteLine("[Skipping full folder retrieval]");
+                    WriteLine("[Skipping full folder retrieval]");
 
                 foreach (var folder in albumJob.Results)
                 {
@@ -450,7 +278,7 @@ public static class Printing
             .ToList();
 
         if (!nonVerbose)
-            Console.WriteLine($"Results for {song}:");
+            WriteLine($"Results for {song}:");
 
         if (orderedResults == null || orderedResults.Count == 0)
         {
@@ -462,7 +290,7 @@ public static class Printing
         }
 
         if (!nonVerbose)
-            Console.WriteLine();
+            WriteLine();
 
         if (printOption.HasFlag(PrintOption.Json))
             JsonPrinter.PrintTrackResultJson(song.Query, orderedResults, printFull);
@@ -533,7 +361,7 @@ public static class Printing
         if (pendingJobs.Count > 0)
         {
             if (songs.Count > 0)
-                Console.WriteLine();
+                WriteLine();
 
             PrintPlannedJobLines($"Downloading {pendingJobs.Count} {(pendingJobs.Count == 1 ? "item" : "items")}:", pendingJobs, config);
         }
@@ -542,13 +370,13 @@ public static class Printing
         {
             if (existingJobs.Count > 0)
             {
-                Console.WriteLine();
+                WriteLine();
                 PrintPlannedJobLines("The following items already exist:", existingJobs, config, includePath: true);
             }
 
             if (notFoundJobs.Count > 0)
             {
-                Console.WriteLine();
+                WriteLine();
                 PrintPlannedJobLines("The following items were not found during a prior run:", notFoundJobs, config);
             }
         }
@@ -562,7 +390,7 @@ public static class Printing
         foreach (var plannedJob in plannedJobs)
         {
             if (printedAny && !nonVerbose)
-                Console.WriteLine();
+                WriteLine();
 
             PrintResults(plannedJob, config.PrintOption, config.Search);
             printedAny = true;
@@ -606,7 +434,7 @@ public static class Printing
         foreach (var job in jobs)
         {
             var path = includePath ? GetPlannedJobDownloadPath(job) : null;
-            Console.WriteLine($"  {job.ToString(noInfo: config.PrintOption.HasFlag(PrintOption.Tracks))}{(string.IsNullOrWhiteSpace(path) ? "" : $" -> {path}")}");
+            WriteLine($"  {job.ToString(noInfo: config.PrintOption.HasFlag(PrintOption.Tracks))}{(string.IsNullOrWhiteSpace(path) ? "" : $" -> {path}")}");
         }
     }
 
@@ -659,7 +487,7 @@ public static class Printing
     {
         if (successes + fails > 1)
         {
-            Console.WriteLine();
+            WriteLine();
             Logger.Info($"Completed: {successes} succeeded, {fails} failed.");
         }
     }
@@ -693,20 +521,20 @@ public static class Printing
             int limit = showAll ? int.MaxValue : 10;
             PrintTracks(toBeDownloaded, limit, full, infoFirst: printTracks);
             if (!showAll && toBeDownloaded.Count > limit)
-                Console.WriteLine($"  ... and {toBeDownloaded.Count - limit} more");
+                WriteLine($"  ... and {toBeDownloaded.Count - limit} more");
 
             if (full && (existing.Count > 0 || notFound.Count > 0))
-                Console.WriteLine("\n-----------------------------------------------\n");
+                WriteLine("\n-----------------------------------------------\n");
         }
 
         if (existing.Count > 0)
         {
-            Console.WriteLine($"\nThe following tracks already exist:");
+            WriteLine($"\nThe following tracks already exist:");
             PrintTracks(existing, fullInfo: full, infoFirst: printTracks);
         }
         if (notFound.Count > 0)
         {
-            Console.WriteLine($"\nThe following tracks were not found during a prior run:");
+            WriteLine($"\nThe following tracks were not found during a prior run:");
             PrintTracks(notFound, fullInfo: full, infoFirst: printTracks);
         }
     }
@@ -719,7 +547,7 @@ public static class Printing
         int count = 0;
         foreach (var (response, file) in orderedResults)
         {
-            Console.WriteLine(DisplayString(query, file, response,
+            WriteLine(DisplayString(query, file, response,
                 full ? necCond : null, full ? prefCond : null,
                 fullpath: full, infoFirst: true, showSpeed: full));
             count++;
@@ -731,7 +559,7 @@ public static class Printing
     public static void PrintLink(string username, string filename)
     {
         var link = $"slsk://{username}/{filename.Replace('\\', '/')}";
-        Console.WriteLine(link);
+        WriteLine(link);
     }
 
 
@@ -740,7 +568,7 @@ public static class Printing
         if (folder.Files.Count == 0) return;
         string directory = Utils.GreatestCommonDirectorySlsk(folder.Files.Select(f => f.ResolvedTarget!.Filename));
         var link = $"slsk://{folder.Username}/{directory.Replace('\\', '/').TrimEnd('/')}/";
-        Console.WriteLine(link);
+        WriteLine(link);
     }
 
 
@@ -759,13 +587,9 @@ public static class Printing
             string format     = propsList.FirstOrDefault() ?? "";
             string otherProps = propsList.Count > 1 ? " / " + string.Join(" / ", propsList.Skip(1)) : "";
 
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write($"User  : {userInfo}\nFolder: {parents}\nProps : [");
-            Console.ForegroundColor = GetFormatColor(format);
-            Console.Write(format);
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(otherProps + "]");
-            Console.ResetColor();
+            Write($"User  : {userInfo}\nFolder: {parents}\nProps : [", ConsoleColor.White);
+            Write(format, GetFormatColor(format));
+            WriteLine(otherProps + "]", ConsoleColor.White);
         }
     }
 
@@ -782,12 +606,10 @@ public static class Printing
         {
             if (indices)
             {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.Write($" [{i + 1:D2}]");
-                Console.ResetColor();
+                Write($" [{i + 1:D2}]", ConsoleColor.DarkGray);
             }
             string customPath = ancestor.Length > 0 ? af.ResolvedTarget!.File.Filename.Replace(ancestor, "").TrimStart('\\') : "";
-            Console.WriteLine("    " + DisplayString(af.Query, af.ResolvedTarget!.File, af.ResolvedTarget!.Response, customPath: customPath, showUser: false));
+            WriteLine("    " + DisplayString(af.Query, af.ResolvedTarget!.File, af.ResolvedTarget!.Response, customPath: customPath, showUser: false));
             i++;
         }
 
@@ -859,37 +681,24 @@ public static class Printing
         };
     }
 
-    public static void RefreshOrPrint(IProgressBar? progress, int current, string item, bool print = false, bool refreshIfOffscreen = false)
+    public static void RefreshOrPrint(int current, string item, bool print = false)
     {
-        if (IsBuffering)
-        {
-            _buffer.Enqueue(() => RefreshOrPrint(progress, current, item, print, refreshIfOffscreen));
-            return;
-        }
-
-        lock (ConsoleLock)
-        {
-            bool canUseCursor = CanUseConsoleCursor();
-            if (progress != null && canUseCursor && (refreshIfOffscreen || progress.Y >= Console.WindowTop))
-            {
-                progress.Refresh(current, item);
-
-                if (print)
-                    Logger.LogNonConsole(Logger.LogLevel.Info, item);
-            }
-            else if ((progress == null || !canUseCursor) && print)
-            {
-                Logger.Info(item);
-            }
-        }
+        if (print)
+            Logger.Info(item);
     }
 
     public static void WriteLine(string value = "", ConsoleColor color = ConsoleColor.Gray, bool force = false)
     {
-        if (IsBuffering && !force)
+        if (!force)
         {
-            _buffer.Enqueue(() => WriteLine(value, color, force));
-            return;
+            lock (ConsoleLock)
+            {
+                if (_isBuffering)
+                {
+                    _buffer.Add((value, color, true));
+                    return;
+                }
+            }
         }
 
         if (!force && LiveWriteLine is { } liveWriteLine)
@@ -900,7 +709,6 @@ public static class Printing
 
         lock (ConsoleLock)
         {
-            EnsureCursorBelowBars();
             Console.ForegroundColor = color;
             Console.WriteLine(value);
             Console.ResetColor();
@@ -909,27 +717,23 @@ public static class Printing
 
     public static void Write(string value, ConsoleColor color = ConsoleColor.Gray, bool force = false)
     {
-        if (IsBuffering && !force)
+        if (!force)
         {
-            _buffer.Enqueue(() => Write(value, color, force));
-            return;
+            lock (ConsoleLock)
+            {
+                if (_isBuffering)
+                {
+                    _buffer.Add((value, color, false));
+                    return;
+                }
+            }
         }
 
         lock (ConsoleLock)
         {
-            EnsureCursorBelowBars();
             Console.ForegroundColor = color;
             Console.Write(value);
             Console.ResetColor();
         }
     }
-
-    public static IProgressBar? GetProgressBar()
-    {
-        if (!CanUseConsoleCursor())
-            return null;
-
-        return new BufferedProgressBar();
-    }
-
 }

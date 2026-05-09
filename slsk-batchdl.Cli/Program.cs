@@ -338,9 +338,8 @@ internal static partial class Program
             cts.Cancel();
             cliReporter?.Stop();
             clientManager.Dispose();
-            Logger.Trace("Main: ClientManager disposed.");
             Printing.SetBuffering(false);
-            Printing.Flush();
+            Logger.Trace("Main: ClientManager disposed.");
             Logger.Trace("Main: Exiting.");
         }
     }
@@ -555,8 +554,6 @@ internal static partial class Program
         {
             cts.Cancel();
             cliReporter?.Stop();
-            Printing.SetBuffering(false);
-            Printing.Flush();
         }
     }
 
@@ -609,7 +606,7 @@ internal static partial class Program
             {
                 Printing.PrintTracks(preview, int.MaxValue, fullInfo: false);
                 if (batch.PendingCount > preview.Count)
-                    Console.WriteLine($"  ... and {batch.PendingCount - preview.Count} more");
+                    Printing.WriteLine($"  ... and {batch.PendingCount - preview.Count} more");
             }
         }
 

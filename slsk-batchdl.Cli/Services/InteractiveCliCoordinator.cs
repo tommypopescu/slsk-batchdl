@@ -232,10 +232,10 @@ internal sealed class InteractiveCliCoordinator
             }
             else
             {
+                Printing.SetBuffering(true);
                 if (ConsoleInputManager.Reporter != null)
                     ConsoleInputManager.Reporter.IsPaused = true;
 
-                Printing.SetBuffering(true);
                 try
                 {
                     var interactive = new InteractiveModeManager(
@@ -258,10 +258,9 @@ internal sealed class InteractiveCliCoordinator
                 }
                 finally
                 {
-                    Printing.SetBuffering(false);
-                    Printing.Flush();
                     if (ConsoleInputManager.Reporter != null)
                         ConsoleInputManager.Reporter.IsPaused = false;
+                    Printing.SetBuffering(false);
                 }
             }
 

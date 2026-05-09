@@ -40,36 +40,33 @@ public static class ConsoleInputManager
                     {
                         if (OnCancelRequested != null)
                         {
-                            if (Reporter != null) Reporter.IsPaused = true;
                             Printing.SetBuffering(true);
+                            if (Reporter != null) Reporter.IsPaused = true;
                             await OnCancelRequested();
-                            Printing.SetBuffering(false);
-                            Printing.Flush();
                             if (Reporter != null) Reporter.IsPaused = false;
+                            Printing.SetBuffering(false);
                         }
                     }
                     else if (GlobalCancelEnabled && char.ToLower(key.KeyChar) == 't')
                     {
                         if (OnNextCandidateRequested != null)
                         {
-                            if (Reporter != null) Reporter.IsPaused = true;
                             Printing.SetBuffering(true);
+                            if (Reporter != null) Reporter.IsPaused = true;
                             await OnNextCandidateRequested();
-                            Printing.SetBuffering(false);
-                            Printing.Flush();
                             if (Reporter != null) Reporter.IsPaused = false;
+                            Printing.SetBuffering(false);
                         }
                     }
                     else if (char.ToLower(key.KeyChar) == 'i')
                     {
                         if (OnInfoRequested != null)
                         {
-                            if (Reporter != null) Reporter.IsPaused = true;
                             Printing.SetBuffering(true);
+                            if (Reporter != null) Reporter.IsPaused = true;
                             await OnInfoRequested();
-                            Printing.SetBuffering(false);
-                            Printing.Flush();
                             if (Reporter != null) Reporter.IsPaused = false;
+                            Printing.SetBuffering(false);
                         }
                     }
                     else

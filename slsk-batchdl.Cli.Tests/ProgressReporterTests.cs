@@ -18,7 +18,7 @@ public class CliProgressReporterTests
     }
 
     [TestMethod]
-    public void DownloadStart_NoProgress_DoesNotCreateProgressBar()
+    public void DownloadStart_NoProgress_CreatesStateTracking()
     {
         var reporter = new CliProgressReporter(new CliSettings { NoProgress = true });
         try
@@ -35,7 +35,7 @@ public class CliProgressReporterTests
                 new SongQueryDto("Artist", "Song", null, null, null, false),
                 CreateFileCandidate(candidate.Response.Username, candidate.File.Filename)));
 
-            Assert.IsFalse(HasBarData(reporter, song));
+            Assert.IsTrue(HasBarData(reporter, song));
         }
         finally
         {
@@ -206,7 +206,7 @@ public class CliProgressReporterTests
     }
 
     [TestMethod]
-    public void StateChanged_FailedPreResolvedSong_DoesNotRenderAsSucceeded()
+    public void StateChanged_FailedPreResolvedSong_DoesNotRenderAsFailedInAlbumButKeepsState()
     {
         var reporter = new CliProgressReporter(new CliSettings());
         try
@@ -242,54 +242,8 @@ public class CliProgressReporterTests
                 DownloadPath: null,
                 ChosenCandidate: candidateDto));
 
-            Assert.AreEqual("Failed", GetField<string>(barData, "StateLabel"));
+            Assert.AreEqual("failed [Cancelled]", GetField<string>(barData, "StateLabel"));
             Assert.AreNotEqual(100, GetField<int>(barData, "Pct"));
-            StringAssert.Contains(GetField<string>(barData, "BaseText"), "Cancelled");
-        }
-        finally
-        {
-            reporter.Stop();
-        }
-    }
-
-    [TestMethod]
-    public void StateChanged_NormalProgress_UsesSongJobPrefixInTerminalLine()
-    {
-        var reporter = new CliProgressReporter(new CliSettings());
-        try
-        {
-            var file = new Soulseek.File(1, @"Music\Artist\Song.flac", 100, ".flac");
-            var response = new Soulseek.SearchResponse("user", 1, true, 100, 0, [file]);
-            var candidate = new FileCandidate(response, file);
-            var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Song" })
-            {
-                ResolvedTarget = candidate,
-            };
-            song.SetDone();
-
-            var workflowId = Guid.NewGuid();
-            var query = new SongQueryDto("Artist", "Song", null, null, null, false);
-            var candidateDto = CreateFileCandidate(candidate.Response.Username, candidate.File.Filename);
-
-            InvokePrivate(reporter, "ReportDownloadStart", new DownloadStartedEventDto(
-                song.Id,
-                song.DisplayId,
-                workflowId,
-                query,
-                candidateDto));
-            var barData = GetBarData(reporter, song);
-
-            InvokePrivate(reporter, "ReportStateChanged", new SongStateChangedEventDto(
-                song.Id,
-                song.DisplayId,
-                workflowId,
-                query,
-                ServerProtocol.JobStates.Done,
-                FailureReason: null,
-                DownloadPath: null,
-                ChosenCandidate: candidateDto));
-
-            StringAssert.StartsWith(BuildBarText(barData), $"  [{song.DisplayId}] SongJob: succeeded: ");
         }
         finally
         {
@@ -414,91 +368,6 @@ public class CliProgressReporterTests
         }
     }
 
-    [TestMethod]
-    public void RemoteAlbumChildSongEvents_DoNotCreateStandaloneProgressLines()
-    {
-        var reporter = new CliProgressReporter(new CliSettings());
-        try
-        {
-            var workflowId = Guid.NewGuid();
-            var albumJobId = Guid.NewGuid();
-            var fileJobId = Guid.NewGuid();
-            var albumSummary = CreateAlbumSummary(albumJobId, ServerProtocol.JobStates.Downloading, null) with
-            {
-                WorkflowId = workflowId,
-            };
-            var childSummary = CreateSongSummary(fileJobId, workflowId, albumJobId);
-
-            InvokePrivate(reporter, "ReportJobUpserted", albumSummary);
-            InvokePrivate(reporter, "ReportJobUpserted", childSummary);
-            InvokePrivate(reporter, "ReportJobStarted", new JobStartedEventDto(childSummary));
-            InvokePrivate(reporter, "ReportSongSearching", new SongSearchingEventDto(
-                fileJobId,
-                DisplayId: 7,
-                workflowId,
-                new SongQueryDto("Artist", "Track", null, null, null, false)));
-            InvokePrivate(reporter, "ReportDownloadStart", new DownloadStartedEventDto(
-                fileJobId,
-                DisplayId: 7,
-                workflowId,
-                new SongQueryDto("Artist", "Track", null, null, null, false),
-                CreateFileCandidate("local", @"Artist\Album\01. Artist - Track.flac")));
-
-            Assert.IsFalse(HasBackendJobBar(reporter, fileJobId));
-            Assert.IsFalse(HasBackendBarData(reporter, fileJobId));
-        }
-        finally
-        {
-            reporter.Stop();
-        }
-    }
-
-    [TestMethod]
-    public void RemoteAggregateChildSongEvents_CreateStandaloneProgressLines()
-    {
-        var reporter = new CliProgressReporter(new CliSettings());
-        try
-        {
-            var workflowId = Guid.NewGuid();
-            var aggregateJobId = Guid.NewGuid();
-            var fileJobId = Guid.NewGuid();
-            var aggregateSummary = new JobSummaryDto(
-                aggregateJobId,
-                DisplayId: 6,
-                WorkflowId: workflowId,
-                Kind: ServerJobKind.Aggregate,
-                State: ServerProtocol.JobStates.Downloading,
-                ItemName: "Artist",
-                QueryText: "Artist",
-                FailureReason: null,
-                FailureMessage: null,
-                ParentJobId: null,
-                ResultJobId: null,
-                SourceJobId: null,
-                DiscoveryResultCount: null,
-                DiscoveryLockedFileCount: null,
-                AppliedAutoProfiles: [],
-                AvailableActions: []);
-            var childSummary = CreateSongSummary(fileJobId, workflowId, aggregateJobId);
-
-            InvokePrivate(reporter, "ReportJobUpserted", aggregateSummary);
-            InvokePrivate(reporter, "ReportJobUpserted", childSummary);
-            InvokePrivate(reporter, "ReportJobStarted", new JobStartedEventDto(childSummary));
-            InvokePrivate(reporter, "ReportDownloadStart", new DownloadStartedEventDto(
-                fileJobId,
-                DisplayId: 7,
-                workflowId,
-                new SongQueryDto("Artist", "Track", null, null, null, false),
-                CreateFileCandidate("local", @"Artist\Album\01. Artist - Track.flac")));
-
-            Assert.IsFalse(HasBackendJobBar(reporter, fileJobId));
-            Assert.IsTrue(HasBackendBarData(reporter, fileJobId));
-        }
-        finally
-        {
-            reporter.Stop();
-        }
-    }
 
     [TestMethod]
     public void RemoteAlbumChildDownloadStart_UpdatesAlbumTrackBarWithoutStandaloneJobLine()
@@ -528,7 +397,6 @@ public class CliProgressReporterTests
                 new SongQueryDto("Artist", "Track", null, null, null, false),
                 CreateFileCandidate("local", @"Artist\Album\01. Artist - Track.flac")));
 
-            Assert.IsFalse(HasBackendJobBar(reporter, fileJobId));
             Assert.IsTrue(HasBackendBarData(reporter, fileJobId));
         }
         finally
@@ -597,6 +465,10 @@ public class CliProgressReporterTests
             var candidate = CreateFileCandidate("local", @"Artist\Album\01. Artist - Track.flac");
 
             InvokePrivate(reporter, "ReportJobUpserted", albumSummary);
+            InvokePrivate(reporter, "ReportAlbumTrackDownloadStarted", new AlbumTrackDownloadStartedEventDto(
+                albumSummary,
+                CreateSingleFileAlbumFolder(fileJobId, ServerProtocol.JobStates.Pending, null),
+                [CreateSongPayload(fileJobId, ServerProtocol.JobStates.Pending, null)]));
             InvokePrivate(reporter, "ReportJobUpserted", songSummary);
             InvokePrivate(reporter, "ReportDownloadStart", new DownloadStartedEventDto(fileJobId, 7, workflowId, query, candidate));
             InvokePrivate(reporter, "ReportStateChanged", new SongStateChangedEventDto(
@@ -609,11 +481,10 @@ public class CliProgressReporterTests
                 DownloadPath: @"out\Track.flac",
                 ChosenCandidate: candidate));
 
-            CollectionAssert.AreEqual(new[]
-            {
-                @"[7] SongJob: downloading: Artist - Track: local\Artist\Album\01. Artist - Track.flac",
-                "[7] SongJob: succeeded: Artist - Track: local\\Artist\\Album\\01. Artist - Track.flac\n    -> out\\Track.flac",
-            }, messages);
+            Assert.AreEqual(3, messages.Count, "Expected three log messages (album tracks start, track downloading, and track completion). Found: " + string.Join(" | ", messages));
+            Assert.AreEqual(@"[6] AlbumJob: downloading tracks: Artist Album - Artist\Album", messages[0]);
+            Assert.AreEqual(@"[7] SongJob: downloading: Artist - Track: local\Artist\Album\01. Artist - Track.flac", messages[1]);
+            Assert.AreEqual(@"[6] AlbumJob: downloaded: 01. Artist - Track.flac", messages[2]);
         }
         finally
         {
@@ -797,10 +668,6 @@ public class CliProgressReporterTests
             .GetValue(target)!;
     }
 
-    private static string BuildBarText(object barData)
-        => (string)typeof(CliProgressReporter)
-            .GetMethod("BuildText", BindingFlags.Static | BindingFlags.NonPublic)!
-            .Invoke(null, [barData])!;
 
     private static bool HasBackendBarData(CliProgressReporter reporter, Guid jobId)
     {
@@ -812,15 +679,6 @@ public class CliProgressReporterTests
         return (bool)bars.GetType().GetMethod("TryGetValue")!.Invoke(bars, args)!;
     }
 
-    private static bool HasBackendJobBar(CliProgressReporter reporter, Guid jobId)
-    {
-        var bars = typeof(CliProgressReporter)
-            .GetField("_jobBars", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(reporter)!;
-
-        object?[] args = [jobId, null];
-        return (bool)bars.GetType().GetMethod("TryGetValue")!.Invoke(bars, args)!;
-    }
 
     private static int GetBackendAlbumDoneCount(CliProgressReporter reporter, Guid albumJobId)
     {
