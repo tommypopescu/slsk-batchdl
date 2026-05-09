@@ -153,6 +153,9 @@ public class Downloader
         downloadRegistry.DownloadedFiles[fileKey] = song;
         downloadRegistry.Downloads.TryRemove(candidate.Filename, out _);
 
+        if (candidate.File.Size > 0)
+            song.BytesTransferred = candidate.File.Size;
+
         song.SetDone(outputPath, candidate);
     }
 

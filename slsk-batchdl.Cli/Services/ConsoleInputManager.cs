@@ -12,6 +12,7 @@ public static class ConsoleInputManager
         CancelAll,
         CancelJob,
         Invalid,
+        Refresh,
     }
 
     public readonly record struct CancelPromptResult(CancelPromptAction Action, int? JobId = null, string? Input = null);
@@ -94,6 +95,54 @@ public static class ConsoleInputManager
     {
         var result = ReadCancelPromptResult();
         return result.Action == CancelPromptAction.CancelJob ? result.JobId : null;
+    }
+
+    public static CancelPromptResult ReadJobIdOrRefreshResult()
+    {
+        var input = new System.Text.StringBuilder();
+        bool firstKey = true;
+
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+
+            if (key.Key == ConsoleKey.Escape)
+            {
+                Console.WriteLine();
+                return new(CancelPromptAction.Abort);
+            }
+
+            if (firstKey && char.ToLower(key.KeyChar) == 'r')
+            {
+                Console.WriteLine();
+                return new(CancelPromptAction.Refresh);
+            }
+
+            firstKey = false;
+
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                var s = input.ToString().Trim();
+                return int.TryParse(s, out int id)
+                    ? new(CancelPromptAction.CancelJob, id)
+                    : new(CancelPromptAction.Abort);
+            }
+
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (input.Length == 0) continue;
+                input.Length--;
+                Console.Write("\b \b");
+                continue;
+            }
+
+            if (!char.IsControl(key.KeyChar))
+            {
+                input.Append(key.KeyChar);
+                Console.Write(key.KeyChar);
+            }
+        }
     }
 
     public static CancelPromptResult ReadCancelPromptResult()

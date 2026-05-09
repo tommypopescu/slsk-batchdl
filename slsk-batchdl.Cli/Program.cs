@@ -269,19 +269,49 @@ internal static partial class Program
 
         ConsoleInputManager.OnInfoRequested = async () =>
         {
+            lock (Printing.ConsoleLock)
+                Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
+            var id = ConsoleInputManager.ReadJobIdInput();
+            if (id == null) return;
+
             while (true)
             {
-                lock (Printing.ConsoleLock)
-                    Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
-
-                var id = ConsoleInputManager.ReadJobIdInput();
-                if (id == null) return;
+                int printStart = Console.IsOutputRedirected ? -1 : Console.CursorTop;
 
                 var detail = await backend.GetJobDetailByDisplayIdAsync(id.Value, ct: cts.Token);
                 if (detail == null)
                     Logger.Error($"Job ID [{id}] not found.");
                 else
                     JobInfoPrinter.Print(detail);
+
+                lock (Printing.ConsoleLock)
+                    Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
+
+                var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.Refresh)
+                {
+                    if (printStart >= 0)
+                    {
+                        int pos = Console.CursorTop;
+                        while (pos > printStart && pos > 0)
+                        {
+                            Console.SetCursorPosition(0, pos - 1);
+                            Console.Write(new string(' ', Console.BufferWidth));
+                            Console.SetCursorPosition(0, pos - 1);
+                            pos--;
+                        }
+                        Console.SetCursorPosition(0, printStart);
+                    }
+                }
+                else if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId.HasValue)
+                {
+                    id = result.JobId.Value;
+                }
+                else
+                {
+                    return;
+                }
             }
         };
 
@@ -452,19 +482,49 @@ internal static partial class Program
 
         ConsoleInputManager.OnInfoRequested = async () =>
         {
+            lock (Printing.ConsoleLock)
+                Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
+            var id = ConsoleInputManager.ReadJobIdInput();
+            if (id == null) return;
+
             while (true)
             {
-                lock (Printing.ConsoleLock)
-                    Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
-
-                var id = ConsoleInputManager.ReadJobIdInput();
-                if (id == null) return;
+                int printStart = Console.IsOutputRedirected ? -1 : Console.CursorTop;
 
                 var detail = await backend.GetJobDetailByDisplayIdAsync(id.Value, submission.WorkflowId, cts.Token);
                 if (detail == null)
                     Logger.Error($"Job ID [{id}] not found.");
                 else
                     JobInfoPrinter.Print(detail);
+
+                lock (Printing.ConsoleLock)
+                    Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
+
+                var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.Refresh)
+                {
+                    if (printStart >= 0)
+                    {
+                        int pos = Console.CursorTop;
+                        while (pos > printStart && pos > 0)
+                        {
+                            Console.SetCursorPosition(0, pos - 1);
+                            Console.Write(new string(' ', Console.BufferWidth));
+                            Console.SetCursorPosition(0, pos - 1);
+                            pos--;
+                        }
+                        Console.SetCursorPosition(0, printStart);
+                    }
+                }
+                else if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId.HasValue)
+                {
+                    id = result.JobId.Value;
+                }
+                else
+                {
+                    return;
+                }
             }
         };
 

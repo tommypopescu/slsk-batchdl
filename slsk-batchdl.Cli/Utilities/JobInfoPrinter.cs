@@ -10,12 +10,24 @@ internal static class JobInfoPrinter
     public static void Print(JobDetailDto detail)
     {
         var s = detail.Summary;
-        var stateColor = StateColor(s.State);
+
+        string stateLabel = s.State.ToString();
+        ConsoleColor stateColor = StateColor(s.State);
+
+        if (detail.Payload is SongJobPayloadDto songPayload)
+        {
+            var tsLabel = TransferStateLabel(songPayload.TransferState);
+            if (tsLabel != null)
+            {
+                stateLabel = tsLabel;
+                stateColor = TransferStateLabelColor(tsLabel);
+            }
+        }
 
         Printing.WriteLine(force: true);
         Printing.Write($"[{s.DisplayId:000}] {s.Kind}", ConsoleColor.White, force: true);
         Printing.Write(" • ", ConsoleColor.DarkGray, force: true);
-        Printing.WriteLine(s.State.ToString(), stateColor, force: true);
+        Printing.WriteLine(stateLabel, stateColor, force: true);
 
         switch (detail.Payload)
         {
@@ -184,8 +196,9 @@ internal static class JobInfoPrinter
 
     private static void PrintAlbumTrack(SongJobPayloadDto track, string? folderPath)
     {
-        var stateLabel = TransferStateLabel(track.TransferState) ?? track.State?.ToString().ToLowerInvariant() ?? "pending";
-        var stateColor = stateLabel == "downloading" ? ConsoleColor.Cyan
+        var transferStateLabel = TransferStateLabel(track.TransferState);
+        var stateLabel = transferStateLabel ?? track.State?.ToString() ?? "Pending";
+        var stateColor = transferStateLabel != null ? TransferStateLabelColor(transferStateLabel)
             : track.State.HasValue ? StateColor(track.State.Value)
             : ConsoleColor.Gray;
 
@@ -195,7 +208,11 @@ internal static class JobInfoPrinter
 
         var meta = FormatTrackMeta(track);
 
-        Printing.Write($"    {stateLabel,-14}", stateColor, force: true);
+        if (track.DisplayId is int id)
+            Printing.Write($"    [{id:000}] ", ConsoleColor.DarkGray, force: true);
+        else
+            Printing.Write($"    ", force: true);
+        Printing.Write($"{stateLabel,-14}", stateColor, force: true);
         Printing.Write(": ", ConsoleColor.DarkGray, force: true);
         Printing.Write(name, ConsoleColor.White, force: true);
         if (meta != null)
@@ -218,14 +235,14 @@ internal static class JobInfoPrinter
 
     private static string? TransferStateLabel(string? raw)
     {
-        if (raw == null || !Enum.TryParse<TransferStates>(raw, out var s))
+        if (raw == null || !Enum.TryParse<TransferStates>(raw, out var s) || s == TransferStates.None)
             return null;
-        if (s.HasFlag(TransferStates.InProgress))   return "downloading";
-        if (s.HasFlag(TransferStates.Queued) && s.HasFlag(TransferStates.Remotely)) return "queued (r)";
-        if (s.HasFlag(TransferStates.Queued) && s.HasFlag(TransferStates.Locally))  return "queued (l)";
-        if (s.HasFlag(TransferStates.Queued))       return "queued";
-        if (s.HasFlag(TransferStates.Initializing)) return "initialising";
-        return "requested";
+        if (s.HasFlag(TransferStates.InProgress))   return "Downloading";
+        if (s.HasFlag(TransferStates.Queued) && s.HasFlag(TransferStates.Remotely)) return "Queued (R)";
+        if (s.HasFlag(TransferStates.Queued) && s.HasFlag(TransferStates.Locally))  return "Queued (L)";
+        if (s.HasFlag(TransferStates.Initializing)) return "Initialising";
+        if (s.HasFlag(TransferStates.TimedOut))     return "Timed Out";
+        return s.ToString();
     }
 
     private static string? FormatTrackMeta(SongJobPayloadDto track)
@@ -309,6 +326,16 @@ internal static class JobInfoPrinter
         if (bytes >= 1_024)         return $"{bytes / 1_024.0:F1} KB";
         return $"{bytes} B";
     }
+
+    private static ConsoleColor TransferStateLabelColor(string label) => label switch
+    {
+        "Downloading"                               => ConsoleColor.Cyan,
+        "Completed" or "Succeeded"                  => ConsoleColor.Green,
+        "Errored" or "Timed Out" or "Rejected"
+            or "Aborted"                            => ConsoleColor.Red,
+        "Cancelled"                                 => ConsoleColor.DarkGray,
+        _                                           => ConsoleColor.Gray,
+    };
 
     private static ConsoleColor StateColor(ServerJobState state) => state switch
     {
