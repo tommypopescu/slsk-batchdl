@@ -35,7 +35,7 @@ public static class ConsoleInputManager
                 {
                     var key = Console.ReadKey(intercept: true);
 
-                    if (GlobalCancelEnabled && key.KeyChar == 'c')
+                    if (GlobalCancelEnabled && char.ToLower(key.KeyChar) == 'c')
                     {
                         if (OnCancelRequested != null)
                         {
@@ -47,7 +47,7 @@ public static class ConsoleInputManager
                             if (Reporter != null) Reporter.IsPaused = false;
                         }
                     }
-                    else if (GlobalCancelEnabled && key.KeyChar == 't')
+                    else if (GlobalCancelEnabled && char.ToLower(key.KeyChar) == 't')
                     {
                         if (OnNextCandidateRequested != null)
                         {
@@ -59,7 +59,7 @@ public static class ConsoleInputManager
                             if (Reporter != null) Reporter.IsPaused = false;
                         }
                     }
-                    else if (key.KeyChar == 'i')
+                    else if (char.ToLower(key.KeyChar) == 'i')
                     {
                         if (OnInfoRequested != null)
                         {
