@@ -150,6 +150,9 @@ public class CliProgressReporter
                 case "on-complete.ended" when envelope.Payload is OnCompleteEndedEventDto e:
                     ReportOnCompleteEnd(e);
                     break;
+                case "track-batch.resolved" when envelope.Payload is TrackBatchResolvedEventDto e:
+                    ReportTrackBatchResolved(e);
+                    break;
                 case "search.rate-limited" when envelope.Payload is SearchRateLimitedEventDto rl:
                     if (LiveMode)
                         _live!.SetRateLimited(rl.ResetsAt);
@@ -1071,6 +1074,45 @@ public class CliProgressReporter
 
 
     // ── display event handlers ───────────────────────────────────────────
+
+    private void ReportTrackBatchResolved(TrackBatchResolvedEventDto batch)
+    {
+        const int max = 10;
+
+        if (LiveMode)
+        {
+            void LogLiveGroup(IReadOnlyList<SongJobPayloadDto> songs, TerminalLogKind kind, string label)
+            {
+                if (songs.Count == 0) return;
+                var shown = songs.Take(max).ToList();
+                var more = songs.Count - shown.Count;
+                var msg = $"{songs.Count} {label}:\n"
+                    + string.Join('\n', shown.Select(s => $"    {SongQueryText(s.Query)}"))
+                    + (more > 0 ? $"\n    ... and {more} more" : "");
+                _live!.Log(new TerminalLogLine(kind, batch.Summary.JobId.ToString(), batch.Summary.DisplayId, GetJobTypeLabel(batch.Summary.Kind), msg));
+            }
+
+            LogLiveGroup(batch.Existing, TerminalLogKind.SongAlreadyExists, "tracks already exist");
+            LogLiveGroup(batch.NotFound, TerminalLogKind.SongSkipped,       "tracks were not found in a prior run");
+        }
+        else
+        {
+            void LogPlainGroup(IReadOnlyList<SongJobPayloadDto> songs, string label)
+            {
+                if (songs.Count == 0) return;
+                var shown = songs.Take(max).ToList();
+                var more = songs.Count - shown.Count;
+                Logger.Info($"{songs.Count} {label}:");
+                foreach (var s in shown)
+                    Logger.Info($"    {SongQueryText(s.Query)}");
+                if (more > 0)
+                    Logger.Info($"    ... and {more} more");
+            }
+
+            LogPlainGroup(batch.Existing, "tracks already exist");
+            LogPlainGroup(batch.NotFound, "tracks were not found in a prior run");
+        }
+    }
 
     private void ReportExtractionStarted(ExtractionStartedEventDto job)
     {
