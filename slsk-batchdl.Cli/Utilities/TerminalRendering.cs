@@ -1019,6 +1019,10 @@ internal sealed class TerminalLiveRenderer : IDisposable
             return TruncateEnd(path, maxWidth);
         }
 
+        // TODO: Perf bottleneck. RightFit and TruncateEnd allocate new strings and Segments on every loop iteration,
+        // Instead of trial-and-error substrings, iterate through the string once, accumulate the cell width of each
+        // character/rune (spectre.console might have utilities for that), find the exact cutoff index, and perform
+        // Substring() exactly once.
         private static string RightFit(string text, int maxWidth)
         {
             if (maxWidth <= 0)
