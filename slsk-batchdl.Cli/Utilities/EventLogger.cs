@@ -210,7 +210,7 @@ internal sealed class EventLogger
             if (IsTerminalJobState(song.State))
             {
                 // Matches old behavior: [AlbumID] AlbumJob: downloaded: SongName
-                string itemName = song.ChosenCandidate?.Ref.Filename != null ? System.IO.Path.GetFileName(song.ChosenCandidate.Ref.Filename) : detail;
+                string itemName = song.ChosenCandidate?.Ref.Filename != null ? Utils.GetFileNameSlsk(song.ChosenCandidate.Ref.Filename) : detail;
                 Log(song.JobId, $"[{album!.DisplayId}] {prefix}{label}: {itemName}", ephemeral: false);
                 return;
             }
