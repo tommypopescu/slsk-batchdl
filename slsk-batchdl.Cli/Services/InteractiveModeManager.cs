@@ -94,7 +94,7 @@ public class InteractiveModeManager
 
             Console.ResetColor();
             Printing.WriteLine($"[{aidx + 1} / {filterList.Count}]", ConsoleColor.DarkGray, force: true);
-            Printing.PrintAlbum(folder, indices: true);
+            Printing.PrintAlbum(folder, indices: true, force: true);
             Console.WriteLine();
 
         Loop:
@@ -142,7 +142,7 @@ public class InteractiveModeManager
 
                 case "y":
                     Console.WriteLine("Exiting interactive mode");
-                    job.PrintLines();
+                    // job.PrintLines(); // Removed as logging is handled centrally now
                     return new RunResult(index, folder, true, ExitInteractiveMode: true, filterStr);
 
                 case "r":

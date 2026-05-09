@@ -27,6 +27,8 @@ internal static class JobInfoPrinter
         Printing.WriteLine(force: true);
         Printing.Write($"[{s.DisplayId:000}] {s.Kind}", ConsoleColor.White, force: true);
         Printing.Write(" • ", ConsoleColor.DarkGray, force: true);
+
+        // TODO: When state = failed, should also print failure reason.
         Printing.WriteLine(stateLabel, stateColor, force: true);
 
         switch (detail.Payload)

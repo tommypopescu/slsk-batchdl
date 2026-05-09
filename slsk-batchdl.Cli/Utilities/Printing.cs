@@ -572,7 +572,7 @@ public static class Printing
     }
 
 
-    public static void PrintAlbumHeader(AlbumFolder folder)
+    public static void PrintAlbumHeader(AlbumFolder folder, bool force = false)
     {
         if (folder.Files.Count == 0) return;
 
@@ -587,18 +587,18 @@ public static class Printing
             string format     = propsList.FirstOrDefault() ?? "";
             string otherProps = propsList.Count > 1 ? " / " + string.Join(" / ", propsList.Skip(1)) : "";
 
-            Write($"User  : {userInfo}\nFolder: {parents}\nProps : [", ConsoleColor.White);
-            Write(format, GetFormatColor(format));
-            WriteLine(otherProps + "]", ConsoleColor.White);
+            Write($"User  : {userInfo}\nFolder: {parents}\nProps :[", ConsoleColor.White, force: force);
+            Write(format, GetFormatColor(format), force: force);
+            WriteLine(otherProps + "]", ConsoleColor.White, force: force);
         }
     }
 
-    public static int PrintAlbum(AlbumFolder folder, bool indices = false)
+    public static int PrintAlbum(AlbumFolder folder, bool indices = false, bool force = false)
     {
         if (folder.Files.Count == 0) return 0;
 
         Console.ResetColor();
-        PrintAlbumHeader(folder);
+        PrintAlbumHeader(folder, force);
 
         string ancestor = Utils.GreatestCommonDirectorySlsk(folder.Files.Select(f => f.ResolvedTarget!.Filename));
         int i = 0;
@@ -606,10 +606,10 @@ public static class Printing
         {
             if (indices)
             {
-                Write($" [{i + 1:D2}]", ConsoleColor.DarkGray);
+                Write($" [{i + 1:D2}]", ConsoleColor.DarkGray, force: force);
             }
             string customPath = ancestor.Length > 0 ? af.ResolvedTarget!.File.Filename.Replace(ancestor, "").TrimStart('\\') : "";
-            WriteLine("    " + DisplayString(af.Query, af.ResolvedTarget!.File, af.ResolvedTarget!.Response, customPath: customPath, showUser: false));
+            WriteLine("    " + DisplayString(af.Query, af.ResolvedTarget!.File, af.ResolvedTarget!.Response, customPath: customPath, showUser: false), ConsoleColor.Gray, force: force);
             i++;
         }
 
