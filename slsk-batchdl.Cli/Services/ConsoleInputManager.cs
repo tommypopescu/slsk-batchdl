@@ -12,6 +12,7 @@ public static class ConsoleInputManager
         CancelAll,
         CancelJob,
         Invalid,
+        Refresh,
     }
 
     public readonly record struct CancelPromptResult(CancelPromptAction Action, int? JobId = null, string? Input = null);
@@ -19,6 +20,7 @@ public static class ConsoleInputManager
     public static bool GlobalCancelEnabled { get; set; } = true;
     public static Func<Task>? OnCancelRequested { get; set; }
     public static Func<Task>? OnNextCandidateRequested { get; set; }
+    public static Func<Task>? OnInfoRequested { get; set; }
     public static CliProgressReporter? Reporter { get; set; }
 
     public static async Task RunLoopAsync(CancellationToken ct)
@@ -34,28 +36,37 @@ public static class ConsoleInputManager
                 {
                     var key = Console.ReadKey(intercept: true);
 
-                    if (GlobalCancelEnabled && key.KeyChar == 'c')
+                    if (GlobalCancelEnabled && char.ToLower(key.KeyChar) == 'c')
                     {
                         if (OnCancelRequested != null)
                         {
-                            if (Reporter != null) Reporter.IsPaused = true;
                             Printing.SetBuffering(true);
+                            if (Reporter != null) Reporter.IsPaused = true;
                             await OnCancelRequested();
-                            Printing.SetBuffering(false);
-                            Printing.Flush();
                             if (Reporter != null) Reporter.IsPaused = false;
+                            Printing.SetBuffering(false);
                         }
                     }
-                    else if (GlobalCancelEnabled && key.KeyChar == 't')
+                    else if (GlobalCancelEnabled && char.ToLower(key.KeyChar) == 't')
                     {
                         if (OnNextCandidateRequested != null)
                         {
-                            if (Reporter != null) Reporter.IsPaused = true;
                             Printing.SetBuffering(true);
+                            if (Reporter != null) Reporter.IsPaused = true;
                             await OnNextCandidateRequested();
-                            Printing.SetBuffering(false);
-                            Printing.Flush();
                             if (Reporter != null) Reporter.IsPaused = false;
+                            Printing.SetBuffering(false);
+                        }
+                    }
+                    else if (char.ToLower(key.KeyChar) == 'i')
+                    {
+                        if (OnInfoRequested != null)
+                        {
+                            Printing.SetBuffering(true);
+                            if (Reporter != null) Reporter.IsPaused = true;
+                            await OnInfoRequested();
+                            if (Reporter != null) Reporter.IsPaused = false;
+                            Printing.SetBuffering(false);
                         }
                     }
                     else
@@ -75,6 +86,60 @@ public static class ConsoleInputManager
     public static async ValueTask<ConsoleKeyInfo> ReadKeyAsync(CancellationToken ct = default)
     {
         return await _keyChannel.Reader.ReadAsync(ct);
+    }
+
+    public static int? ReadJobIdInput()
+    {
+        var result = ReadCancelPromptResult();
+        return result.Action == CancelPromptAction.CancelJob ? result.JobId : null;
+    }
+
+    public static CancelPromptResult ReadJobIdOrRefreshResult()
+    {
+        var input = new System.Text.StringBuilder();
+        bool firstKey = true;
+
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+
+            if (key.Key == ConsoleKey.Escape)
+            {
+                Console.WriteLine();
+                return new(CancelPromptAction.Abort);
+            }
+
+            if (firstKey && char.ToLower(key.KeyChar) == 'r')
+            {
+                Console.WriteLine();
+                return new(CancelPromptAction.Refresh);
+            }
+
+            firstKey = false;
+
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                var s = input.ToString().Trim();
+                return int.TryParse(s, out int id)
+                    ? new(CancelPromptAction.CancelJob, id)
+                    : new(CancelPromptAction.Abort);
+            }
+
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (input.Length == 0) continue;
+                input.Length--;
+                Console.Write("\b \b");
+                continue;
+            }
+
+            if (!char.IsControl(key.KeyChar))
+            {
+                input.Append(key.KeyChar);
+                Console.Write(key.KeyChar);
+            }
+        }
     }
 
     public static CancelPromptResult ReadCancelPromptResult()

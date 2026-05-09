@@ -112,12 +112,22 @@ public class Downloader
                         cancellationToken: downloadCts.Token);
                     break;
                 }
-                catch (SoulseekClientException e)
+                catch (Exception e) when (e is not OperationCanceledException)
                 {
                     retryCount++;
+                    bool canRetry = e is SoulseekClientException
+                        && retryCount < maxRetries
+                        && !clientManager.IsConnectedAndLoggedIn;
+                    int reportedMaxRetries = canRetry || (e is SoulseekClientException && !clientManager.IsConnectedAndLoggedIn)
+                        ? maxRetries
+                        : retryCount;
+
                     Logger.DebugError($"Error while downloading '{candidate.Username}\\{candidate.Filename}' to '{incompleteOutputPath}' (attempt {retryCount}/{maxRetries}): {e}");
-                    if (retryCount >= maxRetries || clientManager.IsConnectedAndLoggedIn)
+                    events.RaiseDownloadAttemptFailed(song, candidate, incompleteOutputPath, retryCount, reportedMaxRetries, e);
+
+                    if (!canRetry)
                         throw;
+
                     await clientManager.WaitUntilReadyAsync(downloadCts.Token);
                 }
             }
@@ -142,6 +152,9 @@ public class Downloader
 
         downloadRegistry.DownloadedFiles[fileKey] = song;
         downloadRegistry.Downloads.TryRemove(candidate.Filename, out _);
+
+        if (candidate.File.Size > 0)
+            song.BytesTransferred = candidate.File.Size;
 
         song.SetDone(outputPath, candidate);
     }

@@ -38,7 +38,9 @@ public class EngineEvents
 
     // ── Search ───────────────────────────────────────────────────────────────
     // Fired once per rate-limit window when the search semaphore is exhausted.
-    public event Action? SearchRateLimited;
+    public event Action<DateTimeOffset>? SearchRateLimited;
+    // Fired when the rate-limit window resets and searching resumes.
+    public event Action? SearchResumed;
 
     // ── Song-level ───────────────────────────────────────────────────────────
     public event Action<SongJob>? OnCompleteStart;
@@ -50,6 +52,7 @@ public class EngineEvents
     public event Action<SongJob, FileCandidate>? DownloadStarted;
     public event Action<SongJob, long, long>? DownloadProgress;      // transferred, total
     public event Action<SongJob, TransferStates>? DownloadStateChanged;  // raw state, not string
+    public event Action<SongJob, FileCandidate, string, int, int, Exception>? DownloadAttemptFailed;
 
     // ── List / overall ───────────────────────────────────────────────────────
     // Fired when a batch of songs has been resolved into:
@@ -71,7 +74,8 @@ public class EngineEvents
 
 
     internal void RaiseJobStatus(Job job, string status) => JobStatus?.Invoke(job, status);
-    internal void RaiseSearchRateLimited() => SearchRateLimited?.Invoke();
+    internal void RaiseSearchRateLimited(DateTimeOffset resetsAt) => SearchRateLimited?.Invoke(resetsAt);
+    internal void RaiseSearchResumed() => SearchResumed?.Invoke();
 
     internal void RaiseOnCompleteStart(SongJob song) => OnCompleteStart?.Invoke(song);
     internal void RaiseOnCompleteEnd(SongJob song) => OnCompleteEnd?.Invoke(song);
@@ -79,6 +83,8 @@ public class EngineEvents
     internal void RaiseDownloadStarted(SongJob song, FileCandidate c) => DownloadStarted?.Invoke(song, c);
     internal void RaiseDownloadProgress(SongJob song, long xfer, long total) => DownloadProgress?.Invoke(song, xfer, total);
     internal void RaiseDownloadStateChanged(SongJob song, TransferStates s) => DownloadStateChanged?.Invoke(song, s);
+    internal void RaiseDownloadAttemptFailed(SongJob song, FileCandidate c, string outputPath, int attempt, int maxAttempts, Exception ex)
+        => DownloadAttemptFailed?.Invoke(song, c, outputPath, attempt, maxAttempts, ex);
 
     internal void RaiseTrackBatchResolved(Job job, IReadOnlyList<SongJob> pending, IReadOnlyList<SongJob> existing, IReadOnlyList<SongJob> notFound)
         => TrackBatchResolved?.Invoke(job, pending, existing, notFound);

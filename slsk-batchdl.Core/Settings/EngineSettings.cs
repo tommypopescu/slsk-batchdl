@@ -35,7 +35,7 @@ public class EngineSettings
     /// Global limit for concurrent leaf work. Counts direct song jobs, album jobs,
     /// aggregate child song jobs, album-aggregate child album jobs, and standalone
     /// folder retrievals. Does not count extractor jobs or song jobs inside albums.
-    public int ConcurrentJobs { get; set; } = int.MaxValue;
+    public int ConcurrentJobs { get; set; } = 20;
 
     public int ConcurrentSearches { get; set; } = 2;
 
@@ -52,6 +52,8 @@ public class EngineSettings
     /// --verbose / -v / --debug are special cases handled by ConfigManager that set this to Debug.
     public Logger.LogLevel LogLevel { get; set; } = Logger.LogLevel.Info;
 
+    public bool ReportIntervalProgress { get; set; } = true;
+
     public string? LogFilePath { get; set; }
 
     // ── Testing / mock ────────────────────────────────────────────────────────
@@ -62,4 +64,6 @@ public class EngineSettings
     public bool MockFilesReadTags { get; set; } = true;
 
     public bool MockFilesSlow { get; set; }
+
+    public int MockFilesFailDownloads { get; set; }
 }

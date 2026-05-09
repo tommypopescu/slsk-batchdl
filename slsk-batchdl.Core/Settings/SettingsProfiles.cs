@@ -312,10 +312,12 @@ public static class SettingsCloner
         SearchesPerTime = source.SearchesPerTime,
         SearchRenewTime = source.SearchRenewTime,
         LogLevel = source.LogLevel,
+        ReportIntervalProgress = source.ReportIntervalProgress,
         LogFilePath = source.LogFilePath,
         MockFilesDir = source.MockFilesDir,
         MockFilesReadTags = source.MockFilesReadTags,
         MockFilesSlow = source.MockFilesSlow,
+        MockFilesFailDownloads = source.MockFilesFailDownloads,
     };
 
     public static DownloadSettings Clone(DownloadSettings source) => new()

@@ -2,6 +2,8 @@
 namespace Sldl.Core;
     // Values 0-4 are written to index files — do not reorder, existing files must remain readable.
     // Values 5+ are runtime-only and never persisted.
+    // TODO: Split this into lifecycle state, activity phase, and terminal outcome instead of
+    // using one enum for all three concepts.
     public enum JobState
     {
         Pending          = 0,
@@ -13,6 +15,7 @@ namespace Sldl.Core;
         Searching        = 6,
         Downloading      = 7,
         Extracting       = 8,
+        Running          = 9,
     }
 
     public enum FailureReason

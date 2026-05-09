@@ -47,47 +47,13 @@ namespace Sldl.Core.Extractors;
                 rows.Reverse();
 
             var csvName = Path.GetFileNameWithoutExtension(csvFilePath);
-            var jobs = BuildJobList(rows.Skip(offset).Take(maxTracks), csvName);
-
             var list = new JobList { ItemName = csvName, EnablesIndexByDefault = true };
-            list.Jobs.AddRange(jobs);
+            list.Jobs.AddRange(BuildJobs(rows.Skip(offset).Take(maxTracks)));
             return list;
         }
 
-        // Builds a List<Job> from a sequence of per-row items (SongJob or AlbumJob).
-        // Consecutive SongJobs are grouped into a single JobList.
-        private static List<Job> BuildJobList(IEnumerable<object> rows, string csvName)
-        {
-            var jobs = new List<Job>();
-            JobList? currentSlj = null;
-
-            foreach (var row in rows)
-            {
-                if (row is AlbumJob albumJob)
-                {
-                    if (currentSlj != null)
-                    {
-                        jobs.Add(currentSlj);
-                        currentSlj = null;
-                    }
-                    jobs.Add(albumJob);
-                }
-                else if (row is SongJob song)
-                {
-                    currentSlj ??= new JobList
-                    {
-                        ItemName              = csvName,
-                        EnablesIndexByDefault = true,
-                    };
-                    currentSlj.Jobs.Add(song);
-                }
-            }
-
-            if (currentSlj != null && currentSlj.Jobs.Count > 0)
-                jobs.Add(currentSlj);
-
-            return jobs;
-        }
+        private static IEnumerable<Job> BuildJobs(IEnumerable<object> rows)
+            => rows.OfType<Job>();
 
         public async Task RemoveFromSource(Job job)
         {

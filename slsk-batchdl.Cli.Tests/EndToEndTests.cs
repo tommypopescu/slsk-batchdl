@@ -4,6 +4,7 @@ using Sldl.Core.Jobs;
 using Sldl.Core.Services;
 using Sldl.Core.Settings;
 using Sldl.Cli;
+using Sldl.Server;
 
 namespace Tests.EndToEnd;
 
@@ -111,8 +112,9 @@ public class CliEndToEndTests
             var maxActivePickers = 0;
             var pickerCalls = 0;
 
+            var backend = new LocalCliBackend(app, rootSettings);
             var coordinator = new InteractiveCliCoordinator(
-                app,
+                backend,
                 cliSettings,
                 CancellationToken.None,
                 async request =>
@@ -144,9 +146,13 @@ public class CliEndToEndTests
                     }
                 });
 
-            coordinator.Start(new ExtractJob(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType), rootSettings);
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var workflowId = Guid.NewGuid();
+            var submission = await coordinator.StartAsync(
+                new SubmitExtractJobRequestDto(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType.ToString(), Options: new SubmissionOptionsDto(workflowId)),
+                cts.Token);
+            _ = coordinator.RunUntilCompleteAsync(submission.WorkflowId, cts.Token)
+                .ContinueWith(_ => app.CompleteEnqueue(), TaskScheduler.Default);
             await app.RunAsync(cts.Token);
 
             Assert.IsFalse(cts.IsCancellationRequested, "RunAsync timed out");
@@ -218,8 +224,9 @@ public class CliEndToEndTests
                 albumJob.Cancel();
             };
 
+            var backend = new LocalCliBackend(app, rootSettings);
             var coordinator = new InteractiveCliCoordinator(
-                app,
+                backend,
                 cliSettings,
                 CancellationToken.None,
                 request =>
@@ -235,9 +242,13 @@ public class CliEndToEndTests
                         request.FilterStr));
                 });
 
-            coordinator.Start(new ExtractJob(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType), rootSettings);
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var workflowId = Guid.NewGuid();
+            var submission = await coordinator.StartAsync(
+                new SubmitExtractJobRequestDto(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType.ToString(), Options: new SubmissionOptionsDto(workflowId)),
+                cts.Token);
+            _ = coordinator.RunUntilCompleteAsync(submission.WorkflowId, cts.Token)
+                .ContinueWith(_ => app.CompleteEnqueue(), TaskScheduler.Default);
             await app.RunAsync(cts.Token);
 
             Assert.IsFalse(cts.IsCancellationRequested, "RunAsync timed out");
@@ -289,17 +300,18 @@ public class CliEndToEndTests
             var app = new DownloadEngine(engineSettings, clientManager);
 
             var pickerCalls = 0;
+            var backend = new LocalCliBackend(app, rootSettings);
             var coordinator = new InteractiveCliCoordinator(
-                app,
+                backend,
                 cliSettings,
                 CancellationToken.None,
                 request =>
                 {
                     pickerCalls++;
-                    
+
                     Assert.IsTrue(request.Folders.Count >= 1, "Expected at least 1 folder candidate available to pick.");
                     var folder = request.Folders.First();
-                    
+
                     // We delete the file here so the download fails
                     if (pickerCalls == 1 && File.Exists(doomedFilePath))
                     {
@@ -314,8 +326,12 @@ public class CliEndToEndTests
                         request.FilterStr));
                 });
 
-            coordinator.Start(new ExtractJob(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType), rootSettings);
-
+            var workflowId = Guid.NewGuid();
+            var submission = await coordinator.StartAsync(
+                new SubmitExtractJobRequestDto(rootSettings.Extraction.Input!, rootSettings.Extraction.InputType.ToString(), Options: new SubmissionOptionsDto(workflowId)),
+                CancellationToken.None);
+            _ = coordinator.RunUntilCompleteAsync(submission.WorkflowId, CancellationToken.None)
+                .ContinueWith(_ => app.CompleteEnqueue(), TaskScheduler.Default);
             await app.RunAsync(CancellationToken.None);
 
             Assert.AreEqual(2, pickerCalls, "A failed chosen album should reopen the picker with remaining candidates.");

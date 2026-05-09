@@ -93,6 +93,8 @@ internal static partial class Program
             Logger.AddOrReplaceFile(engineSettings.LogFilePath, engineSettings.LogLevel < Logger.LogLevel.Debug ? engineSettings.LogLevel : Logger.LogLevel.Debug);
 
         Logger.SetConsoleLogLevel(rootSettings.NonVerbosePrint ? Logger.LogLevel.Error : engineSettings.LogLevel);
+        if (ShouldUseLiveRendering(cliSettings))
+            engineSettings.ReportIntervalProgress = false;
 
         if (daemonMode)
         {
@@ -161,12 +163,17 @@ internal static partial class Program
             cliReporter = new CliProgressReporter(cliSettings);
             cliReporter.Attach(backend);
         }
+
+        var eventLogger = new EventLogger(backend, ShouldUseLiveRendering(cliSettings));
+        eventLogger.Attach();
+
         backend.EventReceived += envelope =>
         {
             if (envelope.Type == "track-batch.resolved"
                 && envelope.Payload is TrackBatchResolvedEventDto batch
                 && !batch.PrintOption.HasFlag(PrintOption.Tracks)
-                && ShouldPrintHumanBatchPreview(batch.PrintOption))
+                && ShouldPrintHumanBatchPreview(batch.PrintOption)
+                && cliReporter?.UsesLiveRendering != true)
             {
                 PrintTrackBatchResolved(batch);
             }
@@ -174,10 +181,16 @@ internal static partial class Program
 
         if (cliSettings.InteractiveMode)
         {
-            var interactiveCoordinator = new InteractiveCliCoordinator(engine, cliSettings, cts.Token, backend);
-            interactiveCoordinator.Start(
-                new ExtractJob(rootSettings.Extraction.Input, rootSettings.Extraction.InputType),
-                rootSettings);
+            var workflowId = Guid.NewGuid();
+            var coordinator = new InteractiveCliCoordinator(backend, cliSettings, cts.Token);
+            var submission = await coordinator.StartAsync(
+                new SubmitExtractJobRequestDto(
+                    rootSettings.Extraction.Input,
+                    rootSettings.Extraction.InputType.ToString(),
+                    Options: new SubmissionOptionsDto(workflowId)),
+                cts.Token);
+            _ = coordinator.RunUntilCompleteAsync(submission.WorkflowId, cts.Token)
+                .ContinueWith(_ => engine.CompleteEnqueue(), TaskScheduler.Default);
         }
         else
         {
@@ -258,12 +271,62 @@ internal static partial class Program
             }
         };
 
+        ConsoleInputManager.OnInfoRequested = async () =>
+        {
+            lock (Printing.ConsoleLock)
+                Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
+            var id = ConsoleInputManager.ReadJobIdInput();
+            if (id == null) return;
+
+            while (true)
+            {
+                int printStart = Console.IsOutputRedirected ? -1 : Console.CursorTop;
+
+                var detail = await backend.GetJobDetailByDisplayIdAsync(id.Value, ct: cts.Token);
+                if (detail == null)
+                    Logger.Error($"Job ID [{id}] not found.");
+                else
+                    JobInfoPrinter.Print(detail);
+
+                lock (Printing.ConsoleLock)
+                    Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
+
+                var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.Refresh)
+                {
+                    if (printStart >= 0)
+                    {
+                        int pos = Console.CursorTop;
+                        while (pos > printStart && pos > 0)
+                        {
+                            Console.SetCursorPosition(0, pos - 1);
+                            Console.Write(new string(' ', Console.BufferWidth));
+                            Console.SetCursorPosition(0, pos - 1);
+                            pos--;
+                        }
+                        Console.SetCursorPosition(0, printStart);
+                    }
+                }
+                else if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId.HasValue)
+                {
+                    id = result.JobId.Value;
+                }
+                else
+                {
+                    return;
+                }
+            }
+        };
+
         _ = Task.Run(() => ConsoleInputManager.RunLoopAsync(cts.Token), cts.Token);
 
         try
         {
             await engine.RunAsync(cts.Token);
             Logger.Trace("Main: RunAsync returned.");
+            cliReporter?.Stop();
+            cliReporter = null;
             Printing.PrintComplete(engine.Queue);
 
             if (rootSettings.DoNotDownload)
@@ -277,10 +340,10 @@ internal static partial class Program
             Logger.Trace("Main: Entered finally block. Disposing clientManager...");
             engine.Cancel();
             cts.Cancel();
+            cliReporter?.Stop();
             clientManager.Dispose();
-            Logger.Trace("Main: ClientManager disposed.");
             Printing.SetBuffering(false);
-            Printing.Flush();
+            Logger.Trace("Main: ClientManager disposed.");
             Logger.Trace("Main: Exiting.");
         }
     }
@@ -326,12 +389,16 @@ internal static partial class Program
             cliReporter.Attach(backend);
         }
 
+        var eventLogger = new EventLogger(backend, ShouldUseLiveRendering(cliSettings));
+        eventLogger.Attach();
+
         backend.EventReceived += envelope =>
         {
             if (envelope.Type == "track-batch.resolved"
                 && envelope.Payload is TrackBatchResolvedEventDto batch
                 && !batch.PrintOption.HasFlag(PrintOption.Tracks)
-                && ShouldPrintHumanBatchPreview(batch.PrintOption))
+                && ShouldPrintHumanBatchPreview(batch.PrintOption)
+                && cliReporter?.UsesLiveRendering != true)
             {
                 PrintTrackBatchResolved(batch);
             }
@@ -346,11 +413,11 @@ internal static partial class Program
             rootSettings.Extraction.InputType.ToString(),
             Options: options);
 
-        RemoteInteractiveCliCoordinator? interactiveCoordinator = null;
+        InteractiveCliCoordinator? interactiveCoordinator = null;
         JobSummaryDto submission;
         if (cliSettings.InteractiveMode)
         {
-            interactiveCoordinator = new RemoteInteractiveCliCoordinator(backend, cliSettings, cts.Token);
+            interactiveCoordinator = new InteractiveCliCoordinator(backend, cliSettings, cts.Token);
             submission = await interactiveCoordinator.StartAsync(request, cts.Token);
         }
         else
@@ -419,6 +486,54 @@ internal static partial class Program
             }
         };
 
+        ConsoleInputManager.OnInfoRequested = async () =>
+        {
+            lock (Printing.ConsoleLock)
+                Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
+            var id = ConsoleInputManager.ReadJobIdInput();
+            if (id == null) return;
+
+            while (true)
+            {
+                int printStart = Console.IsOutputRedirected ? -1 : Console.CursorTop;
+
+                var detail = await backend.GetJobDetailByDisplayIdAsync(id.Value, submission.WorkflowId, cts.Token);
+                if (detail == null)
+                    Logger.Error($"Job ID [{id}] not found.");
+                else
+                    JobInfoPrinter.Print(detail);
+
+                lock (Printing.ConsoleLock)
+                    Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
+
+                var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.Refresh)
+                {
+                    if (printStart >= 0)
+                    {
+                        int pos = Console.CursorTop;
+                        while (pos > printStart && pos > 0)
+                        {
+                            Console.SetCursorPosition(0, pos - 1);
+                            Console.Write(new string(' ', Console.BufferWidth));
+                            Console.SetCursorPosition(0, pos - 1);
+                            pos--;
+                        }
+                        Console.SetCursorPosition(0, printStart);
+                    }
+                }
+                else if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId.HasValue)
+                {
+                    id = result.JobId.Value;
+                }
+                else
+                {
+                    return;
+                }
+            }
+        };
+
         _ = Task.Run(() => ConsoleInputManager.RunLoopAsync(cts.Token), cts.Token);
 
         try
@@ -427,6 +542,9 @@ internal static partial class Program
                 await interactiveCoordinator.RunUntilCompleteAsync(submission.WorkflowId, cts.Token);
             else
                 await WaitForRemoteWorkflowAsync(backend, submission.WorkflowId, cts.Token);
+
+            cliReporter?.Stop();
+            cliReporter = null;
 
             if (!rootSettings.DoNotDownload)
                 await PrintRemoteCompleteAsync(backend, submission.WorkflowId, cts.Token);
@@ -443,8 +561,6 @@ internal static partial class Program
         {
             cts.Cancel();
             cliReporter?.Stop();
-            Printing.SetBuffering(false);
-            Printing.Flush();
         }
     }
 
@@ -497,7 +613,7 @@ internal static partial class Program
             {
                 Printing.PrintTracks(preview, int.MaxValue, fullInfo: false);
                 if (batch.PendingCount > preview.Count)
-                    Console.WriteLine($"  ... and {batch.PendingCount - preview.Count} more");
+                    Printing.WriteLine($"  ... and {batch.PendingCount - preview.Count} more");
             }
         }
 
@@ -858,6 +974,11 @@ internal static partial class Program
         => string.IsNullOrWhiteSpace(names)
             ? null
             : names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool ShouldUseLiveRendering(CliSettings cliSettings)
+        => !cliSettings.NoProgress
+            && !cliSettings.ProgressJson
+            && !Console.IsOutputRedirected;
 
     private static async Task RunDaemonAsync(
         string[] args,

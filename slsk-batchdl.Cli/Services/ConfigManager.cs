@@ -478,6 +478,8 @@ public static partial class ConfigManager
                 Engine(e => e.MockFilesReadTags = false); break;
             case "--mock-files-slow":
                 Engine(e => e.MockFilesSlow = Bool()); break;
+            case "--mock-files-fail-downloads":
+                Engine(e => e.MockFilesFailDownloads = Int()); break;
 
             // ── CliSettings ──────────────────────────────────────────────────
             case "-t": case "--interactive":
@@ -488,8 +490,6 @@ public static partial class ConfigManager
                 Cli(c => c.NoProgress = !Bool()); break;
             case "--progress-json":
                 Cli(c => c.ProgressJson = Bool()); break;
-            case "--acp": case "--album-compact-progress":
-                Cli(c => c.AlbumCompactProgress = Bool()); break;
             case "--server-ip": case "--daemon-ip": case "--api-ip":
                 Daemon(d => d.ListenIp = value); break;
             case "--server-port": case "--daemon-port": case "--api-port":
@@ -1197,7 +1197,6 @@ public static partial class ConfigManager
         or "--mock-files-slow"
         or "-t" or "--interactive"
         or "--progress-json"
-        or "--acp" or "--album-compact-progress"
         or "--wp" or "--write-playlist"
         or "--wi" or "--write-index"
         or "-r" or "--reverse"

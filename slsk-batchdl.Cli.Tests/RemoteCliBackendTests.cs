@@ -282,7 +282,7 @@ public class RemoteCliBackendTests
     }
 
     [TestMethod]
-    public async Task RemoteInteractiveCliCoordinator_FromListSerializesPromptsAndDownloadsSelections()
+    public async Task InteractiveCliCoordinator_FromListSerializesPromptsAndDownloadsSelections()
     {
         string inputPath = Path.Combine(Path.GetTempPath(), "sldl-remote-interactive-" + Guid.NewGuid() + ".txt");
         string musicRoot = Path.Combine(Path.GetTempPath(), "sldl-remote-interactive-music-" + Guid.NewGuid());
@@ -340,7 +340,7 @@ public class RemoteCliBackendTests
             int activePickers = 0;
             int maxActivePickers = 0;
             int pickerCalls = 0;
-            var coordinator = new RemoteInteractiveCliCoordinator(
+            var coordinator = new InteractiveCliCoordinator(
                 backend,
                 new CliSettings { InteractiveMode = true, NoProgress = true },
                 CancellationToken.None,

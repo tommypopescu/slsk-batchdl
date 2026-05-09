@@ -21,6 +21,7 @@ public static class ServerEventCatalog
             Activity("song.searching", nameof(SongSearchingEventDto)),
             Activity("download.started", nameof(DownloadStartedEventDto)),
             Activity("download.state-changed", nameof(DownloadStateChangedEventDto)),
+            Activity("download.attempt-failed", nameof(DownloadAttemptFailedEventDto)),
             Activity("song.state-changed", nameof(SongStateChangedEventDto)),
             Activity("album.download-started", nameof(AlbumDownloadStartedEventDto)),
             Activity("album.track-download-started", nameof(AlbumTrackDownloadStartedEventDto)),
@@ -28,6 +29,7 @@ public static class ServerEventCatalog
             Activity("on-complete.started", nameof(OnCompleteStartedEventDto)),
             Activity("on-complete.ended", nameof(OnCompleteEndedEventDto)),
             Activity("search.rate-limited", nameof(SearchRateLimitedEventDto)),
+            Activity("search.resumed", nameof(SearchResumedEventDto)),
             Activity("track-batch.resolved", nameof(TrackBatchResolvedEventDto)),
         }
         .ToDictionary(descriptor => descriptor.Type, StringComparer.Ordinal);
