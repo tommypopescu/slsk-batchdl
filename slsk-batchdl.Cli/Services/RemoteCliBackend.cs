@@ -137,6 +137,17 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
         return await ReadRequiredAsync<JobDetailDto>(response, ct);
     }
 
+    public async Task<JobDetailDto?> GetJobDetailByDisplayIdAsync(int displayId, Guid? workflowId = null, CancellationToken ct = default)
+    {
+        if (workflowId is not Guid id)
+            return null;
+        using var response = await http.GetAsync($"api/workflows/{id}/jobs/display/{displayId}", ct);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return null;
+        await EnsureSuccessAsync(response, ct);
+        return await ReadRequiredAsync<JobDetailDto>(response, ct);
+    }
+
     public async Task<WorkflowDetailDto?> GetWorkflowAsync(Guid workflowId, CancellationToken ct = default)
     {
         using var response = await http.GetAsync($"api/workflows/{workflowId}", ct);
@@ -317,6 +328,7 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
             "download.started" => Deserialize<DownloadStartedEventDto>(payload),
             "download.progress" => Deserialize<DownloadProgressEventDto>(payload),
             "download.state-changed" => Deserialize<DownloadStateChangedEventDto>(payload),
+            "download.attempt-failed" => Deserialize<DownloadAttemptFailedEventDto>(payload),
             "song.state-changed" => Deserialize<SongStateChangedEventDto>(payload),
             "album.download-started" => Deserialize<AlbumDownloadStartedEventDto>(payload),
             "album.track-download-started" => Deserialize<AlbumTrackDownloadStartedEventDto>(payload),
@@ -367,5 +379,6 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
         => state is ServerJobState.Pending
             or ServerJobState.Searching
             or ServerJobState.Downloading
-            or ServerJobState.Extracting;
+            or ServerJobState.Extracting
+            or ServerJobState.Running;
 }

@@ -199,7 +199,6 @@ public static partial class Help
     -v, --verbose                   Print extra debug info
     --log-file <path>               Write debug info to a specified file
     --no-progress                   Disable progress bars/percentages, only simple printing
-    --album-compact-progress        Enable a concise progress view for albums
     --print <option>                Print tracks or search results instead of downloading:
                                     'tracks': Print all tracks to be downloaded
                                     'tracks-full': Print extended information about all tracks
@@ -213,6 +212,7 @@ public static partial class Help
     
     --mock-files-dir <path>         Directory containing files to simulate download results
     --mock-files-no-read-tags       Only read filenames when simulating (much faster)
+    --mock-files-fail-downloads <n> Fail the next n mock download attempts
 
 Notes
   - Flags can be explicitly disabled by setting them to false, e.g. --interactive false.

@@ -148,7 +148,7 @@ public static class JsonPrinter
     {
         if (results == null || !results.Any())
         {
-            Console.WriteLine("[]");
+            Printing.WriteLine("[]");
             return;
         }
 
@@ -162,7 +162,7 @@ public static class JsonPrinter
             trackResults = trackResults.Take(1);
 
         var json = JsonSerializer.Serialize(trackResults, _options);
-        Console.WriteLine(json);
+        Printing.WriteLine(json);
     }
 
     public static void PrintAggregateJson(IEnumerable<SongJob> songs)
@@ -170,7 +170,7 @@ public static class JsonPrinter
         var songList = songs.ToList();
         if (songList.Count == 0)
         {
-            Console.WriteLine("[]");
+            Printing.WriteLine("[]");
             return;
         }
 
@@ -190,14 +190,14 @@ public static class JsonPrinter
         }).ToList();
 
         var json = JsonSerializer.Serialize(aggregateTracks, _options);
-        Console.WriteLine(json);
+        Printing.WriteLine(json);
     }
 
     public static void PrintAlbumJson(List<AlbumFolder> folders, AlbumJob job)
     {
         if (folders.Count == 0)
         {
-            Console.WriteLine("[]");
+            Printing.WriteLine("[]");
             return;
         }
 
@@ -210,13 +210,13 @@ public static class JsonPrinter
             });
 
         var json = JsonSerializer.Serialize(albumResults, _options);
-        Console.WriteLine(json);
+        Printing.WriteLine(json);
     }
 
     public static void PrintIndexJson(IEnumerable<IndexEntry> entries)
     {
         var trackJsons = entries.Select(e => new TrackJson(e));
         var json = JsonSerializer.Serialize(trackJsons, _indentedOptions);
-        Console.WriteLine(json);
+        Printing.WriteLine(json);
     }
 }

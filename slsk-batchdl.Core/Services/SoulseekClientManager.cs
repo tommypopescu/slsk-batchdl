@@ -85,12 +85,25 @@ public class SoulseekClientManager : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.Error($"Failed to ensure Soulseek connection and login: {ex.Message}");
+            StartMonitoring(); // Ensure monitoring starts even on failure so we can retry
             throw new InvalidOperationException($"Soulseek login failed: {ex.Message}", ex);
         }
         finally
         {
             _initializationSemaphore.Release();
         }
+    }
+
+    private static bool IsTransient(Exception? e)
+    {
+        while (e != null)
+        {
+            if (e is Soulseek.AddressException || e is System.TimeoutException || e is System.Net.Sockets.SocketException) return true;
+            if (e.GetType().Name.Contains("ConnectionException")) return true;
+            if (e.GetType().Name.Contains("SoulseekClientException")) return true;
+            e = e.InnerException;
+        }
+        return false;
     }
 
     private async Task MonitorConnectionLoopAsync(CancellationToken ct)
@@ -122,6 +135,12 @@ public class SoulseekClientManager : IDisposable
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
+                if (!IsTransient(ex))
+                {
+                    Logger.Fatal($"Permanent Soulseek error: {ex.Message}. Stopping reconnection attempts.");
+                    break;
+                }
+
                 Logger.DebugError($"Reconnection attempt failed: {ex.Message}");
                 retryDelay = Math.Min(retryDelay * 2, 8);
             }
@@ -136,7 +155,11 @@ public class SoulseekClientManager : IDisposable
         if (!string.IsNullOrEmpty(settings.MockFilesDir))
         {
             Logger.Info("Using local files Soulseek client.");
-            return LocalFilesSoulseekClient.FromLocalPaths(settings.MockFilesReadTags, settings.MockFilesSlow, settings.MockFilesDir);
+            return LocalFilesSoulseekClient.FromLocalPaths(
+                settings.MockFilesReadTags,
+                settings.MockFilesSlow,
+                settings.MockFilesFailDownloads,
+                settings.MockFilesDir);
         }
         else
         {
@@ -195,7 +218,7 @@ public class SoulseekClientManager : IDisposable
     /// <summary>
     /// Internal login logic extracted from DownloaderApplication.
     /// </summary>
-    private async Task LoginInternalAsync(ISoulseekClient client, EngineSettings settings, CancellationToken cancellationToken, int tries = 3)
+    private async Task LoginInternalAsync(ISoulseekClient client, EngineSettings settings, CancellationToken cancellationToken)
     {
         string user = settings.Username;
         string pass = settings.Password;
@@ -212,40 +235,15 @@ public class SoulseekClientManager : IDisposable
         string displayUser = settings.UseRandomLogin ? "[Random]" : user;
         Logger.Info($"Login {displayUser}");
 
-        int attempt = 0;
-        while (true)
+        cancellationToken.ThrowIfCancellationRequested();
+        await client.ConnectAsync(user, pass);
+
+        if (!settings.NoModifyShareCount)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            attempt++;
-            try
-            {
-                Logger.Debug($"Connecting {displayUser} (Attempt {attempt}/{tries})");
-                // Pass cancellation token to ConnectAsync if the library supports it (check Soulseek library version)
-                // Assuming it doesn't directly, we rely on the loop's cancellation check.
-                await client.ConnectAsync(user, pass);
-
-                if (!settings.NoModifyShareCount)
-                {
-                    Logger.Debug($"Setting share count for {displayUser}");
-                    await client.SetSharedCountsAsync(settings.SharedFiles, settings.SharedFolders, cancellationToken);
-                }
-                Logger.Debug($"Logged in {displayUser}");
-                break;
-            }
-            catch (Exception e)
-            {
-                cancellationToken.ThrowIfCancellationRequested(); // Check again after potential long operation
-                Logger.DebugError($"Exception during login attempt {attempt}/{tries} for {displayUser}: {e}");
-                if (!(e is Soulseek.AddressException || e is System.TimeoutException || e is System.Net.Sockets.SocketException) || attempt >= tries)
-                {
-                    Logger.Error($"Login failed definitively for {displayUser} after {attempt} attempts.");
-                    throw; // Retries exhausted or non-transient error
-                }
-
-                Logger.Warn($"Login attempt {attempt}/{tries} failed for {displayUser}, retrying...");
-                await Task.Delay(1000, cancellationToken);
-            }
+            Logger.Debug($"Setting share count for {displayUser}");
+            await client.SetSharedCountsAsync(settings.SharedFiles, settings.SharedFolders, cancellationToken);
         }
+        Logger.Debug($"Logged in {displayUser}");
     }
 
     public void Dispose()

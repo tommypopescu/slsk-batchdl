@@ -214,6 +214,22 @@ namespace Tests.ExtractorTests2
         }
 
         [TestMethod]
+        public async Task GetTracks_ReturnsSingleFlatJobList()
+        {
+            File.WriteAllText(_tempCsv, "artist,title,album\nArtist1,Song1,\nAlbumArtist,,Album1\nArtist2,Song2,\n");
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            var extractor = new CsvExtractor(config.Csv);
+
+            var result = await extractor.GetTracks(_tempCsv, config.Extraction);
+            var list = (JobList)result;
+
+            Assert.AreEqual(3, list.Jobs.Count);
+            Assert.IsInstanceOfType(list.Jobs[0], typeof(SongJob));
+            Assert.IsInstanceOfType(list.Jobs[1], typeof(AlbumJob));
+            Assert.IsInstanceOfType(list.Jobs[2], typeof(SongJob));
+        }
+
+        [TestMethod]
         public async Task GetTracks_WithAlbumColumn_ParsesAlbum()
         {
             File.WriteAllText(_tempCsv, "artist,title,album\nBand,Track,TheAlbum\n");
