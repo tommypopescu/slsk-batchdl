@@ -200,7 +200,15 @@ public class DownloadEngine
 
             if (settings.NeedLogin && !servicesInitialized)
             {
-                await _clientManager.EnsureConnectedAndLoggedInAsync(engineSettings, ct);
+                try
+                {
+                    await _clientManager.EnsureConnectedAndLoggedInAsync(engineSettings, ct);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Initial Soulseek login failed: {ex.Message}. Reconnection will be attempted automatically in the background.");
+                }
+
                 await _clientManager.WaitUntilReadyAsync(ct);
                 searcher = new Searcher(Client!, _registry, _registry, Events, engineSettings.SearchesPerTime, engineSettings.SearchRenewTime, engineSettings.ConcurrentSearches);
                 downloader = new Downloader(Client!, _clientManager, _registry, Events);
