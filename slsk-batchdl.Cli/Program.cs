@@ -177,10 +177,16 @@ internal static partial class Program
 
         if (cliSettings.InteractiveMode)
         {
-            var interactiveCoordinator = new InteractiveCliCoordinator(engine, cliSettings, cts.Token, backend);
-            interactiveCoordinator.Start(
-                new ExtractJob(rootSettings.Extraction.Input, rootSettings.Extraction.InputType),
-                rootSettings);
+            var workflowId = Guid.NewGuid();
+            var coordinator = new InteractiveCliCoordinator(backend, cliSettings, cts.Token);
+            var submission = await coordinator.StartAsync(
+                new SubmitExtractJobRequestDto(
+                    rootSettings.Extraction.Input,
+                    rootSettings.Extraction.InputType.ToString(),
+                    Options: new SubmissionOptionsDto(workflowId)),
+                cts.Token);
+            _ = coordinator.RunUntilCompleteAsync(submission.WorkflowId, cts.Token)
+                .ContinueWith(_ => engine.CompleteEnqueue(), TaskScheduler.Default);
         }
         else
         {
@@ -371,11 +377,11 @@ internal static partial class Program
             rootSettings.Extraction.InputType.ToString(),
             Options: options);
 
-        RemoteInteractiveCliCoordinator? interactiveCoordinator = null;
+        InteractiveCliCoordinator? interactiveCoordinator = null;
         JobSummaryDto submission;
         if (cliSettings.InteractiveMode)
         {
-            interactiveCoordinator = new RemoteInteractiveCliCoordinator(backend, cliSettings, cts.Token);
+            interactiveCoordinator = new InteractiveCliCoordinator(backend, cliSettings, cts.Token);
             submission = await interactiveCoordinator.StartAsync(request, cts.Token);
         }
         else
