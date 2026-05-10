@@ -23,3 +23,5 @@
 - Implement sharing service. Look how slskd does it for a start.
 
 - (breaking) Maybe use yaml for settings instead of our custom format, and improve structure.
+
+- Test performance again for song and album searches (CPU and allocations, include the raw search collection phase + projection) on big queries (e.g. `love`)
