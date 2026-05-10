@@ -24,6 +24,7 @@ public class InteractiveModeManager
     // index == -2  → user pressed 'q' (quit program)
     // index >= 0   → accepted folder; folder is the (possibly trimmed) chosen AlbumFolder
     // exitInteractiveMode == true → engine should disable config.interactiveMode
+    // TODO: Make explicit rather than -1, -2.
 
     public record RunResult(
         int         Index,
@@ -69,11 +70,11 @@ public class InteractiveModeManager
         try
         {
             int aidx = 0;
-            string retrieveAll1 = canRetrieve ? "| [r]            " : "";
-            string retrieveAll2 = canRetrieve ? "| Load All Files " : "";
+            string retrieveAll1 = canRetrieve ? "| [r]           " : "";
+            string retrieveAll2 = canRetrieve ? "| Load All Files" : "";
             Console.WriteLine();
-        Printing.WriteLine($" [Up/p] | [Down/n] | [Enter] | {retrieveAll1}| [s]  | [Esc/q] | [h]", ConsoleColor.Green, force: true);
-        Printing.WriteLine($" Prev   | Next     | Accept  | {retrieveAll2}| Skip | Quit    | Help", ConsoleColor.Green, force: true);
+        Printing.WriteLine($" [Up/p] | [Down/n] | [Enter] {retrieveAll1} | [s]  | [Esc/q] | [h]", ConsoleColor.Green, force: true);
+        Printing.WriteLine($" Prev   | Next     | Accept  {retrieveAll2} | Skip | Quit    | Help", ConsoleColor.Green, force: true);
 
         Console.WriteLine();
         savedPos = Console.CursorTop;
@@ -213,7 +214,8 @@ public class InteractiveModeManager
                         }
                     }
                     goto Loop;
-
+                
+                // TODO: BUG: This does not work. InteractiveCliCoordinator downloads everything regardless.
                 case "d":
                     if (options.Length == 0)
                         return new RunResult(index, folder, true, false, filterStr);

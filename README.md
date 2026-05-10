@@ -594,10 +594,11 @@ on-complete = + 1:h:u: cmd /c if {stdout}==success (del "{path}" & echo "1;{path
 ```
 c               cancel a job by id or all jobs
 t               try next candidate for a job id
+i               get detailed info about job by id
 ```
 
 ### CLI Interactive Prompt Shortcuts
-Interactive mode for albums can be enabled with `-t`/`--interactive`. It enables users to choose the desired folder or download specific files from it.
+Interactive mode for albums can be enabled with `-t`/`--interactive`. It enables you to choose the desired folder or download specific files from it, rather than automatically downloading the best match.
 
 Key bindings:
 ```
@@ -606,7 +607,7 @@ Down/n          next folder
 Enter/d         download selected folder
 y               download folder and disable interactive mode
 r               retrieve all files in the folder
-s               skip current item
+s               skip current album
 Esc/q           quit program
 h               print this help text
 
