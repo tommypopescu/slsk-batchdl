@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -8,7 +8,6 @@ namespace Sldl.Server;
 [JsonSerializable(typeof(ServerInfoDto))]
 [JsonSerializable(typeof(ServerStatusDto))]
 [JsonSerializable(typeof(SoulseekClientStatusDto))]
-[JsonSerializable(typeof(ServerFolderRetrievalOutcome))]
 [JsonSerializable(typeof(ProfileSummaryDto))]
 [JsonSerializable(typeof(ApiErrorDto))]
 [JsonSerializable(typeof(CancelWorkflowResponseDto))]
@@ -20,6 +19,12 @@ namespace Sldl.Server;
 [JsonSerializable(typeof(WorkflowJobNodeDto))]
 [JsonSerializable(typeof(WorkflowTreeDto))]
 [JsonSerializable(typeof(JobQuery))]
+[JsonSerializable(typeof(ServerJobKind))]
+[JsonSerializable(typeof(ServerJobState))]
+[JsonSerializable(typeof(ServerWorkflowState))]
+[JsonSerializable(typeof(ServerFailureReason))]
+[JsonSerializable(typeof(ServerFolderRetrievalOutcome))]
+[JsonSerializable(typeof(ServerResourceActionKind))]
 
 [JsonSerializable(typeof(SubmitExtractJobRequestDto))]
 [JsonSerializable(typeof(SubmitSearchJobRequestDto))]
@@ -136,4 +141,4 @@ namespace Sldl.Server;
 [JsonSerializable(typeof(IReadOnlyList<FileCandidateRefDto>))]
 [JsonSerializable(typeof(IReadOnlyList<string>))]
 [JsonSerializable(typeof(IReadOnlyDictionary<string, bool>))]
-public partial class ServerJsonContext : JsonSerializerContext;
+public partial class SldlApiJsonContext : JsonSerializerContext;

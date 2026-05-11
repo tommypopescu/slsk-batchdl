@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Sldl.Api;
 using Sldl.Server;
 
 namespace Tests.Server;

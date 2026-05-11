@@ -3,9 +3,9 @@ using Sldl.Core.Jobs;
 using Sldl.Core.Models;
 using Sldl.Core.Services;
 using Sldl.Core.Settings;
+using Sldl.Api;
 using Sldl.Server;
 using Soulseek;
-using System.Net.Http.Json;
 
 namespace Sldl.Cli;
 
@@ -56,10 +56,11 @@ internal static partial class Program
                 {
                     try
                     {
-                        using var http = new HttpClient { BaseAddress = RemoteCliBackend.NormalizeServerUrl(remoteSettings.ServerUrl!) };
-                        var profiles = await http.GetFromJsonAsync<IReadOnlyList<ProfileSummaryDto>>("api/profiles", RemoteCliBackend.CreateJsonOptions());
-                        
-                        if (profiles == null || profiles.Count == 0)
+                        using var http = SldlApiClient.CreateHttpClient(remoteSettings.ServerUrl!);
+                        var api = new SldlApiClient(http, RemoteCliBackend.CreateJsonOptions());
+                        var profiles = await api.GetProfilesAsync();
+
+                        if (profiles.Count == 0)
                             Console.WriteLine("No profiles found on remote daemon.");
                         else
                         {

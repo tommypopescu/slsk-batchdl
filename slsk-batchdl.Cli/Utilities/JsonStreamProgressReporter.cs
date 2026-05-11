@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Sldl.Core;
 using Sldl.Core.Jobs;
 using Sldl.Core.Models;
+using Sldl.Api;
 using Sldl.Server;
 
 namespace Sldl.Cli;

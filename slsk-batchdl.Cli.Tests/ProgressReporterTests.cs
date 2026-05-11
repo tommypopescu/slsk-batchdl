@@ -5,6 +5,7 @@ using Sldl.Core;
 using Sldl.Core.Jobs;
 using Sldl.Core.Models;
 using Sldl.Server;
+using Sldl.Api;
 
 namespace Tests.ProgressReporterTests;
 

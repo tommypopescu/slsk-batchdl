@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Sldl.Api;
 using Sldl.Cli;
 using Sldl.Core;
 using Sldl.Core.Settings;
@@ -30,7 +31,7 @@ public class RemoteCliBackendTests
     {
         Assert.AreEqual(
             "http://127.0.0.1:5030/",
-            RemoteCliBackend.NormalizeServerUrl("127.0.0.1").ToString());
+            SldlApiClient.NormalizeServerUrl("127.0.0.1").ToString());
     }
 
     [TestMethod]
@@ -38,7 +39,7 @@ public class RemoteCliBackendTests
     {
         Assert.AreEqual(
             "http://127.0.0.1:6123/",
-            RemoteCliBackend.NormalizeServerUrl("http://127.0.0.1:6123").ToString());
+            SldlApiClient.NormalizeServerUrl("http://127.0.0.1:6123").ToString());
     }
 
     [TestMethod]

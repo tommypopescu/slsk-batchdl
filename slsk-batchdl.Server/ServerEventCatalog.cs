@@ -1,3 +1,5 @@
+using Sldl.Api;
+
 namespace Sldl.Server;
 
 public static class ServerEventCatalog

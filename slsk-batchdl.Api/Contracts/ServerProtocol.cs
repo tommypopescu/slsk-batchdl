@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 /// <summary>
 /// Runtime job kind returned by job and workflow endpoints.

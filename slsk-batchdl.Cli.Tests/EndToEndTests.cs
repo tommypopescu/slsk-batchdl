@@ -5,6 +5,7 @@ using Sldl.Core.Services;
 using Sldl.Core.Settings;
 using Sldl.Cli;
 using Sldl.Server;
+using Sldl.Api;
 
 namespace Tests.EndToEnd;
 

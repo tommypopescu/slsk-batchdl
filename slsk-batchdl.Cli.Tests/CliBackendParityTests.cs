@@ -6,6 +6,7 @@ using Sldl.Core.Settings;
 using Sldl.Server;
 using System.Net;
 using System.Net.Sockets;
+using Sldl.Api;
 
 namespace Tests.Cli;
 

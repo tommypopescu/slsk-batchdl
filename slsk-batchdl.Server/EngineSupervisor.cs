@@ -7,6 +7,7 @@ using Sldl.Core.Models;
 using Sldl.Core.Services;
 using Sldl.Core.Settings;
 using Soulseek;
+using Sldl.Api;
 
 namespace Sldl.Server;
 

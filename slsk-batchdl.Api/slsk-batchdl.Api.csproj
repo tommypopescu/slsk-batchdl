@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Sldl.Api</AssemblyName>
+    <RootNamespace>Sldl.Api</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\slsk-batchdl.Core\slsk-batchdl.Core.csproj" />
+  </ItemGroup>
+
+</Project>

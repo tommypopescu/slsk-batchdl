@@ -1,6 +1,6 @@
 using Sldl.Core;
 
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 /// <summary>
 /// SignalR event envelope. Correct UI state must be reconstructable from HTTP snapshots alone;

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sldl.Core.Jobs;
 using Sldl.Core.Settings;
+using Sldl.Api;
 using Sldl.Server;
 using System.Collections.Concurrent;
 

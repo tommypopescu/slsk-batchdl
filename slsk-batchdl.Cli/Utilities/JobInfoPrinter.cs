@@ -1,3 +1,4 @@
+using Sldl.Api;
 using Sldl.Server;
 using Soulseek;
 

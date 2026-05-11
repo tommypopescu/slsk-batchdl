@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sldl.Core;
 using Sldl.Core.Settings;
+using Sldl.Api;
 using Sldl.Server;
 
 namespace Tests.Server;
@@ -69,13 +70,13 @@ public class OpenApiContractTests
     }
 
     [TestMethod]
-    public void ServerJsonContext_CoversServerDtoContracts()
+    public void SldlApiJsonContext_CoversApiDtoContracts()
     {
-        var dtoTypes = typeof(ServerJsonContext).Assembly
+        var dtoTypes = typeof(SldlApiJsonContext).Assembly
             .GetTypes()
             .Where(type =>
                 type.IsPublic
-                && type.Namespace == typeof(ServerJsonContext).Namespace
+                && type.Namespace == typeof(SldlApiJsonContext).Namespace
                 && type.Name.EndsWith("Dto", StringComparison.Ordinal)
                 && !type.ContainsGenericParameters)
             .OrderBy(type => type.FullName)
@@ -94,21 +95,21 @@ public class OpenApiContractTests
         var missing = dtoTypes
             .Concat(closedGenericDtoTypes)
             .Distinct()
-            .Where(type => !HasServerJsonTypeInfo(type))
+            .Where(type => !HasApiJsonTypeInfo(type))
             .Select(type => type.FullName)
             .ToList();
 
         Assert.AreEqual(
             0,
             missing.Count,
-            "Missing ServerJsonContext metadata for:" + Environment.NewLine + string.Join(Environment.NewLine, missing));
+            "Missing SldlApiJsonContext metadata for:" + Environment.NewLine + string.Join(Environment.NewLine, missing));
     }
 
-    private static bool HasServerJsonTypeInfo(Type type)
+    private static bool HasApiJsonTypeInfo(Type type)
     {
         try
         {
-            return ServerJsonContext.Default.GetTypeInfo(type) != null;
+            return SldlApiJsonContext.Default.GetTypeInfo(type) != null;
         }
         catch (NotSupportedException)
         {

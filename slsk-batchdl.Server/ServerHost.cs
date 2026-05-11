@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Sldl.Api;
 
 namespace Sldl.Server;
 
@@ -29,14 +30,14 @@ public static class ServerHost
         builder.Services.Configure<JsonOptions>(jsonOptions =>
         {
             jsonOptions.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-            jsonOptions.SerializerOptions.TypeInfoResolverChain.Insert(0, ServerJsonContext.Default);
+            SldlApiJson.ConfigureSerializerOptions(jsonOptions.SerializerOptions);
         });
 
         builder.Services.AddSignalR()
             .AddJsonProtocol(jsonOptions =>
             {
                 jsonOptions.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-                jsonOptions.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, ServerJsonContext.Default);
+                SldlApiJson.ConfigureSerializerOptions(jsonOptions.PayloadSerializerOptions);
             });
         builder.Services.AddOpenApi();
         builder.Services.AddSingleton<EngineSupervisor>();

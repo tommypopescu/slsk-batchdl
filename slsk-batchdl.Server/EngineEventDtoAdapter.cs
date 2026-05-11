@@ -2,6 +2,7 @@ using Soulseek;
 using Sldl.Core;
 using Sldl.Core.Jobs;
 using Sldl.Core.Models;
+using Sldl.Api;
 
 namespace Sldl.Server;
 

@@ -7,6 +7,7 @@ using Sldl.Core.Services;
 using Sldl.Core.Settings;
 using Sldl.Server;
 using System.Collections.Concurrent;
+using Sldl.Api;
 
 namespace Tests.Cli;
 

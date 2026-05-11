@@ -2,6 +2,7 @@ using Sldl.Core;
 using Sldl.Core.Jobs;
 using Sldl.Core.Models;
 using Sldl.Core.Services;
+using Sldl.Api;
 using Sldl.Server;
 using Soulseek;
 

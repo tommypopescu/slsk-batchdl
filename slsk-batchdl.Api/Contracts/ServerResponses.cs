@@ -1,4 +1,4 @@
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 /// <summary>
 /// Basic daemon identity.

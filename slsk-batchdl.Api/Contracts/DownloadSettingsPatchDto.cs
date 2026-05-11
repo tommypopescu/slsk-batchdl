@@ -2,7 +2,7 @@ using Sldl.Core;
 using Sldl.Core.Models;
 using Sldl.Core.Settings;
 
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 public sealed record CollectionPatchDto<T>(
     IReadOnlyList<T>? Replace = null,

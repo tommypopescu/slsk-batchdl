@@ -232,6 +232,12 @@
           "AngleSharp": "1.4.0"
         }
       },
+      "Sldl.Api": {
+        "type": "Project",
+        "dependencies": {
+          "Sldl.Core": "[3.0.0-dev, )"
+        }
+      },
       "Sldl.Core": {
         "type": "Project",
         "dependencies": {
@@ -249,6 +255,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.AspNetCore.OpenApi": "[10.0.7, )",
+          "Sldl.Api": "[3.0.0-dev, )",
           "Sldl.Core": "[3.0.0-dev.6, )"
         }
       }

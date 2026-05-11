@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\slsk-batchdl.Api\slsk-batchdl.Api.csproj" />
     <ProjectReference Include="..\slsk-batchdl.Core\slsk-batchdl.Core.csproj" />
   </ItemGroup>
 

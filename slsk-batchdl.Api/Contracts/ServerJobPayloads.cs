@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 /// <summary>
 /// Typed job-specific payload carried by JobDetailDto. Switch on the JSON "kind" discriminator

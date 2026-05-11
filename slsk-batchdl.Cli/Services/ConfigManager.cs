@@ -3,6 +3,7 @@ using Sldl.Core.Models;
 using Sldl.Core.Jobs;
 using Sldl.Core.Services;
 using Sldl.Core.Settings;
+using Sldl.Api;
 using Sldl.Server;
 
 namespace Sldl.Cli;

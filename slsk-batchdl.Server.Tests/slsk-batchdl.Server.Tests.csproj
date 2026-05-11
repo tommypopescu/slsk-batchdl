@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\slsk-batchdl.Api\slsk-batchdl.Api.csproj" />
     <ProjectReference Include="..\\slsk-batchdl.Server\\slsk-batchdl.Server.csproj" />
   </ItemGroup>
 

@@ -25,6 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../slsk-batchdl.Api/slsk-batchdl.Api.csproj" />
     <ProjectReference Include="../slsk-batchdl.Core/slsk-batchdl.Core.csproj" />
     <ProjectReference Include="../slsk-batchdl.Server/slsk-batchdl.Server.csproj" />
   </ItemGroup>
@@ -44,6 +45,7 @@
     <TrimMode>partial</TrimMode>
   </PropertyGroup>
   <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
+    <TrimmerRootAssembly Include="Sldl.Api" />
     <TrimmerRootAssembly Include="Sldl.Core" />
     <TrimmerRootAssembly Include="Sldl.Server" />
     <TrimmerRootAssembly Include="Soulseek" />

@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using Sldl.Core;
 
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 /// <summary>
 /// Starts an extract job from a URL, list path, CSV path, or free-text query.

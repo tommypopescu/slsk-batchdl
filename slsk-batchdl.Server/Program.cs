@@ -1,3 +1,4 @@
+using Sldl.Api;
 using Sldl.Server;
 
 Sldl.Core.Logger.SetupExceptionHandling();

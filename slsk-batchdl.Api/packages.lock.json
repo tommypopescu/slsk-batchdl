@@ -2,15 +2,6 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
-      "Microsoft.AspNetCore.OpenApi": {
-        "type": "Direct",
-        "requested": "[10.0.7, )",
-        "resolved": "10.0.7",
-        "contentHash": "vKiAcGXG0BwNVw3bOjjWRLnp9tR18dR7MiwpvC94h0yFS+zfnzGHzS/JmmgwUdRixrGxrlIMRAWrVc+2DfAGlg==",
-        "dependencies": {
-          "Microsoft.OpenApi": "2.0.0"
-        }
-      },
       "AngleSharp": {
         "type": "Transitive",
         "resolved": "1.4.0",
@@ -63,11 +54,6 @@
         "type": "Transitive",
         "resolved": "1.11.72",
         "contentHash": "RNLgXxTFdIGFI+o5l8c2aJ2L5StIRn9Uv8HKR76p7QP4ZUL26wzpWUCWh08xWUdkL2kocl+Xhv6VUu0rA1npVg=="
-      },
-      "Microsoft.OpenApi": {
-        "type": "Transitive",
-        "resolved": "2.0.0",
-        "contentHash": "GGYLfzV/G/ct80OZ45JxnWP7NvMX1BCugn/lX7TH5o0lcVaviavsLMTxmFV2AybXWjbi3h6FF1vgZiTK6PXndw=="
       },
       "Newtonsoft.Json": {
         "type": "Transitive",
@@ -130,12 +116,6 @@
         "contentHash": "oIJpcxpgSUaPxg73iYj1a0hckbCbOHOrE1OzeCH9lNf6oRjJp2awOyPaWvf1qRm6kYFJ88FktdMeT+lGyNUcvA==",
         "dependencies": {
           "AngleSharp": "1.4.0"
-        }
-      },
-      "Sldl.Api": {
-        "type": "Project",
-        "dependencies": {
-          "Sldl.Core": "[3.0.0-dev, )"
         }
       },
       "Sldl.Core": {

@@ -1,4 +1,4 @@
-namespace Sldl.Server;
+namespace Sldl.Api;
 
 /// <summary>
 /// Song query shape used by search, download, and song payloads.
