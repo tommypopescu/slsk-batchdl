@@ -318,8 +318,9 @@ internal sealed class LocalCliBackend
             throw new ArgumentException("Requested folder was not found in this job's album candidates.");
 
         var retrieveJob = new RetrieveFolderJob(folder) { ItemName = folder.FolderPath, WorkflowId = sourceJob.WorkflowId };
+        stateStore.SetSourceJob(retrieveJob.Id, sourceJobId);
         engine.Enqueue(retrieveJob, sourceJob.Config);
-        return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(retrieveJob.Id) ?? BuildSubmittedJobSummary(retrieveJob));
+        return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(retrieveJob.Id) ?? BuildSubmittedJobSummary(retrieveJob, sourceJobId));
     }
 
     public async Task<int> RetrieveFolderAndWaitAsync(Guid sourceJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
@@ -395,8 +396,9 @@ internal sealed class LocalCliBackend
                 WorkflowId = sourceJob.WorkflowId,
             };
 
+            stateStore.SetSourceJob(followUpSongJob.Id, sourceJobId);
             engine.Enqueue(followUpSongJob, settings);
-            summaries.Add(stateStore.GetJobSummary(followUpSongJob.Id) ?? BuildSubmittedJobSummary(followUpSongJob));
+            summaries.Add(stateStore.GetJobSummary(followUpSongJob.Id) ?? BuildSubmittedJobSummary(followUpSongJob, sourceJobId));
         }
 
         return Task.FromResult<IReadOnlyList<JobSummaryDto>?>(summaries);
@@ -450,8 +452,9 @@ internal sealed class LocalCliBackend
             DownloadBehaviorPolicy = new DownloadBehaviorPolicy(),
         };
 
+        stateStore.SetSourceJob(followUpAlbumJob.Id, sourceJobId);
         engine.Enqueue(followUpAlbumJob, settings);
-        return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(followUpAlbumJob.Id) ?? BuildSubmittedJobSummary(followUpAlbumJob));
+        return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(followUpAlbumJob.Id) ?? BuildSubmittedJobSummary(followUpAlbumJob, sourceJobId));
     }
 
     public Task<bool> CompleteManualSelectionAsync(Guid jobId, CancellationToken ct = default)
@@ -647,7 +650,7 @@ internal sealed class LocalCliBackend
                 string.Equals(candidate.Username, candidateRef.Username, StringComparison.Ordinal)
                 && string.Equals(candidate.Filename, candidateRef.Filename, StringComparison.Ordinal));
 
-    private static JobSummaryDto BuildSubmittedJobSummary(Job job)
+    private static JobSummaryDto BuildSubmittedJobSummary(Job job, Guid? sourceJobId = null)
         => new(
             job.Id,
             job.DisplayId,
@@ -660,7 +663,7 @@ internal sealed class LocalCliBackend
             job.FailureMessage,
             null,
             null,
-            null,
+            sourceJobId,
             job.Discovery?.ResultCount,
             job.Discovery?.LockedFileCount,
             job.Config?.AppliedAutoProfiles?.ToList() ?? [],
