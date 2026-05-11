@@ -24,7 +24,7 @@ public sealed record SubmitSearchJobRequestDto(
 /// <summary>
 /// Starts a track search job. Use result endpoints to inspect candidates and follow-up endpoints
 /// to start downloads from selected candidates. Prefer SongJob/AggregateJob with DownloadBehavior.Manual
-/// when the client is implementing a manual pick-then-download flow. 
+/// when the client is implementing a manual pick-then-download flow.
 /// </summary>
 public sealed record SubmitTrackSearchJobRequestDto(
     SongQueryDto SongQuery,

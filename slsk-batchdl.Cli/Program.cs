@@ -404,140 +404,140 @@ internal static partial class Program
             }
         };
 
-        Guid workflowId = Guid.NewGuid();
-        await backend.SubscribeWorkflowAsync(workflowId, cts.Token);
-
-        var options = BuildRemoteSubmissionOptions(args, cliSettings) with { WorkflowId = workflowId };
-        var request = new SubmitExtractJobRequestDto(
-            rootSettings.Extraction.Input,
-            rootSettings.Extraction.InputType.ToString(),
-            Options: options);
-
-        InteractiveCliCoordinator? interactiveCoordinator = null;
-        JobSummaryDto submission;
-        if (cliSettings.InteractiveMode)
-        {
-            interactiveCoordinator = new InteractiveCliCoordinator(backend, cliSettings, cts.Token);
-            submission = await interactiveCoordinator.StartAsync(request, cts.Token);
-        }
-        else
-        {
-            submission = await backend.SubmitExtractJobAsync(request, cts.Token);
-        }
-
-        ConsoleInputManager.Reporter = cliReporter;
-        ConsoleInputManager.OnCancelRequested = async () =>
-        {
-            lock (Printing.ConsoleLock)
-            {
-                Printing.WriteLine(force: true);
-                Printing.Write("Cancel job ID or current workflow? id/[A]ll/n=Esc: ", ConsoleColor.Yellow, force: true);
-            }
-
-            var result = ConsoleInputManager.ReadCancelPromptResult();
-
-            if (result.Action == ConsoleInputManager.CancelPromptAction.Abort)
-                return;
-
-            if (result.Action == ConsoleInputManager.CancelPromptAction.CancelAll)
-            {
-                Logger.LogNonConsole(Logger.LogLevel.Info, "Cancelling workflow...");
-                Printing.WriteLine("Cancelling workflow...", ConsoleColor.Gray, force: true);
-                await backend.CancelWorkflowAsync(submission.WorkflowId, cts.Token);
-                return;
-            }
-
-            if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId is int id)
-            {
-                if (await backend.CancelJobByDisplayIdAsync(id, submission.WorkflowId, cts.Token))
-                    Logger.Info($"Cancelling job [{id}]...");
-                else
-                    Logger.Error($"Job ID [{id}] not found.");
-            }
-            else
-            {
-                Logger.Error($"Invalid input '{result.Input}'.");
-            }
-        };
-
-        ConsoleInputManager.OnNextCandidateRequested = async () =>
-        {
-            lock (Printing.ConsoleLock)
-            {
-                Printing.WriteLine(force: true);
-                Printing.Write("Try next candidate for job ID or n=Esc: ", ConsoleColor.Yellow, force: true);
-            }
-
-            var result = ConsoleInputManager.ReadCancelPromptResult();
-
-            if (result.Action == ConsoleInputManager.CancelPromptAction.Abort)
-                return;
-
-            if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId is int id)
-            {
-                if (await backend.TryNextCandidateByDisplayIdAsync(id, submission.WorkflowId, cts.Token))
-                    Logger.Info($"Trying next candidate for job [{id}]...");
-                else
-                    Logger.Error($"Job ID [{id}] not found or has no active download.");
-            }
-            else
-            {
-                Logger.Error($"Invalid input '{result.Input}'.");
-            }
-        };
-
-        ConsoleInputManager.OnInfoRequested = async () =>
-        {
-            lock (Printing.ConsoleLock)
-                Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
-            var id = ConsoleInputManager.ReadJobIdInput();
-            if (id == null) return;
-
-            while (true)
-            {
-                int printStart = Console.IsOutputRedirected ? -1 : Console.CursorTop;
-
-                var detail = await backend.GetJobDetailByDisplayIdAsync(id.Value, submission.WorkflowId, cts.Token);
-                if (detail == null)
-                    Logger.Error($"Job ID [{id}] not found.");
-                else
-                    JobInfoPrinter.Print(detail);
-
-                lock (Printing.ConsoleLock)
-                    Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
-
-                var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
-
-                if (result.Action == ConsoleInputManager.CancelPromptAction.Refresh)
-                {
-                    if (printStart >= 0)
-                    {
-                        int pos = Console.CursorTop;
-                        while (pos > printStart && pos > 0)
-                        {
-                            Console.SetCursorPosition(0, pos - 1);
-                            Console.Write(new string(' ', Console.BufferWidth));
-                            Console.SetCursorPosition(0, pos - 1);
-                            pos--;
-                        }
-                        Console.SetCursorPosition(0, printStart);
-                    }
-                }
-                else if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId.HasValue)
-                {
-                    id = result.JobId.Value;
-                }
-                else
-                {
-                    return;
-                }
-            }
-        };
-
-        _ = Task.Run(() => ConsoleInputManager.RunLoopAsync(cts.Token), cts.Token);
-
         try
         {
+            Guid workflowId = Guid.NewGuid();
+            await backend.SubscribeWorkflowAsync(workflowId, cts.Token);
+
+            var options = BuildRemoteSubmissionOptions(args, cliSettings) with { WorkflowId = workflowId };
+            var request = new SubmitExtractJobRequestDto(
+                rootSettings.Extraction.Input,
+                rootSettings.Extraction.InputType.ToString(),
+                Options: options);
+
+            InteractiveCliCoordinator? interactiveCoordinator = null;
+            JobSummaryDto submission;
+            if (cliSettings.InteractiveMode)
+            {
+                interactiveCoordinator = new InteractiveCliCoordinator(backend, cliSettings, cts.Token);
+                submission = await interactiveCoordinator.StartAsync(request, cts.Token);
+            }
+            else
+            {
+                submission = await backend.SubmitExtractJobAsync(request, cts.Token);
+            }
+
+            ConsoleInputManager.Reporter = cliReporter;
+            ConsoleInputManager.OnCancelRequested = async () =>
+            {
+                lock (Printing.ConsoleLock)
+                {
+                    Printing.WriteLine(force: true);
+                    Printing.Write("Cancel job ID or current workflow? id/[A]ll/n=Esc: ", ConsoleColor.Yellow, force: true);
+                }
+
+                var result = ConsoleInputManager.ReadCancelPromptResult();
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.Abort)
+                    return;
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.CancelAll)
+                {
+                    Logger.LogNonConsole(Logger.LogLevel.Info, "Cancelling workflow...");
+                    Printing.WriteLine("Cancelling workflow...", ConsoleColor.Gray, force: true);
+                    await backend.CancelWorkflowAsync(submission.WorkflowId, cts.Token);
+                    return;
+                }
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId is int id)
+                {
+                    if (await backend.CancelJobByDisplayIdAsync(id, submission.WorkflowId, cts.Token))
+                        Logger.Info($"Cancelling job [{id}]...");
+                    else
+                        Logger.Error($"Job ID [{id}] not found.");
+                }
+                else
+                {
+                    Logger.Error($"Invalid input '{result.Input}'.");
+                }
+            };
+
+            ConsoleInputManager.OnNextCandidateRequested = async () =>
+            {
+                lock (Printing.ConsoleLock)
+                {
+                    Printing.WriteLine(force: true);
+                    Printing.Write("Try next candidate for job ID or n=Esc: ", ConsoleColor.Yellow, force: true);
+                }
+
+                var result = ConsoleInputManager.ReadCancelPromptResult();
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.Abort)
+                    return;
+
+                if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId is int id)
+                {
+                    if (await backend.TryNextCandidateByDisplayIdAsync(id, submission.WorkflowId, cts.Token))
+                        Logger.Info($"Trying next candidate for job [{id}]...");
+                    else
+                        Logger.Error($"Job ID [{id}] not found or has no active download.");
+                }
+                else
+                {
+                    Logger.Error($"Invalid input '{result.Input}'.");
+                }
+            };
+
+            ConsoleInputManager.OnInfoRequested = async () =>
+            {
+                lock (Printing.ConsoleLock)
+                    Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
+                var id = ConsoleInputManager.ReadJobIdInput();
+                if (id == null) return;
+
+                while (true)
+                {
+                    int printStart = Console.IsOutputRedirected ? -1 : Console.CursorTop;
+
+                    var detail = await backend.GetJobDetailByDisplayIdAsync(id.Value, submission.WorkflowId, cts.Token);
+                    if (detail == null)
+                        Logger.Error($"Job ID [{id}] not found.");
+                    else
+                        JobInfoPrinter.Print(detail);
+
+                    lock (Printing.ConsoleLock)
+                        Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
+
+                    var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
+
+                    if (result.Action == ConsoleInputManager.CancelPromptAction.Refresh)
+                    {
+                        if (printStart >= 0)
+                        {
+                            int pos = Console.CursorTop;
+                            while (pos > printStart && pos > 0)
+                            {
+                                Console.SetCursorPosition(0, pos - 1);
+                                Console.Write(new string(' ', Console.BufferWidth));
+                                Console.SetCursorPosition(0, pos - 1);
+                                pos--;
+                            }
+                            Console.SetCursorPosition(0, printStart);
+                        }
+                    }
+                    else if (result.Action == ConsoleInputManager.CancelPromptAction.CancelJob && result.JobId.HasValue)
+                    {
+                        id = result.JobId.Value;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+            };
+
+            _ = Task.Run(() => ConsoleInputManager.RunLoopAsync(cts.Token), cts.Token);
+
             if (interactiveCoordinator != null)
                 await interactiveCoordinator.RunUntilCompleteAsync(submission.WorkflowId, cts.Token);
             else
@@ -556,6 +556,13 @@ internal static partial class Program
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (cliReporter != null)
+                cliReporter.ReportClientError(ex.Message);
+            else
+                Logger.Fatal(ex.Message);
         }
         finally
         {

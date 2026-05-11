@@ -98,6 +98,19 @@ public class CliProgressReporter
         }
     }
 
+    public void ReportClientError(string message)
+    {
+        if (LiveMode)
+        {
+            _live!.Log(new TerminalLogLine(TerminalLogKind.JobFailed, Guid.Empty.ToString(), 0, "Remote", message));
+            Logger.LogNonConsole(Logger.LogLevel.Error, message);
+        }
+        else
+        {
+            Logger.Error(message);
+        }
+    }
+
     internal void Attach(ICliBackend backend)
     {
         backend.EventReceived += envelope =>
