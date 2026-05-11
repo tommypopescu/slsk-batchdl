@@ -11,6 +11,12 @@
           "Microsoft.OpenApi": "2.0.0"
         }
       },
+      "Microsoft.Extensions.ApiDescription.Server": {
+        "type": "Direct",
+        "requested": "[10.0.7, )",
+        "resolved": "10.0.7",
+        "contentHash": "VBNJzdInUkjhL/Habj16j3kMHIccjjuWg2zILcapH2QDq5GJF4bfQzJvt2gynuT98PkTpLUvPAsPeefKBDT/mg=="
+      },
       "AngleSharp": {
         "type": "Transitive",
         "resolved": "1.4.0",
@@ -135,7 +141,7 @@
       "Sldl.Api": {
         "type": "Project",
         "dependencies": {
-          "Sldl.Core": "[3.0.0-dev, )"
+          "Sldl.Core": "[3.0.0-dev.10, )"
         }
       },
       "Sldl.Core": {
