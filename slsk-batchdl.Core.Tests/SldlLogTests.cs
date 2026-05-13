@@ -30,6 +30,38 @@ public class SldlLogTests
     }
 
     [TestMethod]
+    public void NonConsoleLogs_IncludeExplicitCategoryAndLevel()
+    {
+        var sinkMessages = new List<string>();
+        SldlLog.AddSink((_, message) => sinkMessages.Add(message), LogLevel.Debug, prependLogLevel: true);
+
+        SldlLog.Info("cli message", categoryName: SldlLog.Categories.Cli);
+        SldlLog.Debug("core message", callerFilePath: "/repo/slsk-batchdl.Core/DownloadEngine.cs");
+        SldlLog.Warn("daemon message", callerFilePath: "/repo/slsk-batchdl.Server/ServerHost.cs");
+
+        CollectionAssert.AreEqual(new[]
+        {
+            "[info] [sldl.cli] cli message",
+            "[debug] [sldl.core] core message",
+            "[warn] [sldl.daemon] daemon message",
+        }, sinkMessages);
+    }
+
+    [TestMethod]
+    public void ConsoleLogs_OmitCategoryForCliRendering()
+    {
+        var consoleMessages = new List<string>();
+        SldlLog.AddConsole(prependLogLevel: true, writer: (message, _) => consoleMessages.Add(message));
+
+        SldlLog.Info("plain output", categoryName: SldlLog.Categories.Cli);
+
+        CollectionAssert.AreEqual(new[]
+        {
+            "[info] plain output",
+        }, consoleMessages);
+    }
+
+    [TestMethod]
     public async Task FileLogging_AllowsConcurrentWritesToSameLogFile()
     {
         var logPath = Path.Combine(Path.GetTempPath(), "sldl-logger-concurrent-" + Guid.NewGuid() + ".log");

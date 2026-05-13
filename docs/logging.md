@@ -19,6 +19,9 @@ directly to `Console`.
 - Server/daemon owns HTTP hosting logs and systemd-friendly stdout output.
   `CoreLoggerBridge` routes core/server log events to daemon stdout with
   timestamp, level, and category.
+- CLI code that starts daemon lifecycle output should pass the explicit
+  `SldlLog.Categories.Daemon` category even though the call originates from
+  the CLI assembly.
 
 ## Categories
 

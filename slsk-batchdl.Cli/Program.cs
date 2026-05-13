@@ -1005,8 +1005,8 @@ internal static partial class Program
         };
 
         var app = ServerHost.Build(args, options, url);
-        SldlLog.Info($"Starting sldl daemon on {url}");
-        SldlLog.Info("Press Ctrl+C to stop.");
+        SldlLog.Info($"Starting sldl daemon on {url}", categoryName: SldlLog.Categories.Daemon);
+        SldlLog.Info("Press Ctrl+C to stop.", categoryName: SldlLog.Categories.Daemon);
         await app.RunAsync();
     }
 

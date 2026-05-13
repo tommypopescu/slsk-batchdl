@@ -5,6 +5,16 @@ namespace Sldl.Core;
 
 public static class SldlLog
 {
+    public static class Categories
+    {
+        public const string Cli = "sldl.cli";
+        public const string Core = "sldl.core";
+        public const string Daemon = "sldl.daemon";
+        public const string CliTests = "sldl.tests.cli";
+        public const string CoreTests = "sldl.tests.core";
+        public const string DaemonTests = "sldl.tests.daemon";
+    }
+
     private static readonly object Sync = new();
     private static readonly List<RoutingLoggerProvider> Providers = new();
     private static ILoggerFactory Factory = BuildFactory();
@@ -39,7 +49,6 @@ public static class SldlLog
         });
 
         AddProvider(new RoutingLoggerProvider(
-            "cli",
             minimumLevel,
             includeConsole: true,
             includeFile: false,
@@ -55,7 +64,6 @@ public static class SldlLog
         bool prependLogLevel = false)
     {
         AddProvider(new RoutingLoggerProvider(
-            "sink",
             minimumLevel,
             includeConsole: false,
             includeFile: false,
@@ -78,7 +86,6 @@ public static class SldlLog
         {
             Providers.RemoveAll(provider => provider.IsFileOutput);
             Providers.Add(new RoutingLoggerProvider(
-                "file",
                 minimumLevel,
                 includeConsole: false,
                 includeFile: true,
@@ -125,18 +132,18 @@ public static class SldlLog
         }
     }
 
-    public static void LogNonConsole(LogLevel level, string message, [CallerFilePath] string callerFilePath = "")
-        => Log(level, message, consoleOnly: false, nonConsoleOnly: true, callerFilePath: callerFilePath);
+    public static void LogNonConsole(LogLevel level, string message, string? categoryName = null, [CallerFilePath] string callerFilePath = "")
+        => Log(level, message, consoleOnly: false, nonConsoleOnly: true, categoryName: categoryName, callerFilePath: callerFilePath);
 
-    public static void LogConsoleOnly(LogLevel level, string message, ConsoleColor? color = null, [CallerFilePath] string callerFilePath = "")
-        => Log(level, message, color, consoleOnly: true, nonConsoleOnly: false, callerFilePath: callerFilePath);
+    public static void LogConsoleOnly(LogLevel level, string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "")
+        => Log(level, message, color, consoleOnly: true, nonConsoleOnly: false, categoryName: categoryName, callerFilePath: callerFilePath);
 
-    public static void Trace(string message, ConsoleColor? color = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Trace, message, color, callerFilePath: callerFilePath);
-    public static void Debug(string message, ConsoleColor? color = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Debug, message, color, callerFilePath: callerFilePath);
-    public static void Info(string message, ConsoleColor? color = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Information, message, color, callerFilePath: callerFilePath);
-    public static void Warn(string message, ConsoleColor? color = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Warning, message, color, callerFilePath: callerFilePath);
-    public static void Error(string message, ConsoleColor? color = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Error, message, color, callerFilePath: callerFilePath);
-    public static void Fatal(string message, ConsoleColor? color = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Critical, message, color, callerFilePath: callerFilePath);
+    public static void Trace(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Trace, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
+    public static void Debug(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Debug, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
+    public static void Info(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Information, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
+    public static void Warn(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Warning, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
+    public static void Error(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Error, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
+    public static void Fatal(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Critical, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
 
     private static void NonConsoleCritical(Exception exception, string message)
     {
@@ -156,9 +163,10 @@ public static class SldlLog
         ConsoleColor? color = null,
         bool consoleOnly = false,
         bool nonConsoleOnly = false,
+        string? categoryName = null,
         string callerFilePath = "")
     {
-        var categoryName = CategoryFor(callerFilePath);
+        categoryName ??= CategoryFor(callerFilePath);
         foreach (var provider in SnapshotProviders())
         {
             if (consoleOnly && !provider.IsConsoleOutput) continue;
@@ -170,12 +178,12 @@ public static class SldlLog
     private static string CategoryFor(string callerFilePath)
     {
         var normalized = callerFilePath.Replace('\\', '/');
-        if (normalized.Contains("slsk-batchdl.Cli.Tests/", StringComparison.Ordinal)) return "sldl.tests.cli";
-        if (normalized.Contains("slsk-batchdl.Server.Tests/", StringComparison.Ordinal)) return "sldl.tests.daemon";
-        if (normalized.Contains("slsk-batchdl.Core.Tests/", StringComparison.Ordinal)) return "sldl.tests.core";
-        if (normalized.Contains("slsk-batchdl.Cli/", StringComparison.Ordinal)) return "sldl.cli";
-        if (normalized.Contains("slsk-batchdl.Server/", StringComparison.Ordinal)) return "sldl.daemon";
-        return "sldl.core";
+        if (normalized.Contains("slsk-batchdl.Cli.Tests/", StringComparison.Ordinal)) return Categories.CliTests;
+        if (normalized.Contains("slsk-batchdl.Server.Tests/", StringComparison.Ordinal)) return Categories.DaemonTests;
+        if (normalized.Contains("slsk-batchdl.Core.Tests/", StringComparison.Ordinal)) return Categories.CoreTests;
+        if (normalized.Contains("slsk-batchdl.Cli/", StringComparison.Ordinal)) return Categories.Cli;
+        if (normalized.Contains("slsk-batchdl.Server/", StringComparison.Ordinal)) return Categories.Daemon;
+        return Categories.Core;
     }
 
     private static void AddProvider(RoutingLoggerProvider provider)
@@ -238,13 +246,11 @@ public static class SldlLog
 
     private sealed class RoutingLoggerProvider : ILoggerProvider
     {
-        private readonly string _name;
         private readonly bool _prependDate;
         private readonly bool _prependLogLevel;
         private readonly Action<LogLevel, string, ConsoleColor?> _write;
 
         public RoutingLoggerProvider(
-            string name,
             LogLevel minimumLevel,
             bool includeConsole,
             bool includeFile,
@@ -252,7 +258,6 @@ public static class SldlLog
             bool prependLogLevel,
             Action<LogLevel, string, ConsoleColor?> write)
         {
-            _name = name;
             MinimumLevel = minimumLevel;
             IsConsoleOutput = includeConsole;
             IsFileOutput = includeFile;

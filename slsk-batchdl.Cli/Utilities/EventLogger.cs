@@ -7,6 +7,40 @@ namespace Sldl.Cli;
 
 internal sealed class EventLogger
 {
+    internal static class EventTypes
+    {
+        public const string JobUpserted = "job.upserted";
+        public const string AlbumDownloadStarted = "album.download-started";
+        public const string AlbumTrackDownloadStarted = "album.track-download-started";
+        public const string AlbumDownloadCompleted = "album.download-completed";
+        public const string DownloadStarted = "download.started";
+        public const string OnCompleteStarted = "on-complete.started";
+        public const string OnCompleteEnded = "on-complete.ended";
+        public const string SongStateChanged = "song.state-changed";
+        public const string ExtractionStarted = "extraction.started";
+        public const string ExtractionFailed = "extraction.failed";
+        public const string JobStarted = "job.started";
+        public const string JobFolderRetrieving = "job.folder-retrieving";
+        public const string SongSearching = "song.searching";
+    }
+
+    internal static readonly IReadOnlySet<string> HandledEventTypes = new HashSet<string>(StringComparer.Ordinal)
+    {
+        EventTypes.JobUpserted,
+        EventTypes.AlbumDownloadStarted,
+        EventTypes.AlbumTrackDownloadStarted,
+        EventTypes.AlbumDownloadCompleted,
+        EventTypes.DownloadStarted,
+        EventTypes.OnCompleteStarted,
+        EventTypes.OnCompleteEnded,
+        EventTypes.SongStateChanged,
+        EventTypes.ExtractionStarted,
+        EventTypes.ExtractionFailed,
+        EventTypes.JobStarted,
+        EventTypes.JobFolderRetrieving,
+        EventTypes.SongSearching,
+    };
+
     private readonly ICliBackend _backend;
     private readonly bool _liveMode;
 
@@ -29,43 +63,43 @@ internal sealed class EventLogger
     {
         switch (envelope.Type)
         {
-            case "job.upserted":
+            case EventTypes.JobUpserted:
                 HandleJobUpserted((JobSummaryDto)envelope.Payload);
                 break;
-            case "album.download-started":
+            case EventTypes.AlbumDownloadStarted:
                 HandleAlbumDownloadStarted((AlbumDownloadStartedEventDto)envelope.Payload);
                 break;
-            case "album.track-download-started":
+            case EventTypes.AlbumTrackDownloadStarted:
                 HandleAlbumTrackDownloadStarted((AlbumTrackDownloadStartedEventDto)envelope.Payload);
                 break;
-            case "album.download-completed":
+            case EventTypes.AlbumDownloadCompleted:
                 HandleAlbumDownloadCompleted((AlbumDownloadCompletedEventDto)envelope.Payload);
                 break;
-            case "download.start":
+            case EventTypes.DownloadStarted:
                 HandleDownloadStart((DownloadStartedEventDto)envelope.Payload);
                 break;
-            case "on-complete.start":
+            case EventTypes.OnCompleteStarted:
                 HandleOnCompleteStart((OnCompleteStartedEventDto)envelope.Payload);
                 break;
-            case "on-complete.end":
+            case EventTypes.OnCompleteEnded:
                 HandleOnCompleteEnd((OnCompleteEndedEventDto)envelope.Payload);
                 break;
-            case "song.state-changed":
+            case EventTypes.SongStateChanged:
                 HandleSongStateChanged((SongStateChangedEventDto)envelope.Payload);
                 break;
-            case "extract.start":
+            case EventTypes.ExtractionStarted:
                 HandleExtractionStart((ExtractionStartedEventDto)envelope.Payload);
                 break;
-            case "extract.failed":
+            case EventTypes.ExtractionFailed:
                 HandleExtractionFailed((ExtractionFailedEventDto)envelope.Payload);
                 break;
-            case "job.started":
+            case EventTypes.JobStarted:
                 HandleJobStarted((JobStartedEventDto)envelope.Payload);
                 break;
-            case "job.folder-retrieving":
+            case EventTypes.JobFolderRetrieving:
                 HandleJobFolderRetrieving((JobFolderRetrievingEventDto)envelope.Payload);
                 break;
-            case "song.searching":
+            case EventTypes.SongSearching:
                 HandleSongSearching((SongSearchingEventDto)envelope.Payload);
                 break;
         }
