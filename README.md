@@ -27,7 +27,8 @@ A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 
 ## Important
 > [!NOTE]
-> `sldl` doesn't share your music folders by itself. To keep the Soulseek network healthy over the long term, please also share your collection using a regular client like [Nicotine+](https://github.com/nicotine-plus/nicotine-plus) or [slskd](https://github.com/slskd/slskd). 
+> `sldl` doesn't share your music folders by itself. To keep the Soulseek network healthy over the long term, please also share your collection using a regular client like [Nicotine+](https://github.com/nicotine-plus/nicotine-plus) or [slskd](https://github.com/slskd/slskd).
+> Sharing and other client features will be available in future versions of sldl (see [Daemon / remote mode / API](#daemon--remote-mode)).
 
 > [!NOTE]
 > Because it's not possible to run the same account on two separate clients simultaneously, it is recommended to use `sldl` with a **separate Soulseek account** to avoid connection problems.
