@@ -16,7 +16,7 @@ A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 
 ## Setup
 
-1. Head to the [releases](https://github.com/fiso64/Sockseek/releases) page and get an appropriate release for your system.
+1. Head to the [releases](https://github.com/fiso64/sockseek/releases) page and get an appropriate release for your system.
 2. Put your soulseek username and password in the [configuration file](#configuration).
 3. Try it:
     ```bash
@@ -62,7 +62,7 @@ A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 
 
 ## Options
-<!-- Sockseek-help:start(main) -->
+<!-- sockseek-help:start(main) -->
 #### Required Arguments
 ```
 <input>                         A url, search string, Soulseek link, or path to a local
@@ -300,9 +300,9 @@ sockseek daemon                 Start the HTTP/SignalR daemon instead of running
 - Flags can be explicitly disabled by setting them to false, e.g. `--interactive false`.
 - Single-character flags can be combined, e.g. `-at` for `-a -t`.
 - Acronyms of two- and `--three-word-flags` like `--twf` are also accepted. E.g. `--Mbr` for `--max-bitrate`.
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(input) -->
+<!-- sockseek-help:start(input) -->
 ## Input types
 The input type is usually determined automatically. You can also manually set it with `--input-type`.  
 The following input types are available:
@@ -387,9 +387,9 @@ a:"Another Album"               strict-album=true
 ```
 The inputs can be any of the above input types, including links. The conditions are added on top of the
 configured conditions and can be omitted. 
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(download-modes) -->
+<!-- sockseek-help:start(download-modes) -->
 ## Download modes
 ### Normal
 The default for playlists. Downloads a single file for every input entry.
@@ -412,9 +412,9 @@ download one of each distinct album, starting with the one shared by the most us
 that `--min-shares-aggregate` is 2 by default, meaning that albums shared by only one user
 will be ignored. Album-aggregate mode can be used to download the most popular (or all) albums
 by an artist. It is recommended to pair it with `--interactive`. See [Example](#download-all-albums-by-an-artist-interactively) for more details.
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(daemon) -->
+<!-- sockseek-help:start(daemon) -->
 ## Daemon / remote mode
 Daemon mode is the first step toward running Sockseek as a persistent Soulseek client rather than a one-shot downloader. 
 Right now it exposes the download engine for remote CLI use; future releases may expand it with long-running client features such as sharing.
@@ -430,9 +430,9 @@ sockseek "Artist - Title" --remote http://127.0.0.1:5030
 ```
 
 For HTTP API, SignalR, and client integration notes, see [docs/api.md](docs/api.md).
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(config) -->
+<!-- sockseek-help:start(config) -->
 ## Configuration
 ### Config Location
 Sockseek will look for a file named sockseek.conf in the following locations:
@@ -486,9 +486,9 @@ interactive       (bool)
 progress-json     (bool)
 no-progress       (bool)
 ```
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(file-conditions) -->
+<!-- sockseek-help:start(file-conditions) -->
 ## File conditions
 Files not satisfying the required conditions will be ignored. Files satisfying pref-conditions
 will be preferred: With `--pref-format flac,wav`, Sockseek will try to download lossless files if
@@ -534,9 +534,9 @@ certain clients. For example, because the standard Soulseek client does not broa
 enabling `--strict-conditions` and setting a `--min-bitrate` will make Sockseek ignore all files
 shared by users with the standard client. Even without a required min-bitrate, all those shares
 will be ranked at the bottom due to the default pref- bitrate checks.
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(name-format) -->
+<!-- sockseek-help:start(name-format) -->
 ## Name format
 Variables enclosed in {} will be replaced by the corresponding file tag value.
 Name format supports subdirectories as well as conditional expressions like {tag1|tag2} - If
@@ -599,9 +599,9 @@ path                           Download file path (or folder if album)
 path-noext                     Download file path without extension
 ext                            File extension
 ```
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(on-complete) -->
+<!-- sockseek-help:start(on-complete) -->
 ## On-Complete Actions
 The `--on-complete` parameter allows executing commands after a track or album is downloaded. Multiple actions can be chained using the `+ ` prefix (note the space after +).
 
@@ -655,9 +655,9 @@ on-complete = + 1:h:r: cmd /c if {stdout}==true (ffmpeg -i "{path}" -q:a 0 "{pat
 # Delete original and update index if conversion succeeded
 on-complete = + 1:h:u: cmd /c if {stdout}==success (del "{path}" & echo "1;{path-noext}.mp3")
 ```
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
-<!-- Sockseek-help:start(shortcuts) -->
+<!-- sockseek-help:start(shortcuts) -->
 ## Shortcuts & interactive mode
 ### CLI Shortcuts
 ```
@@ -686,7 +686,7 @@ f:query         filter folders containing files matching query
 cd ..           load parent folder
 cd subdir       go to subfolder
 ```
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
 ## Examples
 
@@ -753,7 +753,7 @@ Now you can manually run, or set up a cron job / scheduled task to periodically 
 sockseek --profile wishlist
 ```
 
-<!-- Sockseek-help:start(notes-and-tips) -->
+<!-- sockseek-help:start(notes-and-tips) -->
 ## Notes
 - **Soulseek's rate limits**: The server bans users for 30 minutes if too many searches are performed within a short timespan. Sockseek has a search limiter which can be adjusted with `--searches-per-time` and `--searches-renew-time` (when the limit is reached, the status of the downloads will be 'Waiting'). By default it is configured to allow up to 34 searches every 220 seconds.
 
@@ -798,7 +798,7 @@ sockseek "Artist - Album" -at --mock-files-dir /path/to/dir
 ```
 If you plan to use a large music library, you may want to add `--mock-files-no-read-tags` to improve the initial loading performance. But note that reading tags is required when filtering by metadata such as length or bitrate.
 
-<!-- Sockseek-help:end -->
+<!-- sockseek-help:end -->
 
 ## Docker
 
@@ -807,7 +807,7 @@ A docker container for running Sockseek can be built from this repository. The i
 To build and start container:
 
 ```shell
-clone https://github.com/fiso64/Sockseek
+clone https://github.com/fiso64/sockseek
 cd Sockseek
 docker compose up -d
 ```

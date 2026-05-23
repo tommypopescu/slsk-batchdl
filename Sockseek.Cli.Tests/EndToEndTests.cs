@@ -86,7 +86,7 @@ public class CliEndToEndTests
         File.WriteAllBytes(Path.Combine(albumOneDir, "01. Artist One - Track One.mp3"), [1, 2, 3]);
         File.WriteAllBytes(Path.Combine(albumTwoDir, "01. Artist Two - Track Two.mp3"), [4, 5, 6]);
         File.WriteAllText(listPath,
-            "a:\"Artist One - Album One\"" + Environment.NewLine +
+            "a:\"Artist One - Album One\"" + "\n" +
             "a:\"Artist Two - Album Two\"");
 
         try

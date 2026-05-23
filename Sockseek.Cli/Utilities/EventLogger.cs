@@ -253,7 +253,7 @@ internal sealed class EventLogger
 
         string line = $"[{song.DisplayId}] {prefix}{label}: {detail}";
         if (!string.IsNullOrEmpty(song.FailureMessage))
-            line += Environment.NewLine + $"    Error: {song.FailureMessage}";
+            line += "\n" + $"    Error: {song.FailureMessage}";
 
         Log(song.JobId, line, ephemeral: !IsTerminalJobState(song.State));
     }
@@ -374,7 +374,7 @@ internal sealed class EventLogger
         }
 
         if (!string.IsNullOrEmpty(summary.FailureMessage))
-            line += Environment.NewLine + $"    Error: {summary.FailureMessage}";
+            line += "\n" + $"    Error: {summary.FailureMessage}";
         return line;
     }
 

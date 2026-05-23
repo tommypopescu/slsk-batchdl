@@ -24,7 +24,7 @@ return 0;
 static Dictionary<string, string> ExtractHelpTopics(string markdown)
 {
     var topics = new Dictionary<string, string>();
-    var matches = Regex.Matches(markdown, @"<!-- Sockseek-help:start\((.*?)\) -->(.*?)<!-- Sockseek-help:end -->", RegexOptions.Singleline);
+    var matches = Regex.Matches(markdown, @"<!-- sockseek-help:start\((.*?)\) -->(.*?)<!-- sockseek-help:end -->", RegexOptions.Singleline);
 
     foreach (Match match in matches)
     {

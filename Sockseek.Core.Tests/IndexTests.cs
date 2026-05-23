@@ -126,7 +126,7 @@ namespace Tests.Index
 
             var lines = File.ReadAllLines(testM3uPath);
             Assert.IsTrue(lines.Any(line => line.StartsWith("./nested/song.mp3,")),
-                string.Join(Environment.NewLine, lines));
+                string.Join("\n", lines));
             Assert.IsFalse(lines.Any(line => line.StartsWith(@".\nested\song.mp3,")),
                 "Index paths should use forward slashes even on Windows.");
         }

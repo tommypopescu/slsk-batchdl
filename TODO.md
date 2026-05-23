@@ -1,5 +1,7 @@
 ## TODO
 
+### 3.0
+
 - Add {outputdir} and {configdir} variable. {configdir} resolves to the parent of the currently used config file location.
     - Should work everywhere (input/config paths resolution, on-complete, name-format)
 
@@ -20,6 +22,8 @@
 - Logging is scattered & inconsistent. Centralize and make it more defined.
     - Consider storing errors on the job objects and DTOs
     - or even full per-job logs?
+
+### Later
 
 - Add `q` to quit. When any jobs are running or pending, prompt if should cancel [Y/n/Esc]. In local mode, n=Esc="do not cancel, keep running". In remote mode, n="exit without cancelling workflow remotely" and Esc="cancel prompt, keep running" (the prompt should be different depending on if local or remote mode for clarity).
 

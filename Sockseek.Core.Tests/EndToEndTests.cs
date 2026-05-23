@@ -208,7 +208,7 @@ namespace Tests.EndToEnd
                 Assert.AreEqual("filepath,artist,album,title,length,tracktype,state,failurereason", lines[0]);
                 var normalizedLines = lines.Select(line => line.Replace('\\', '/')).ToList();
                 Assert.IsTrue(normalizedLines.Any(line => line.StartsWith("./Renamed/Test Artist - Test Title.mp3,Test Artist,,Test Title,")
-                    && line.EndsWith(",0,1,0")), string.Join(Environment.NewLine, lines));
+                    && line.EndsWith(",0,1,0")), string.Join("\n", lines));
             }
             finally
             {
@@ -259,7 +259,7 @@ namespace Tests.EndToEnd
                 Assert.AreEqual("filepath,artist,album,title,length,tracktype,state,failurereason", lines[0]);
                 var normalizedLines = lines.Select(line => line.Replace('\\', '/')).ToList();
                 Assert.IsTrue(normalizedLines.Any(line => line == "./Renamed/Test Album,Test Artist,Test Album,,-1,1,1,0"),
-                    string.Join(Environment.NewLine, lines));
+                    string.Join("\n", lines));
                 Assert.IsFalse(lines.Any(line => line.Contains("First.mp3") || line.Contains("Second.mp3")),
                     "Album child songs should not be written as index entries.");
             }
@@ -299,7 +299,7 @@ namespace Tests.EndToEnd
 
                 var lines = File.ReadAllLines(settings.Output.IndexFilePath);
                 Assert.IsTrue(lines.Any(line => line == ",Test Artist,,Test Title,-1,0,2,4"),
-                    string.Join(Environment.NewLine, lines));
+                    string.Join("\n", lines));
             }
             finally
             {
@@ -374,7 +374,7 @@ namespace Tests.EndToEnd
 
                 var lines = File.ReadAllLines(settings.Output.IndexFilePath);
                 Assert.IsTrue(lines.Any(line => line == ",Test Artist,Test Album,,-1,1,2,4"),
-                    string.Join(Environment.NewLine, lines));
+                    string.Join("\n", lines));
                 Assert.IsFalse(lines.Any(line => line.Contains(failedDir) || line.Contains("First.mp3")),
                     "Failed album index entry should record only album failure, not failed-album-path or child files.");
             }

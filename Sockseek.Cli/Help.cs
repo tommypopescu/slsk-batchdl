@@ -45,7 +45,7 @@ public static partial class Help
         {
             Console.WriteLine(usageText.Trim());
             Console.WriteLine();
-            Console.WriteLine("Type Sockseek --help to see a list of all options.");
+            Console.WriteLine("Type sockseek --help to see a list of all options.");
             return true;
         }
 

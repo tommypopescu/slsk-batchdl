@@ -70,7 +70,7 @@ public class CliProgressReporterTests
         Assert.AreEqual("OnComplete start: [9] Artist - Song", messages[1]);
         Assert.AreEqual("OnComplete end: [9] Artist - Song", messages[2]);
         Assert.AreEqual("[11] ExtractJob: Input (List): input.txt", messages[3]);
-        Assert.AreEqual($"[11] ExtractJob: Failed: input.txt{Environment.NewLine}  Reason:    Could not parse input", messages[4]);
+        Assert.AreEqual($"[11] ExtractJob: Failed: input.txt\n  Reason:    Could not parse input", messages[4]);
     }
 
     [TestMethod]
@@ -277,7 +277,7 @@ public class CliProgressReporterTests
  
             CollectionAssert.AreEqual(new[]
             {
-                $"[12] SongJob: failed [All downloads failed]: Artist - Song: user\\Music\\Artist\\Song.flac{Environment.NewLine}    Error: Connection reset by peer",
+                $"[12] SongJob: failed [All downloads failed]: Artist - Song: user\\Music\\Artist\\Song.flac\n    Error: Connection reset by peer",
             }, messages);
         }
         finally

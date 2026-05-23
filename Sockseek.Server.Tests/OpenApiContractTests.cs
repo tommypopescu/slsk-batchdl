@@ -109,7 +109,7 @@ public class OpenApiContractTests
         Assert.AreEqual(
             0,
             missing.Count,
-            "Missing SockseekApiJsonContext metadata for:" + Environment.NewLine + string.Join(Environment.NewLine, missing));
+            "Missing SockseekApiJsonContext metadata for:" + "\n" + string.Join("\n", missing));
     }
 
     private static bool HasApiJsonTypeInfo(Type type)

@@ -74,7 +74,7 @@ namespace Sockseek.Core.Extractors;
         public MusicBrainzClient()
         {
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Sockseek/1.0 ( https://github.com/fiso64/Sockseek )");
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Sockseek/1.0 ( https://github.com/fiso64/sockseek )");
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
 
