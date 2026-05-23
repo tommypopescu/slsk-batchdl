@@ -1,4 +1,4 @@
-# sldl
+# Sockseek
 
 A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 
@@ -16,22 +16,22 @@ A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 
 ## Setup
 
-1. Head to the [releases](https://github.com/fiso64/slsk-batchdl/releases) page and get an appropriate release for your system.
+1. Head to the [releases](https://github.com/fiso64/Sockseek/releases) page and get an appropriate release for your system.
 2. Put your soulseek username and password in the [configuration file](#configuration).
 3. Try it:
     ```bash
-    sldl "Artist - Your Favorite Album" -at
+    sockseek "Artist - Your Favorite Album" -at
     ```
     This will search for the album and show an interactive UI for result selection.  
     For more examples, see the [usage examples section](#examples-2).
 
 ## Important
 > [!NOTE]
-> `sldl` doesn't share your music folders by itself. To keep the Soulseek network healthy over the long term, please also share your collection using a regular client like [Nicotine+](https://github.com/nicotine-plus/nicotine-plus) or [slskd](https://github.com/slskd/slskd).
-> Sharing and other client features will be available in future versions of sldl (see [Daemon / remote mode / API](#daemon--remote-mode)).
+> Sockseek doesn't share your music folders by itself. To keep the Soulseek network healthy over the long term, please also share your collection using a regular client like [Nicotine+](https://github.com/nicotine-plus/nicotine-plus) or [slskd](https://github.com/slskd/slskd).
+> Sharing and other client features will be available in future versions of Sockseek (see [Daemon / remote mode / API](#daemon--remote-mode)).
 
 > [!NOTE]
-> Because it's not possible to run the same account on two separate clients simultaneously, it is recommended to use `sldl` with a **separate Soulseek account** to avoid connection problems.
+> Because it's not possible to run the same account on two separate clients simultaneously, it is recommended to use Sockseek with a **separate Soulseek account** to avoid connection problems.
 
 ## Index
  - [Options](#options)
@@ -62,7 +62,7 @@ A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 
 
 ## Options
-<!-- sldl-help:start(main) -->
+<!-- Sockseek-help:start(main) -->
 #### Required Arguments
 ```
 <input>                         A url, search string, Soulseek link, or path to a local
@@ -90,8 +90,8 @@ A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 --concurrent-extractors <num>   Max concurrent input extractors (default: 4)
 --write-playlist                Create an m3u playlist file in the output directory
 --playlist-path <path>          Override default path for m3u playlist file
---no-write-index                Do not create/update the sldl index
---index-path <path>             Override default path for sldl index
+--no-write-index                Do not create/update the Sockseek index
+--index-path <path>             Override default path for Sockseek index
 --no-incomplete-ext             Save files with their final name instead of a temporary
                                 `.incomplete` extension.
 
@@ -118,7 +118,7 @@ A smart and configurable downloader for Soulseek. Built with Soulseek.NET.
 ```
 #### Daemon / Remote Options
 ```
-sldl daemon                     Start the HTTP/SignalR daemon instead of running a download
+sockseek daemon                 Start the HTTP/SignalR daemon instead of running a download
 --server-ip <ip>                IP/interface for the daemon HTTP API (default: 127.0.0.1)
 --server-port <port>            Port for the daemon HTTP API (default: 5030)
 --remote <url>                  Use an existing daemon instead of running locally
@@ -157,7 +157,7 @@ sldl daemon                     Start the HTTP/SignalR daemon instead of running
                                 "{id}" -f bestaudio/best -ci -o "{savepath-noext}.%(ext)s" -x
                                 Available vars are: {id}, {savedir}, {savepath},
                                 {savepath-noext}.
-                                Warning: If you change the -o parameter, sldl won't be able
+                                Warning: If you change the -o parameter, Sockseek won't be able
                                 to index the downloaded files.
                                 Note that -x causes yt-dlp to download webms in case ffmpeg
                                 is unavailable.
@@ -288,8 +288,8 @@ sldl daemon                     Start the HTTP/SignalR daemon instead of running
                                 'json': Print first result in json format
                                 'json-all': Print json of all results in sorted order
                                 'link': Print first result slsk:// link
-                                'index': Print sldl index as formatted json
-                                'index-failed': Print failed downloads from sldl index
+                                'index': Print Sockseek index as formatted json
+                                'index-failed': Print failed downloads from Sockseek index
 
 --mock-files-dir <path>         Directory containing files to simulate download results
 --mock-files-no-read-tags       Only read filenames when simulating (much faster)
@@ -300,9 +300,9 @@ sldl daemon                     Start the HTTP/SignalR daemon instead of running
 - Flags can be explicitly disabled by setting them to false, e.g. `--interactive false`.
 - Single-character flags can be combined, e.g. `-at` for `-a -t`.
 - Acronyms of two- and `--three-word-flags` like `--twf` are also accepted. E.g. `--Mbr` for `--max-bitrate`.
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(input) -->
+<!-- Sockseek-help:start(input) -->
 ## Input types
 The input type is usually determined automatically. You can also manually set it with `--input-type`.  
 The following input types are available:
@@ -332,25 +332,25 @@ Credentials are required when downloading a private playlist or liked music.
 
 Create a Spotify application at https://developer.spotify.com/dashboard/applications with a redirect url http://127.0.0.1:48721/callback. Obtain an application ID and secret from the created application dashboard.
 
-Start sldl with the obtained credentials and an authorized action to trigger the Spotify app login flow:
+Start Sockseek with the obtained credentials and an authorized action to trigger the Spotify app login flow:
 
 ```
-sldl spotify-likes --spotify-id 123456 --spotify-secret 123456 -n 1 --print-tracks
+sockseek spotify-likes --spotify-id 123456 --spotify-secret 123456 -n 1 --print-tracks
 ```
-sldl will try to open a browser automatically but will fallback to logging the login flow URL to output. After login flow is complete sldl will output a token and refresh token and finish running the current command.
+Sockseek will try to open a browser automatically but will fallback to logging the login flow URL to output. After login flow is complete Sockseek will output a token and refresh token and finish running the current command.
 
-To skip requiring login flow every time sldl is used the token and refresh token can be provided to sldl (hint: store this info in the config file to make commands less verbose):
+To skip requiring login flow every time Sockseek is used the token and refresh token can be provided to Sockseek (hint: store this info in the config file to make commands less verbose):
 
 ```
-sldl spotify-likes --spotify-id 123456 --spotify-secret 123456 --spotify-refresh 123456 --spotify-token 123456 -n 1 --pt
+sockseek spotify-likes --spotify-id 123456 --spotify-secret 123456 --spotify-refresh 123456 --spotify-token 123456 -n 1 --pt
 ```
 
-spotify-token access is only valid for 1 hour. spotify-refresh will enable sldl to renew access every time it is run (and can be used without including spotify-token)
+spotify-token access is only valid for 1 hour. spotify-refresh will enable Sockseek to renew access every time it is run (and can be used without including spotify-token)
 </details>
 
 ### Bandcamp
 A bandcamp track, album, or artist url. Download a single track, an album, or an artist's
-entire discography. Also accepts wishlist URLs. Extraction might fail due to cloudflare; download the html to a local file and point sldl to it using `--from-html` in case of issues.
+entire discography. Also accepts wishlist URLs. Extraction might fail due to cloudflare; download the html to a local file and point Sockseek to it using `--from-html` in case of issues.
 
 ### MusicBrainz
 A MusicBrainz.org URL for a release, release group, or collection.
@@ -387,60 +387,60 @@ a:"Another Album"               strict-album=true
 ```
 The inputs can be any of the above input types, including links. The conditions are added on top of the
 configured conditions and can be omitted. 
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(download-modes) -->
+<!-- Sockseek-help:start(download-modes) -->
 ## Download modes
 ### Normal
 The default for playlists. Downloads a single file for every input entry.
 
 ### Album
-sldl will search for the album and download an entire folder including non-audio
+Sockseek will search for the album and download an entire folder including non-audio
 files. Activated when the input is a link to a spotify or bandcamp album, when the input
 string or csv row has no track title, or when `-a/--album` is enabled.
 
 ### Aggregate
-With `-g/--aggregate`, sldl performs an ordinary search for the input, then attempts to
+With `-g/--aggregate`, Sockseek performs an ordinary search for the input, then attempts to
 group the results into distinct songs and download one of each, starting with the one shared
 by the most users. Note that `--min-shares-aggregate` is 2 by default, meaning that songs
 shared by only one user will be ignored. Aggregate mode can be used to download all songs by 
 an artist.  
 
 ### Album Aggregate
-Activated when both `--album` and `--aggregate` are enabled. sldl will group shares and
+Activated when both `--album` and `--aggregate` are enabled. Sockseek will group shares and
 download one of each distinct album, starting with the one shared by the most users. Note
 that `--min-shares-aggregate` is 2 by default, meaning that albums shared by only one user
 will be ignored. Album-aggregate mode can be used to download the most popular (or all) albums
 by an artist. It is recommended to pair it with `--interactive`. See [Example](#download-all-albums-by-an-artist-interactively) for more details.
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(daemon) -->
+<!-- Sockseek-help:start(daemon) -->
 ## Daemon / remote mode
-Daemon mode is the first step toward running sldl as a persistent Soulseek client rather than a one-shot downloader. 
+Daemon mode is the first step toward running Sockseek as a persistent Soulseek client rather than a one-shot downloader. 
 Right now it exposes the download engine for remote CLI use; future releases may expand it with long-running client features such as sharing.
 
-Run `sldl daemon` to start the HTTP/SignalR daemon. It uses the same config/profile system as the
+Run `sockseek daemon` to start the HTTP/SignalR daemon. It uses the same config/profile system as the
 CLI and listens on `127.0.0.1:5030` by default.
 
 Once the daemon is running, use `--remote <url>` to run the CLI as a thin client against it:
 
 ```bash
-sldl daemon --server-ip 0.0.0.0 --server-port 5030
-sldl "Artist - Title" --remote http://127.0.0.1:5030
+sockseek daemon --server-ip 0.0.0.0 --server-port 5030
+sockseek "Artist - Title" --remote http://127.0.0.1:5030
 ```
 
 For HTTP API, SignalR, and client integration notes, see [docs/api.md](docs/api.md).
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(config) -->
+<!-- Sockseek-help:start(config) -->
 ## Configuration
 ### Config Location
-sldl will look for a file named sldl.conf in the following locations:
+Sockseek will look for a file named sockseek.conf in the following locations:
 
-- `~/.config/sldl/sldl.conf`
-- `~/AppData/Roaming/sldl/sldl.conf`
-- `$XDG_CONFIG_HOME/sldl/sldl.conf`
-- `{sldl executable dir}/sldl.conf`
+- `~/.config/sockseek/sockseek.conf`
+- `~/AppData/Roaming/sockseek/sockseek.conf`
+- `$XDG_CONFIG_HOME/sockseek/sockseek.conf`
+- `{sockseek executable dir}/sockseek.conf`
 
 Use `--config <path>` to choose a config file, `--config none` or `--no-config` to skip config loading.
 
@@ -453,7 +453,7 @@ pref-format = flac
 fast-search = true
 ```
 Lines starting with hashtags # will be treated as comments. Tildes in paths are expanded as the user
-directory (even on windows). The path variable `{bindir}` stores the directory of the sldl binary.
+directory (even on windows). The path variable `{bindir}` stores the directory of the Sockseek binary.
 
 ### Configuration profiles
 Profiles are supported:
@@ -473,7 +473,7 @@ max-stale-time = 9999999
 # download to another location for youtube
 [youtube]
 profile-cond = input-type == "youtube"
-path = ~/downloads/sldl-youtube
+path = ~/downloads/sockseek-youtube
 ```
 The following operators are supported for use in profile-cond: &&, ||, ==, !=, !{bool}.  
 The following variables are available:
@@ -486,12 +486,12 @@ interactive       (bool)
 progress-json     (bool)
 no-progress       (bool)
 ```
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(file-conditions) -->
+<!-- Sockseek-help:start(file-conditions) -->
 ## File conditions
 Files not satisfying the required conditions will be ignored. Files satisfying pref-conditions
-will be preferred: With `--pref-format flac,wav`, sldl will try to download lossless files if
+will be preferred: With `--pref-format flac,wav`, Sockseek will try to download lossless files if
 available while still accepting lossy files.
 
 The default required conditions accept common audio formats and enforce the source length when
@@ -512,7 +512,7 @@ pref-strict-title = true
 pref-strict-album = true
 ```
 
-sldl will therefore accept common audio files with no length metadata, or whose length differs from
+Sockseek will therefore accept common audio files with no length metadata, or whose length differs from
 the supplied length by no more than 3 seconds, and prefer mp3 files with bitrate between 200 and
 2500 kbps. Moreover, it will prefer files whose paths contain the supplied title and album.
 Changing the last two preferred conditions is not recommended.  
@@ -526,17 +526,17 @@ Conditions can also be supplied as a semicolon-delimited string with `--cond` an
 
 ### Note on availability of metadata
 Some info may be unavailable depending on the client used by the peer. If (e.g) `--min-bitrate`
-is set, then sldl will still accept any file with unknown bitrate. To reject all files where one
+is set, then Sockseek will still accept any file with unknown bitrate. To reject all files where one
 or more of the checked properties is null (unknown), enable `--strict-conditions`.  
 
 This flag should be used with care: It's easy to accidentally exclude all files from users with
 certain clients. For example, because the standard Soulseek client does not broadcast the bitrate,
-enabling `--strict-conditions` and setting a `--min-bitrate` will make sldl ignore all files
+enabling `--strict-conditions` and setting a `--min-bitrate` will make Sockseek ignore all files
 shared by users with the standard client. Even without a required min-bitrate, all those shares
 will be ranked at the bottom due to the default pref- bitrate checks.
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(name-format) -->
+<!-- Sockseek-help:start(name-format) -->
 ## Name format
 Variables enclosed in {} will be replaced by the corresponding file tag value.
 Name format supports subdirectories as well as conditional expressions like {tag1|tag2} - If
@@ -593,15 +593,15 @@ slsk-foldername                Soulseek folder name
 extractor                      Name of the extractor used
 input                          Input string
 item-name                      Name of the playlist/source
-default-folder                 Default sldl folder name
+default-folder                 Default Sockseek folder name
 bindir                         Base application directory
 path                           Download file path (or folder if album)
 path-noext                     Download file path without extension
 ext                            File extension
 ```
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(on-complete) -->
+<!-- Sockseek-help:start(on-complete) -->
 ## On-Complete Actions
 The `--on-complete` parameter allows executing commands after a track or album is downloaded. Multiple actions can be chained using the `+ ` prefix (note the space after +).
 
@@ -655,9 +655,9 @@ on-complete = + 1:h:r: cmd /c if {stdout}==true (ffmpeg -i "{path}" -q:a 0 "{pat
 # Delete original and update index if conversion succeeded
 on-complete = + 1:h:u: cmd /c if {stdout}==success (del "{path}" & echo "1;{path-noext}.mp3")
 ```
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
-<!-- sldl-help:start(shortcuts) -->
+<!-- Sockseek-help:start(shortcuts) -->
 ## Shortcuts & interactive mode
 ### CLI Shortcuts
 ```
@@ -686,50 +686,50 @@ f:query         filter folders containing files matching query
 cd ..           load parent folder
 cd subdir       go to subfolder
 ```
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
 ## Examples
 
 ##### Download tracks from a csv file
 ```bash
-sldl "tracks.csv"
+sockseek "tracks.csv"
 ```
 
 ##### Download a Spotify playlist or your liked songs
 ```bash
-sldl "https://open.spotify.com/playlist/id"
-sldl "spotify-likes"
+sockseek "https://open.spotify.com/playlist/id"
+sockseek "spotify-likes"
 ```
 
 ##### Download the albums of a spotify playlist
 ```bash
-sldl "https://open.spotify.com/playlist/id" -a
+sockseek "https://open.spotify.com/playlist/id" -a
 ```
 
 ##### Download a youtube playlist with yt-dlp fallback & retrieving deleted video names
 ```bash
-sldl "https://youtube.com/playlist/id" --get-deleted --yt-dlp
+sockseek "https://youtube.com/playlist/id" --get-deleted --yt-dlp
 ```
 
 ##### Interactive album download, only include albums with 13 or more tracks
 ```bash
-sldl "Album Name" -at --atc 13+
+sockseek "Album Name" -at --atc 13+
 ```
 
 ##### Download a specific song by name and length, preferring lossless
 ```bash
-sldl "MC MENTAL @ HIS BEST, length=242" --pref-format "flac,wav"
+sockseek "MC MENTAL @ HIS BEST, length=242" --pref-format "flac,wav"
 ``` 
 
 ##### Download all albums by an artist interactively
 ```bash
-sldl "artist=MC MENTAL" -agt
+sockseek "artist=MC MENTAL" -agt
 ```
-This command will show an interactive UI listing all albums with appearances by the specified artist, starting with the most popular (based on the number of shares). You can download or skip albums as needed. sldl will do its best to group shares of the same album into a single entry (but due to differences in filenames this will not be 100% reliable). For some artists, it can be useful to add `--strict-artist` to avoid listing incorrect results. There is currently no way to only include albums *by that artist*, rather than every album/compilation where that artist appeared (feel free to request it if needed).
+This command will show an interactive UI listing all albums with appearances by the specified artist, starting with the most popular (based on the number of shares). You can download or skip albums as needed. Sockseek will do its best to group shares of the same album into a single entry (but due to differences in filenames this will not be 100% reliable). For some artists, it can be useful to add `--strict-artist` to avoid listing incorrect results. There is currently no way to only include albums *by that artist*, rather than every album/compilation where that artist appeared (feel free to request it if needed).
 
 ##### Print all songs by an artist which are not in your library
 ```bash
-sldl "artist=MC MENTAL" -g --skip-music-dir "path/to/music" --print results
+sockseek "artist=MC MENTAL" -g --skip-music-dir "path/to/music" --print results
 ```
 
 ### Advanced example: Automatic wishlist downloader
@@ -738,24 +738,24 @@ Create a file named `wishlist.txt`, and add some items as detailed in [Input typ
 "Artist - My Favorite Song"            format=flac
 a:"Artist - Some Album"                strict-album=true;album-track-count=5
 ```
-Add a profile to your `sldl.conf`:
+Add a profile to your `sockseek.conf`:
 ```ini
 [wishlist]
-input = ~/sldl/wishlist.txt 
+input = ~/sockseek/wishlist.txt 
 input-type = list
-index-path = ~/sldl/wishlist-index.sldl
-log-file = ~/sldl/wishlist.log
+index-path = ~/sockseek/wishlist-index.sockseek
+log-file = ~/sockseek/wishlist.log
 ```
-This will create a global index file `wishlist-index.sldl` which will be scanned every time sldl is run to skip wishlist items that have already been downloaded. If you want to continue searching until a version satisfying the preferred conditions is found, also add `skip-check-pref-cond = true` (note that this requires the files to remain in the same spot after being downloaded).  
+This will create a global index file `wishlist-index.sockseek` which will be scanned every time Sockseek is run to skip wishlist items that have already been downloaded. If you want to continue searching until a version satisfying the preferred conditions is found, also add `skip-check-pref-cond = true` (note that this requires the files to remain in the same spot after being downloaded).  
 
-Now you can manually run, or set up a cron job / scheduled task to periodically run sldl with the following option:
+Now you can manually run, or set up a cron job / scheduled task to periodically run Sockseek with the following option:
 ```bash
-sldl --profile wishlist
+sockseek --profile wishlist
 ```
 
-<!-- sldl-help:start(notes-and-tips) -->
+<!-- Sockseek-help:start(notes-and-tips) -->
 ## Notes
-- **Soulseek's rate limits**: The server bans users for 30 minutes if too many searches are performed within a short timespan. sldl has a search limiter which can be adjusted with `--searches-per-time` and `--searches-renew-time` (when the limit is reached, the status of the downloads will be 'Waiting'). By default it is configured to allow up to 34 searches every 220 seconds.
+- **Soulseek's rate limits**: The server bans users for 30 minutes if too many searches are performed within a short timespan. Sockseek has a search limiter which can be adjusted with `--searches-per-time` and `--searches-renew-time` (when the limit is reached, the status of the downloads will be 'Waiting'). By default it is configured to allow up to 34 searches every 220 seconds.
 
 ## Tips
 
@@ -770,7 +770,7 @@ sldl --profile wishlist
 
 ### Filtering Irrelevant Results
 
-sldl typically selects the correct files as long as they appear in the search results. By default, it filters to common audio formats and applies a 3-second length tolerance when the input source provides a length. You can use the following options to filter your search results further:
+Sockseek typically selects the correct files as long as they appear in the search results. By default, it filters to common audio formats and applies a 3-second length tolerance when the input source provides a length. You can use the following options to filter your search results further:
 
 - `--strict-title`, `--strict-artist`, `--strict-album`  
   Filters out files whose paths do not include the specified title, artist, or album name (ignoring case and using boundary characters). Because the pref- versions of these options are enabled by default, they are only recommended when you want to reduce false downloads, e.g. for [wishlists](#advanced-example-automatic-wishlist-downloader) where there is a high probability that the item does not exist on the network.
@@ -789,40 +789,40 @@ The following options will make it go faster, but may decrease search result qua
 - `--concurrent-jobs` controls how many leaf jobs can run at once (default: 20)
 - `--concurrent-searches` controls how many Soulseek searches can run at once (default: 2)
 - `--concurrent-extractors` controls how many inputs can be extracted at once (default: 4)
-- `--max-stale-time` is set to 30 seconds by default, sldl will wait a long time before giving up on a file.
+- `--max-stale-time` is set to 30 seconds by default, Sockseek will wait a long time before giving up on a file.
 
 ### Testing Options
 You can test almost any aspect of the search and downloading logic by using `--mock-files-dir` and pointing it to a local directory containing audio files. This directory will then be used instead of searching Soulseek. Example:
 ```
-sldl "Artist - Album" -at --mock-files-dir /path/to/dir
+sockseek "Artist - Album" -at --mock-files-dir /path/to/dir
 ```
 If you plan to use a large music library, you may want to add `--mock-files-no-read-tags` to improve the initial loading performance. But note that reading tags is required when filtering by metadata such as length or bitrate.
 
-<!-- sldl-help:end -->
+<!-- Sockseek-help:end -->
 
 ## Docker
 
-A docker container for running `sldl` can be built from this repository. The image supports linux x86/ARM. 
+A docker container for running Sockseek can be built from this repository. The image supports linux x86/ARM. 
 
 To build and start container:
 
 ```shell
-clone https://github.com/fiso64/slsk-batchdl
-cd slsk-batchdl
+clone https://github.com/fiso64/Sockseek
+cd Sockseek
 docker compose up -d
 ```
 
-`exec` into the container to start using `sldl`:
+`exec` into the container to start using Sockseek:
 
 ```shell
-docker compose exec sldl sh
-sldl --help
+docker compose exec sockseek sh
+sockseek --help
 ```
 
 The compose stack mounts two directories relative to where `docker-compose.yml` is located which can be used for file management:
 
-* `/config` (at `./config` on host) - put your `sldl.conf` [configuration](#configuration-) in this directory and then use `sldl -c /config ...` to use your configuration in the container
-* `/data` (at `./data` on host) - use as the download directory IE `sldl -p /data ...`
+* `/config` (at `./config` on host) - put your `sockseek.conf` [configuration](#configuration-) in this directory and then use `sockseek -c /config ...` to use your configuration in the container
+* `/data` (at `./data` on host) - use as the download directory IE `sockseek -p /data ...`
 
 ### File Permissions
 
@@ -838,17 +838,17 @@ Replace these with the corresponding variable (`PUID` `PGID`) in `docker-compose
 
 ### Cron
 
-One or more `sldl` commands can be run on a schedule using [cron](https://en.wikipedia.org/wiki/Cron) built into the container.
+One or more Sockseek commands can be run on a schedule using [cron](https://en.wikipedia.org/wiki/Cron) built into the container.
 
 To create a schedule make a new file on the host `./config/crontabs/abc` and use it with the standard [crontab](https://en.wikipedia.org/wiki/Cron#Overview) syntax.
 
 Make sure to restart the container after any changes to the cron file are made.
 
-Example => Run `sldl` every Sunday at 1am, search for missing tracks from the specified Spotify playlist
+Example => Run Sockseek every Sunday at 1am, search for missing tracks from the specified Spotify playlist
 
 ```
 # min   hour    day     month   weekday command
-0 1 * * 0 sldl https://open.spotify.com/playlist/6sf1WR5grXGJ6dET -c /config -p /data --index-path /data/index.sldl
+0 1 * * 0 sockseek https://open.spotify.com/playlist/6sf1WR5grXGJ6dET -c /config -p /data --index-path /data/index.sockseek
 ```
 
 [crontab.guru](https://crontab.guru/) could be used to help with the scheduling expression.

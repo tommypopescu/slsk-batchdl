@@ -12,7 +12,7 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
     <PublishRoot>$(ArtifactsDir)/publish</PublishRoot>
     <PackageDir>$(ArtifactsDir)/packages</PackageDir>
 
-    <CliProject>$(RepoRoot)/slsk-batchdl.Cli/slsk-batchdl.Cli.csproj</CliProject>
+    <CliProject>$(RepoRoot)/Sockseek.Cli/Sockseek.Cli.csproj</CliProject>
   </PropertyGroup>
 
   <Target Name="PublishPackage">
@@ -24,8 +24,8 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
       <PublishLabel Condition="'$(PublishLabel)' == ''">$(RID)</PublishLabel>
       <PublishDir>$(PublishRoot)/$(PublishLabel)</PublishDir>
       <IsWindowsRid>$([System.String]::Copy('$(RID)').StartsWith('win'))</IsWindowsRid>
-      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' == 'True'">sldl_$(PublishLabel).zip</PackageName>
-      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' != 'True'">sldl_$(PublishLabel).tar.gz</PackageName>
+      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' == 'True'">Sockseek_$(PublishLabel).zip</PackageName>
+      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' != 'True'">Sockseek_$(PublishLabel).tar.gz</PackageName>
       <PackagePath>$(PackageDir)/$(PackageName)</PackagePath>
     </PropertyGroup>
 
@@ -61,15 +61,15 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
 
   <Target Name="PublishAll">
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=win-x64;PublishLabel=win-x64;PackageName=sldl_win-x64.zip" />
+             Properties="RID=win-x64;PublishLabel=win-x64;PackageName=Sockseek_win-x64.zip" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=linux-x64;PublishLabel=linux-x64;PackageName=sldl_linux-x64.tar.gz" />
+             Properties="RID=linux-x64;PublishLabel=linux-x64;PackageName=Sockseek_linux-x64.tar.gz" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=linux-arm;PublishLabel=linux-arm;PackageName=sldl_linux-arm.tar.gz" />
+             Properties="RID=linux-arm;PublishLabel=linux-arm;PackageName=Sockseek_linux-arm.tar.gz" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=osx-x64;PublishLabel=osx-x64;PackageName=sldl_osx-x64.tar.gz" />
+             Properties="RID=osx-x64;PublishLabel=osx-x64;PackageName=Sockseek_osx-x64.tar.gz" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=osx-arm64;PublishLabel=osx-arm64;PackageName=sldl_osx-arm64.tar.gz" />
+             Properties="RID=osx-arm64;PublishLabel=osx-arm64;PackageName=Sockseek_osx-arm64.tar.gz" />
   </Target>
 
   <Target Name="CleanArtifacts">

@@ -361,7 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/slsk-batchdl/Properties/launchSettings.json
+/Sockseek.Cli/Properties/launchSettings.json
 
 .aider*
 install.bat

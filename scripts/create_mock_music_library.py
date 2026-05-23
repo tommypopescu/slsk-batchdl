@@ -192,9 +192,9 @@ def generate(root: Path, seed: int) -> None:
     print(f"Created list.txt: {list_txt}")
     print()
     print("Example commands:")
-    print(f'  sldl "{tracks_csv}" --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
-    print(f'  sldl "{albums_csv}" --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
-    print(f'  sldl "{list_txt}" --input-type list --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
+    print(f'  sockseek "{tracks_csv}" --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
+    print(f'  sockseek "{albums_csv}" --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
+    print(f'  sockseek "{list_txt}" --input-type list --mock-files-dir "{library_dir}" --mock-files-no-read-tags --mock-files-slow')
 
 
 def main() -> None:

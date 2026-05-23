@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/slsk-batchdl/slsk-batchdl.csproj",
+                "${workspaceFolder}/Sockseek/Sockseek.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/slsk-batchdl/slsk-batchdl.csproj",
+                "${workspaceFolder}/Sockseek/Sockseek.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -33,7 +33,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/slsk-batchdl/slsk-batchdl.csproj"
+                "${workspaceFolder}/Sockseek/Sockseek.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

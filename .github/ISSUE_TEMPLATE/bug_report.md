@@ -20,7 +20,7 @@ A clear and concise description of what you expected to happen.
 **Desktop (please complete the following information):**
  - OS: (e.g. windows)
  - Using docker: (yes/no)
- - Version: (run `sldl --version`) 
+ - Version: (run `Sockseek --version`) 
  
 **Additional context**  
 Add any other context about the problem here.  

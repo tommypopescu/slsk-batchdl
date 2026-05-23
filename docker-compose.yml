@@ -1,5 +1,5 @@
 services:
-  sldl:
+  sockseek:
     ports:
     - "127.0.0.1:48721:48721"
     build:
