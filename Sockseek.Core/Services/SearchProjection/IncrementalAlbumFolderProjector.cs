@@ -18,7 +18,8 @@ public sealed class IncrementalAlbumFolderProjector
     public IncrementalAlbumFolderProjector(
         AlbumQuery query,
         SearchSettings search,
-        ConcurrentDictionary<string, int>? userSuccessCounts = null)
+        ConcurrentDictionary<string, int>? userSuccessCounts = null,
+        bool ignoreStringConditions = false)
     {
         this.query = query;
         this.search = search;
@@ -27,7 +28,8 @@ public sealed class IncrementalAlbumFolderProjector
             sortQuery,
             search,
             userSuccessCounts ?? new ConcurrentDictionary<string, int>(),
-            albumMode: true);
+            albumMode: true,
+            ignoreStringConditions: ignoreStringConditions);
     }
 
     public int Count => sorter.Count;

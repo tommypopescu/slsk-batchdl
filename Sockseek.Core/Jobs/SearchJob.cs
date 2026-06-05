@@ -6,7 +6,7 @@ using Sockseek.Core.Settings;
 namespace Sockseek.Core.Jobs;
 
 public sealed record FileSearchProjection(SongQuery Query, bool IncludeFullResults = false);
-public sealed record FolderSearchProjection(AlbumQuery Query, bool IncludeFiles = false);
+public sealed record FolderSearchProjection(AlbumQuery Query, bool IncludeFiles = false, bool IgnoreStringConditions = false);
 public sealed record AggregateTrackProjection(SongQuery Query);
 public sealed record AggregateAlbumProjection(AlbumQuery Query);
 
@@ -121,7 +121,7 @@ public class SearchJob : Job
         var state = GetOrCreateIncrementalProjectionState(
             ProjectionKey("album-folders", projection, search),
             () => new IncrementalRawProjectionState<IncrementalAlbumFolderProjector, AlbumFolder>(
-                new IncrementalAlbumFolderProjector(projection.Query, search),
+                new IncrementalAlbumFolderProjector(projection.Query, search, ignoreStringConditions: projection.IgnoreStringConditions),
                 (projector, results) => projector.AddRange(results),
                 projector => projector.Snapshot()));
 
@@ -214,7 +214,8 @@ public class SearchJob : Job
                 projection.IncludeFullResults),
             FolderSearchProjection projection => string.Join('\0',
                 "folder",
-                ProjectionDependencyKey(projection.Query)),
+                ProjectionDependencyKey(projection.Query),
+                projection.IgnoreStringConditions),
             AggregateTrackProjection projection => string.Join('\0',
                 "aggregate-track",
                 ProjectionDependencyKey(projection.Query)),
@@ -295,7 +296,7 @@ public class SearchJob : Job
 
         public IncrementalAlbumAggregateProjectionState(AlbumQuery query, SearchSettings search)
         {
-            albumProjector = new IncrementalAlbumFolderProjector(query, search);
+            albumProjector = new IncrementalAlbumFolderProjector(query, search, ignoreStringConditions: true);
             aggregateProjector = new IncrementalAlbumAggregateProjector(query, search);
         }
 

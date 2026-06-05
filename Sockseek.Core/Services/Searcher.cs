@@ -193,9 +193,12 @@ public partial class Searcher
     public async Task<List<AlbumJob>> SearchAggregateAlbum(AlbumAggregateJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
     {
         job.UpdateState(JobState.Searching);
-        var tempJob = new AlbumJob(job.Query);
-        await SearchAlbum(tempJob, search, responseData, ct);
-        return SearchResultProjector.AggregateAlbums(tempJob.Results, job.Query, search);
+        var searchJob = new SearchJob(job.Query);
+        await Search(searchJob, search, responseData, ct);
+        var folders = searchJob.GetAlbumFolders(
+            new FolderSearchProjection(job.Query, IgnoreStringConditions: true),
+            search);
+        return SearchResultProjector.AggregateAlbums(folders.Items, job.Query, search);
     }
 
 

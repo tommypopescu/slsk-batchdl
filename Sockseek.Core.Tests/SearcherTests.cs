@@ -735,6 +735,30 @@ namespace Tests.Unit
         }
 
         [TestMethod]
+        public void AggregateTracks_DoesNotSortBucketByStrictArtist()
+        {
+            var artistMatch = TestHelpers.CreateSlFile(@"Music\Right Artist\Track.mp3", length: 200);
+            var titleOnly = TestHelpers.CreateSlFile(@"Music\Other Artist\Track.mp3", length: 200);
+            var artistResponse = new SearchResponse("artist-match", 1, true, 100 * 1024, 0, [artistMatch]);
+            var titleOnlyResponse = new SearchResponse("title-only", 1, true, 800 * 1024, 0, [titleOnly]);
+
+            var search = TestHelpers.CreateDefaultSettings().Download.Search;
+            search.MinSharesAggregate = 1;
+            search.PreferredCond.StrictArtist = true;
+            var counts = new ConcurrentDictionary<string, int>();
+            var query = new SongQuery { Artist = "Right Artist", Title = "Track" };
+
+            var aggregate = SearchResultProjector.AggregateTracks(
+                [(artistResponse, artistMatch), (titleOnlyResponse, titleOnly)],
+                query,
+                search,
+                counts);
+
+            Assert.AreEqual(1, aggregate.Count);
+            Assert.AreEqual("title-only", aggregate[0].Candidates![0].Username);
+        }
+
+        [TestMethod]
         public void IncrementalAlbumAggregate_MatchesFullAggregate_WhenFedInChunks()
         {
             var folders = new List<AlbumFolder>
@@ -855,6 +879,51 @@ namespace Tests.Unit
 
             static string FolderKey(AlbumFolder folder)
                 => folder.Username + '\\' + folder.FolderPath;
+        }
+
+        [TestMethod]
+        public void AlbumAggregate_DoesNotSortBucketByStrictAlbum()
+        {
+            var query = new AlbumQuery { Artist = "ELO", Album = "Time" };
+            var search = TestHelpers.CreateDefaultSettings().Download.Search;
+            search.MinSharesAggregate = 1;
+            search.PreferredCond.Formats = ["flac"];
+            search.PreferredCond.StrictAlbum = true;
+            var folderProjector = new IncrementalAlbumFolderProjector(query, search, ignoreStringConditions: true);
+            var aggregateProjector = new IncrementalAlbumAggregateProjector(query, search);
+
+            var opusTime = AlbumSearchResponse("OpusTimeUser", false, 1000, @"Music\ELO\Time [OPUS]", ".opus", [209, 200]);
+            var flacOther = AlbumSearchResponse("FlacOtherUser", true, 5000, @"Music\ELO\Other [FLAC]", ".flac", [209, 200]);
+
+            foreach (var response in new[] { opusTime, flacOther })
+            {
+                var changes = folderProjector.AddRangeAndGetChanges(response.Files.Select(file => (response, file)));
+                aggregateProjector.ApplyChanges(changes);
+            }
+
+            var buckets = aggregateProjector.Snapshot();
+
+            Assert.AreEqual(1, buckets.Count);
+            Assert.AreEqual("FlacOtherUser", buckets[0].Results[0].Username);
+
+            static SearchResponse AlbumSearchResponse(
+                string username,
+                bool hasFreeUploadSlot,
+                int uploadSpeedKibPerSecond,
+                string folderPath,
+                string extension,
+                int[] lengths)
+            {
+                var files = lengths
+                    .Select((length, index) => TestHelpers.CreateSlFile(
+                        $@"{folderPath}\{index + 1:D2}. Track {index + 1}{extension}",
+                        extension: extension,
+                        bitrate: extension == ".flac" ? 900 : 192,
+                        length: length,
+                        sampleRate: 44100))
+                    .ToList();
+                return new SearchResponse(username, 1, hasFreeUploadSlot, uploadSpeedKibPerSecond * 1024, 0, files);
+            }
         }
 
         [TestMethod]

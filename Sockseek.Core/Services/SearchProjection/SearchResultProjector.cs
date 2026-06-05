@@ -48,7 +48,8 @@ public static partial class SearchResultProjector
                 userSuccessCounts,
                 useInfer: false,
                 useLevenshtein: false,
-                albumMode: false)))
+                albumMode: false,
+                ignoreStringConditions: true)))
             .ToList();
 
         if (!search.Relax)
@@ -73,7 +74,8 @@ public static partial class SearchResultProjector
         IEnumerable<(SearchResponse Response, Soulseek.File File)> rawResults,
         AlbumQuery query,
         SearchSettings search,
-        ConcurrentDictionary<string, int>? userSuccessCounts = null)
+        ConcurrentDictionary<string, int>? userSuccessCounts = null,
+        bool ignoreStringConditions = false)
     {
         var sortQuery = AlbumFileMatchQuery(query);
         var filteredResults = rawResults
@@ -88,7 +90,8 @@ public static partial class SearchResultProjector
             userSuccessCounts ?? new ConcurrentDictionary<string, int>(),
             useInfer: false,
             useLevenshtein: false,
-            albumMode: true);
+            albumMode: true,
+            ignoreStringConditions: ignoreStringConditions);
 
         int capacity = rawResults.TryGetNonEnumeratedCount(out int resultCount) ? resultCount : 0;
         return AlbumFoldersFromOrderedResults(orderedResults.Select(x => (x.response, x.file)), query, search, capacity);
