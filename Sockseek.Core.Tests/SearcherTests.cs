@@ -764,6 +764,51 @@ namespace Tests.Unit
         }
 
         [TestMethod]
+        public void IncrementalAlbumAggregate_SortsVersionsWithinBucketLikeAlbumFolders_WhenPreferredFormatArrivesLater()
+        {
+            var opusFolder = AlbumFolder(
+                "OpusUser",
+                @"Music\ELO\Time [OPUS]",
+                [209],
+                representativeFilename: @"Music\ELO\Time [OPUS]\01. Twilight.opus");
+            var flacFolder = AlbumFolder(
+                "FlacUser",
+                @"Music\ELO\Time [FLAC]",
+                [209],
+                representativeFilename: @"Music\ELO\Time [FLAC]\01. Twilight.flac");
+            var query = new AlbumQuery { Artist = "ELO", Album = "Time" };
+            var search = TestHelpers.CreateDefaultSettings().Download.Search;
+            search.MinSharesAggregate = 1;
+            search.PreferredCond.Formats = ["flac"];
+            var expected = SearchResultProjector.AggregateAlbums([flacFolder, opusFolder], query, search);
+            var aggregateProjector = new IncrementalAlbumAggregateProjector(query, search);
+
+            aggregateProjector.AddRange([opusFolder]);
+            aggregateProjector.AddRange([flacFolder]);
+
+            var normalFolderOrder = expected
+                .Single()
+                .Results
+                .Select(folder => folder.Username + "\\" + folder.FolderPath)
+                .ToList();
+            var aggregateVersionOrder = aggregateProjector.Snapshot()
+                .Single()
+                .Results
+                .Select(folder => folder.Username + "\\" + folder.FolderPath)
+                .ToList();
+
+            Assert.IsTrue(normalFolderOrder[0].StartsWith("FlacUser\\"), "Test setup should model normal album-folder ranking with FLAC first.");
+            Assert.AreEqual(
+                normalFolderOrder[0],
+                aggregateVersionOrder[0],
+                "The best version within an aggregate album bucket should be the normally highest-ranked folder.");
+            CollectionAssert.AreEqual(
+                normalFolderOrder,
+                aggregateVersionOrder,
+                "Versions within an aggregate album bucket should keep normal album-folder ranking, including preferred format.");
+        }
+
+        [TestMethod]
         public void IncrementalAlbumAggregate_DoesNotMergeSingleTrackAlbumsByLengthOnly()
         {
             var folders = new List<AlbumFolder>
