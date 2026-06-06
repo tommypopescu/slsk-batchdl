@@ -289,6 +289,52 @@ namespace Sockseek.Core.Models;
             return length == 0 ? string.Empty : new string(buffer, 0, length);
         }
 
+        public static string FuzzyPhrasePreprocess(string str, bool diacrRemove = true)
+        {
+            if (str.Length == 0)
+                return str;
+
+            Span<char> buffer = str.Length <= 512
+                ? stackalloc char[str.Length]
+                : new char[str.Length];
+            int length = 0;
+            bool previousWasSpace = false;
+            bool hasOutput = false;
+
+            for (int i = 0; i < str.Length; i++)
+            {
+                char c = str[i];
+                if (diacrRemove && c > 127)
+                    c = c.RemoveDiacritics();
+
+                if (Utils.IsSpecialChar(c) || char.IsWhiteSpace(c))
+                    c = ' ';
+
+                if (!hasOutput && c == ' ')
+                    continue;
+
+                if (c == ' ')
+                {
+                    if (previousWasSpace)
+                        continue;
+
+                    previousWasSpace = true;
+                }
+                else
+                {
+                    previousWasSpace = false;
+                }
+
+                buffer[length++] = c;
+                hasOutput = true;
+            }
+
+            while (length > 0 && buffer[length - 1] == ' ')
+                length--;
+
+            return length == 0 ? string.Empty : new string(buffer[..length]);
+        }
+
         private static char NormalizeStrictChar(char c, bool diacrRemove)
         {
             if (c == '_' || IsStrictInvalidChar(c))
@@ -312,6 +358,17 @@ namespace Sockseek.Core.Models;
                 return fname.ContainsWithBoundaryIgnoreWs(tname, ignoreCase, acceptLeftDigit: true);
             else
                 return fname.ContainsWithBoundary(tname, ignoreCase);
+        }
+
+        public static bool FuzzyPhraseString(string fname, string tname, bool diacrRemove = true, bool ignoreCase = true, bool boundarySkipWs = true)
+        {
+            if (tname.Length == 0)
+                return true;
+
+            fname = FuzzyPhrasePreprocess(fname, diacrRemove);
+            tname = FuzzyPhrasePreprocess(tname, diacrRemove);
+
+            return fname.ContainsWithBoundary(tname, ignoreCase);
         }
 
         // Note: Unused. ResultSorter uses the optimized CheapBracketCheck

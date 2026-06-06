@@ -409,6 +409,8 @@ public static partial class Utils
         '[', ']', '{', '}', '(', ')', '-',
         '–', '—', '―',
         '&', '%', '^', '$', '#', '＃', '@', '+', '=', '`', '~', '_',
+        '；', '：', '｜', '？', '！', '＜', '＞', '／', '＼', '［', '］', '｛', '｝', '＝', '｀', '＿',
+        '꞉', 'ː',
         '\u2018', '\u2019', '"', '"',
         '•', '·',
         '【', '】', '「', '」', '『', '』', '《', '》',
@@ -462,6 +464,8 @@ public static partial class Utils
         }
         return sb.ToString();
     }
+
+    public static bool IsSpecialChar(char c) => s_special.Contains(c);
 
     public static string RemoveFt(this string str, bool removeParentheses = true)
     {

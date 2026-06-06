@@ -424,6 +424,26 @@ namespace Tests.ResultSorterTests
         }
 
         [TestMethod]
+        public void OrderedResults_PrefersFuzzyStrictAlbumMatchOverFormat_WhenPreferred()
+        {
+            var matchingAlbum = TestHelpers.CreateSlFile(@"Music\Artist\AD：PIANO X\Track.mp3", bitrate: 320, length: 200);
+            var preferredFormat = TestHelpers.CreateSlFile(@"Music\Artist\Other Album\Track.flac", bitrate: 900, length: 200);
+            var matchingResponse = CreateResponse("album-match", uploadSpeed: 100 * 1024, files: matchingAlbum);
+            var formatResponse = CreateResponse("format-match", uploadSpeed: 5_000 * 1024, files: preferredFormat);
+            var results = new List<(SearchResponse, File)> { (formatResponse, preferredFormat), (matchingResponse, matchingAlbum) };
+
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            config.Search.PreferredCond = new FileConditions { Formats = ["flac"], StrictAlbum = true };
+            var counts = new ConcurrentDictionary<string, int>();
+            var track = TestHelpers.CreateQuery(artist: "Artist", title: "Track", album: "AD:PIANO X");
+
+            var ordered = ResultSorter.OrderedResults(results, track, config.Search, counts).ToList();
+
+            Assert.AreEqual(2, ordered.Count);
+            Assert.AreEqual("album-match", ordered[0].response.Username);
+        }
+
+        [TestMethod]
         public void OrderedResults_DownranksUsersNotInNecessaryAllowedUsers()
         {
             var file1 = TestHelpers.CreateSlFile("Music\\Track.mp3", bitrate: 320, length: 200);

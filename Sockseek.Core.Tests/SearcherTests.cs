@@ -110,6 +110,61 @@ namespace Tests.Unit
         }
 
         [TestMethod]
+        public void AlbumFolders_PrefersFuzzyStrictAlbumMatchOverTechnicalPrefs()
+        {
+            var unrelated = new SearchResponse("FastUnrelated", 1, true, 30_000 * 1024, 0,
+            [
+                TestHelpers.CreateSlFile(@"FLAC\CD1\18 - Forze DJ Team - '98 To Piano.flac", length: 210, sampleRate: 44100),
+            ]);
+            var matching = new SearchResponse("SlowAlbumMatch", 2, true, 500 * 1024, 0,
+            [
+                TestHelpers.CreateSlFile(@"Diverse System\AD：PIANO X\01 - 噓喰らいの怪物.flac", length: 238, sampleRate: 44100),
+            ]);
+
+            var rawResults = new List<(SearchResponse Response, Soulseek.File File)>
+            {
+                (unrelated, unrelated.Files.First()),
+                (matching, matching.Files.First()),
+            };
+            var search = TestHelpers.CreateDefaultSettings().Download.Search;
+
+            var folders = SearchResultProjector.AlbumFolders(rawResults, new AlbumQuery { Album = "AD:PIANO X" }, search);
+
+            Assert.AreEqual(2, folders.Count);
+            Assert.AreEqual("SlowAlbumMatch", folders[0].Username);
+            Assert.AreEqual(@"Diverse System\AD：PIANO X", folders[0].FolderPath);
+        }
+
+        [TestMethod]
+        public void AlbumFolders_IgnoresFuzzyStrictAlbumMatch_WhenStringSortConditionsIgnored()
+        {
+            var unrelated = new SearchResponse("FastUnrelated", 1, true, 30_000 * 1024, 0,
+            [
+                TestHelpers.CreateSlFile(@"FLAC\CD1\18 - Forze DJ Team - '98 To Piano.flac", length: 210, sampleRate: 44100),
+            ]);
+            var matching = new SearchResponse("SlowAlbumMatch", 2, true, 500 * 1024, 0,
+            [
+                TestHelpers.CreateSlFile(@"Diverse System\AD：PIANO X\01 - 噓喰らいの怪物.flac", length: 238, sampleRate: 44100),
+            ]);
+
+            var rawResults = new List<(SearchResponse Response, Soulseek.File File)>
+            {
+                (matching, matching.Files.First()),
+                (unrelated, unrelated.Files.First()),
+            };
+            var search = TestHelpers.CreateDefaultSettings().Download.Search;
+
+            var folders = SearchResultProjector.AlbumFolders(
+                rawResults,
+                new AlbumQuery { Album = "AD:PIANO X" },
+                search,
+                ignoreStringSortConditions: true);
+
+            Assert.AreEqual(2, folders.Count);
+            Assert.AreEqual("FastUnrelated", folders[0].Username);
+        }
+
+        [TestMethod]
         public void IncrementalAlbumFolders_MatchesFullAlbumFolders_WhenFedInChunks()
         {
             var rawResults = new List<(SearchResponse Response, Soulseek.File File)>();

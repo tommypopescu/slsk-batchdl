@@ -313,6 +313,15 @@ namespace Tests.FileConditionsTests
         }
 
         [TestMethod]
+        public void StrictAlbumTrue_FuzzyPunctuationOnlyMatch_ReturnsFalse()
+        {
+            var fc = new FileConditions { StrictAlbum = true };
+
+            Assert.IsFalse(fc.StrictAlbumSatisfies(@"Music\Diverse System\AD：PIANO X\01 - Song.flac", "AD:PIANO X"));
+            Assert.IsTrue(FileConditions.FuzzyPhraseString(@"Music\Diverse System\AD：PIANO X", "AD:PIANO X"));
+        }
+
+        [TestMethod]
         public void StrictStringPreprocess_ReplacesInvalidCharsAndCollapsesSpaces()
         {
             string input = "  A__B:C|D?E<F>G*H\"I/J\\K  Ä  ";
