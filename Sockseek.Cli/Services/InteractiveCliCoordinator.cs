@@ -335,36 +335,25 @@ internal sealed class InteractiveCliCoordinator
             }
             else
             {
-                Printing.SetBuffering(true);
-                if (ConsoleInputManager.Reporter != null)
-                    ConsoleInputManager.Reporter.IsPaused = true;
+                using var pause = ConsoleInputManager.PauseConsoleOutput();
+                using var interaction = await ConsoleInputManager.AcquireConsoleInteractionAsync(appToken);
+                var interactive = new InteractiveModeManager(
+                    session.PromptJob,
+                    new JobList(),
+                    availableFolders,
+                    canRetrieve: true,
+                    retrievedFolders: session.RetrievedFolders,
+                    retrieveFolderCallback: async folder => await RunPromptRetrieveFolderAsync(
+                        folder,
+                        async () => await backend.RetrieveFolderAndWaitAsync(
+                            session.SourceSearchJobId,
+                            new RetrieveFolderRequestDto(
+                                new AlbumFolderRefDto(folder.Username, folder.FolderPath),
+                                session.Query),
+                            appToken)),
+                    filterStr: session.FilterStr);
 
-                try
-                {
-                    var interactive = new InteractiveModeManager(
-                        session.PromptJob,
-                        new JobList(),
-                        availableFolders,
-                        canRetrieve: true,
-                        retrievedFolders: session.RetrievedFolders,
-                        retrieveFolderCallback: async folder => await RunPromptRetrieveFolderAsync(
-                            folder,
-                            async () => await backend.RetrieveFolderAndWaitAsync(
-                                session.SourceSearchJobId,
-                                new RetrieveFolderRequestDto(
-                                    new AlbumFolderRefDto(folder.Username, folder.FolderPath),
-                                    session.Query),
-                                appToken)),
-                        filterStr: session.FilterStr);
-
-                    result = await interactive.Run();
-                }
-                finally
-                {
-                    if (ConsoleInputManager.Reporter != null)
-                        ConsoleInputManager.Reporter.IsPaused = false;
-                    Printing.SetBuffering(false);
-                }
+                result = await interactive.Run();
             }
 
             session.FilterStr = result.FilterStr;

@@ -99,8 +99,8 @@ public class InteractiveModeManager
             Console.WriteLine();
 
         Loop:
-            string userInputStr = (await InteractiveModeInput()).Trim().ToLower();
-            string command      = userInputStr;
+            string userInputStr = (await InteractiveModeInput()).Trim();
+            string command      = userInputStr.ToLowerInvariant();
             string options      = "";
             string subfolder    = "";
 
@@ -254,6 +254,18 @@ public class InteractiveModeManager
                     }
 
                 case "f":
+                    if (string.IsNullOrWhiteSpace(options))
+                    {
+                        var prompted = ReadFilterPrompt();
+                        if (prompted == null)
+                        {
+                            ClearOutput(savedPos);
+                            goto Loop;
+                        }
+
+                        options = prompted.Trim();
+                    }
+
                     aidx = 0;
                     if (string.IsNullOrWhiteSpace(options))
                     {
@@ -326,8 +338,13 @@ public class InteractiveModeManager
                 else return "q";
             }
 
-            if (firstKey && "pnyqrsh".Contains(key.KeyChar))
+            if (firstKey && "fpnyqrsh".Contains(char.ToLowerInvariant(key.KeyChar)))
+            {
+                if (char.ToLowerInvariant(key.KeyChar) == 'f')
+                    ConsoleInputManager.PrepareDirectPromptInput();
+
                 return key.KeyChar.ToString();
+            }
 
             if (key.Key == ConsoleKey.Enter)
             {
@@ -371,6 +388,9 @@ public class InteractiveModeManager
             firstKey = false;
         }
     }
+
+    private static string? ReadFilterPrompt()
+        => ConsoleInputManager.ReadPromptInput("Filter: ");
 
     private static void ClearCurrentLine()
     {

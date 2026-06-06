@@ -5,6 +5,9 @@ namespace Sockseek.Cli;
 public static class ConsoleInputManager
 {
     private static readonly Channel<ConsoleKeyInfo> _keyChannel = Channel.CreateUnbounded<ConsoleKeyInfo>();
+    private static readonly SemaphoreSlim _consoleInteractionLock = new(1, 1);
+    private static volatile bool _directPromptActive;
+    private static int _consoleOutputPauseDepth;
 
     public enum CancelPromptAction
     {
@@ -32,6 +35,12 @@ public static class ConsoleInputManager
         {
             while (!ct.IsCancellationRequested)
             {
+                if (_directPromptActive)
+                {
+                    await Task.Delay(50, ct);
+                    continue;
+                }
+
                 if (Console.KeyAvailable)
                 {
                     var key = Console.ReadKey(intercept: true);
@@ -40,33 +49,27 @@ public static class ConsoleInputManager
                     {
                         if (OnCancelRequested != null)
                         {
-                            Printing.SetBuffering(true);
-                            if (Reporter != null) Reporter.IsPaused = true;
+                            using var interaction = await AcquireConsoleInteractionAsync(ct);
+                            using var pause = PauseConsoleOutput();
                             await OnCancelRequested();
-                            if (Reporter != null) Reporter.IsPaused = false;
-                            Printing.SetBuffering(false);
                         }
                     }
                     else if (GlobalCancelEnabled && char.ToLower(key.KeyChar) == 't')
                     {
                         if (OnNextCandidateRequested != null)
                         {
-                            Printing.SetBuffering(true);
-                            if (Reporter != null) Reporter.IsPaused = true;
+                            using var interaction = await AcquireConsoleInteractionAsync(ct);
+                            using var pause = PauseConsoleOutput();
                             await OnNextCandidateRequested();
-                            if (Reporter != null) Reporter.IsPaused = false;
-                            Printing.SetBuffering(false);
                         }
                     }
-                    else if (char.ToLower(key.KeyChar) == 'i')
+                    else if (GlobalCancelEnabled && char.ToLower(key.KeyChar) == 'i')
                     {
                         if (OnInfoRequested != null)
                         {
-                            Printing.SetBuffering(true);
-                            if (Reporter != null) Reporter.IsPaused = true;
+                            using var interaction = await AcquireConsoleInteractionAsync(ct);
+                            using var pause = PauseConsoleOutput();
                             await OnInfoRequested();
-                            if (Reporter != null) Reporter.IsPaused = false;
-                            Printing.SetBuffering(false);
                         }
                     }
                     else
@@ -96,55 +99,24 @@ public static class ConsoleInputManager
 
     public static CancelPromptResult ReadJobIdOrRefreshResult()
     {
-        var input = new System.Text.StringBuilder();
-        bool firstKey = true;
+        var input = ReadPromptInput();
 
-        while (true)
-        {
-            var key = Console.ReadKey(intercept: true);
+        if (input == null)
+            return new(CancelPromptAction.Abort);
 
-            if (key.Key == ConsoleKey.Escape)
-            {
-                Console.WriteLine();
-                return new(CancelPromptAction.Abort);
-            }
+        input = input.Trim();
 
-            if (firstKey && char.ToLower(key.KeyChar) == 'r')
-            {
-                Console.WriteLine();
-                return new(CancelPromptAction.Refresh);
-            }
+        if (input.Equals("r", StringComparison.OrdinalIgnoreCase))
+            return new(CancelPromptAction.Refresh);
 
-            firstKey = false;
-
-            if (key.Key == ConsoleKey.Enter)
-            {
-                Console.WriteLine();
-                var s = input.ToString().Trim();
-                return int.TryParse(s, out int id)
-                    ? new(CancelPromptAction.CancelJob, id)
-                    : new(CancelPromptAction.Abort);
-            }
-
-            if (key.Key == ConsoleKey.Backspace)
-            {
-                if (input.Length == 0) continue;
-                input.Length--;
-                Console.Write("\b \b");
-                continue;
-            }
-
-            if (!char.IsControl(key.KeyChar))
-            {
-                input.Append(key.KeyChar);
-                Console.Write(key.KeyChar);
-            }
-        }
+        return int.TryParse(input, out int id)
+            ? new(CancelPromptAction.CancelJob, id)
+            : new(CancelPromptAction.Abort);
     }
 
     public static CancelPromptResult ReadCancelPromptResult()
     {
-        var input = ReadCancelPromptInput();
+        var input = ReadPromptInput();
 
         if (input == null)
             return new(CancelPromptAction.Abort);
@@ -167,41 +139,99 @@ public static class ConsoleInputManager
             : new(CancelPromptAction.Invalid, Input: input);
     }
 
-    private static string? ReadCancelPromptInput()
+    public static string? ReadPromptInput(string? prompt = null)
     {
-        var input = new System.Text.StringBuilder();
-
-        while (true)
+        _directPromptActive = true;
+        bool restoreWindowsCursorVisible = false;
+        bool previousWindowsCursorVisible = true;
+        bool restoreAnsiCursorHidden = false;
+        try
         {
-            var key = Console.ReadKey(intercept: true);
-
-            if (key.Key == ConsoleKey.Escape)
+            if (!Console.IsOutputRedirected)
             {
-                Console.WriteLine();
-                return null;
+                if (OperatingSystem.IsWindows())
+                {
+                    try
+                    {
+                        previousWindowsCursorVisible = Console.CursorVisible;
+                        Console.CursorVisible = true;
+                        restoreWindowsCursorVisible = true;
+                    }
+                    catch
+                    {
+                        restoreWindowsCursorVisible = false;
+                    }
+                }
+                else
+                {
+                    Console.Write("\u001b[?25h");
+                    restoreAnsiCursorHidden = true;
+                }
             }
 
-            if (key.Key == ConsoleKey.Enter)
+            if (prompt != null)
+                Console.Write(prompt);
+
+            return Console.ReadLine();
+        }
+        finally
+        {
+            if (restoreWindowsCursorVisible)
             {
-                Console.WriteLine();
-                return input.ToString();
+                try
+                {
+                    Console.CursorVisible = previousWindowsCursorVisible;
+                }
+                catch { }
+            }
+            else if (restoreAnsiCursorHidden && !Console.IsOutputRedirected)
+            {
+                Console.Write("\u001b[?25l");
             }
 
-            if (key.Key == ConsoleKey.Backspace)
-            {
-                if (input.Length == 0)
-                    continue;
+            _directPromptActive = false;
+        }
+    }
 
-                input.Length--;
-                Console.Write("\b \b");
-                continue;
-            }
+    public static void PrepareDirectPromptInput()
+    {
+        _directPromptActive = true;
+    }
 
-            if (!char.IsControl(key.KeyChar))
+    public static async Task<IDisposable> AcquireConsoleInteractionAsync(CancellationToken ct = default)
+    {
+        await _consoleInteractionLock.WaitAsync(ct);
+        return new ActionDisposable(() => _consoleInteractionLock.Release());
+    }
+
+    public static IDisposable PauseConsoleOutput()
+    {
+        if (Interlocked.Increment(ref _consoleOutputPauseDepth) == 1)
+        {
+            Printing.SetBuffering(true);
+            if (Reporter != null)
+                Reporter.IsPaused = true;
+        }
+
+        return new ActionDisposable(() =>
+        {
+            if (Interlocked.Decrement(ref _consoleOutputPauseDepth) == 0)
             {
-                input.Append(key.KeyChar);
-                Console.Write(key.KeyChar);
+                if (Reporter != null)
+                    Reporter.IsPaused = false;
+                Printing.SetBuffering(false);
             }
+        });
+    }
+
+    private sealed class ActionDisposable(Action dispose) : IDisposable
+    {
+        private int disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) == 0)
+                dispose();
         }
     }
 }

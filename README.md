@@ -682,7 +682,7 @@ h               print this help text
 
 d:1,2,3         download specific files
 d:start-end     download a range of files
-f:query         filter folders containing files matching query
+f               filter folders containing files matching query
 cd ..           load parent folder
 cd subdir       go to subfolder
 ```

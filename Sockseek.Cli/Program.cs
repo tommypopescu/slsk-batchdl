@@ -209,7 +209,7 @@ internal static partial class Program
             lock (Printing.ConsoleLock)
             {
                 Printing.WriteLine(force: true);
-                Printing.Write("Cancel job ID or all jobs? id/[A]ll/n=Esc: ", ConsoleColor.Yellow, force: true);
+                Printing.Write("Cancel job ID or all jobs? id/[A]ll/n: ", ConsoleColor.Yellow, force: true);
             }
 
             var result = ConsoleInputManager.ReadCancelPromptResult();
@@ -247,7 +247,7 @@ internal static partial class Program
             lock (Printing.ConsoleLock)
             {
                 Printing.WriteLine(force: true);
-                Printing.Write("Try next candidate for job ID or n=Esc: ", ConsoleColor.Yellow, force: true);
+                Printing.Write("Try next candidate for job ID or n: ", ConsoleColor.Yellow, force: true);
             }
 
             var result = ConsoleInputManager.ReadCancelPromptResult();
@@ -275,7 +275,10 @@ internal static partial class Program
         ConsoleInputManager.OnInfoRequested = async () =>
         {
             lock (Printing.ConsoleLock)
-                Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
+            {
+                Printing.WriteLine(force: true);
+                Printing.Write("Info for job ID (blank to cancel): ", ConsoleColor.Yellow, force: true);
+            }
             var id = ConsoleInputManager.ReadJobIdInput();
             if (id == null) return;
 
@@ -290,7 +293,7 @@ internal static partial class Program
                     JobInfoPrinter.Print(detail);
 
                 lock (Printing.ConsoleLock)
-                    Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
+                    Printing.Write("Info for job ID (r to refresh, blank to exit): ", ConsoleColor.Yellow, force: true);
 
                 var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
 
@@ -434,7 +437,7 @@ internal static partial class Program
                 lock (Printing.ConsoleLock)
                 {
                     Printing.WriteLine(force: true);
-                    Printing.Write("Cancel job ID or current workflow? id/[A]ll/n=Esc: ", ConsoleColor.Yellow, force: true);
+                    Printing.Write("Cancel job ID or current workflow? id/[A]ll/n: ", ConsoleColor.Yellow, force: true);
                 }
 
                 var result = ConsoleInputManager.ReadCancelPromptResult();
@@ -468,7 +471,7 @@ internal static partial class Program
                 lock (Printing.ConsoleLock)
                 {
                     Printing.WriteLine(force: true);
-                    Printing.Write("Try next candidate for job ID or n=Esc: ", ConsoleColor.Yellow, force: true);
+                    Printing.Write("Try next candidate for job ID or n: ", ConsoleColor.Yellow, force: true);
                 }
 
                 var result = ConsoleInputManager.ReadCancelPromptResult();
@@ -492,7 +495,10 @@ internal static partial class Program
             ConsoleInputManager.OnInfoRequested = async () =>
             {
                 lock (Printing.ConsoleLock)
-                    Printing.Write("Info for job ID (or Esc): ", ConsoleColor.Yellow, force: true);
+                {
+                    Printing.WriteLine(force: true);
+                    Printing.Write("Info for job ID (blank to cancel): ", ConsoleColor.Yellow, force: true);
+                }
                 var id = ConsoleInputManager.ReadJobIdInput();
                 if (id == null) return;
 
@@ -507,7 +513,7 @@ internal static partial class Program
                         JobInfoPrinter.Print(detail);
 
                     lock (Printing.ConsoleLock)
-                        Printing.Write("Info for job ID (r to refresh, Esc to exit): ", ConsoleColor.Yellow, force: true);
+                        Printing.Write("Info for job ID (r to refresh, blank to exit): ", ConsoleColor.Yellow, force: true);
 
                     var result = ConsoleInputManager.ReadJobIdOrRefreshResult();
 

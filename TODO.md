@@ -19,10 +19,6 @@
 
 - Introduce a new state `pending search` (set unconditionally before waiting on the search rate & concurrency semaphores). `searching` state should only be set while actually searching.  
 
-- Logging is scattered & inconsistent. Centralize and make it more defined.
-    - Consider storing errors on the job objects and DTOs
-    - or even full per-job logs?
-
 - Do the `TODO [ARCHITECTURE]: Standardize on the Result/Outcome pattern across all job processors.`.
 
 ### Later
