@@ -177,6 +177,85 @@ namespace Tests.EndToEnd
         }
 
         [TestMethod]
+        public async Task NestedListCsv_AutoIndex_SkipsExistingItemsOnRerun()
+        {
+            Console.ResetColor();
+            Console.OutputEncoding = Encoding.UTF8;
+            SockseekLog.SetupExceptionHandling();
+            SockseekLog.AddConsole();
+            SockseekLog.SetConsoleLogLevel(LogLevel.Debug);
+
+            var tempRoot  = Path.Combine(Path.GetTempPath(), "slsk-nested-index-" + Guid.NewGuid());
+            var sourceDir = Path.Combine(tempRoot, "src");
+            var musicRoot = Path.Combine(tempRoot, "music");
+            var outputDir = Path.Combine(tempRoot, "out");
+            Directory.CreateDirectory(sourceDir);
+            Directory.CreateDirectory(musicRoot);
+            Directory.CreateDirectory(outputDir);
+
+            var csvPath = Path.Combine(sourceDir, "songs.csv");
+            var listPath = Path.Combine(sourceDir, "list.txt");
+
+            File.WriteAllText(csvPath, "artist,title\nTest Artist,First Song\nTest Artist,Second Song\n");
+            File.WriteAllText(listPath, $"\"{csvPath}\"\n");
+            File.WriteAllBytes(Path.Combine(musicRoot, "Test Artist - First Song.mp3"), TestHelpers.EmptyMp3Bytes);
+            File.WriteAllBytes(Path.Combine(musicRoot, "Test Artist - Second Song.mp3"), TestHelpers.EmptyMp3Bytes);
+
+            var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+            var settings = new DownloadSettings();
+            settings.Extraction.Input = listPath;
+            settings.Extraction.InputType = InputType.List;
+            settings.Output.ParentDir = outputDir;
+            settings.Output.NameFormat = "{filename}";
+
+            async Task RunAsync(LocalFilesSoulseekClient client)
+            {
+                var app = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(client, engineSettings));
+                app.Enqueue(new ExtractJob(listPath, InputType.List), settings);
+                app.CompleteEnqueue();
+                await app.RunAsync(CancellationToken.None);
+            }
+
+            try
+            {
+                await RunAsync(LocalFilesSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, musicRoot));
+
+                var listIndexPath = Path.Combine(outputDir, "list", "_index.csv");
+                var csvIndexPath = Path.Combine(outputDir, "songs", "_index.csv");
+                Assert.IsTrue(File.Exists(listIndexPath), "The outer list should auto-create an index file.");
+                Assert.IsTrue(File.Exists(csvIndexPath), "The nested CSV should auto-create an index file.");
+
+                var firstRunCsvIndex = File.ReadAllLines(csvIndexPath).Where(line => line.Length > 0).ToArray();
+                Assert.AreEqual("filepath,artist,album,title,length,tracktype,state,failurereason", firstRunCsvIndex[0]);
+                Assert.AreEqual(3, firstRunCsvIndex.Length, string.Join("\n", firstRunCsvIndex));
+                Assert.IsTrue(firstRunCsvIndex.Any(line => line.Contains(",Test Artist,,First Song,") && line.EndsWith(",0,1,0")),
+                    string.Join("\n", firstRunCsvIndex));
+                Assert.IsTrue(firstRunCsvIndex.Any(line => line.Contains(",Test Artist,,Second Song,") && line.EndsWith(",0,1,0")),
+                    string.Join("\n", firstRunCsvIndex));
+
+                var downloadedBeforeRerun = Directory.GetFiles(outputDir, "*.mp3", SearchOption.AllDirectories);
+                Assert.AreEqual(2, downloadedBeforeRerun.Length, string.Join("\n", downloadedBeforeRerun));
+
+                await RunAsync(LocalFilesSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, failDownloads: 10, musicRoot));
+
+                var secondRunCsvIndex = File.ReadAllLines(csvIndexPath).Where(line => line.Length > 0).ToArray();
+                Assert.AreEqual(3, secondRunCsvIndex.Length, string.Join("\n", secondRunCsvIndex));
+                Assert.IsTrue(secondRunCsvIndex.Any(line => line.Contains(",Test Artist,,First Song,") && line.EndsWith(",0,3,0")),
+                    string.Join("\n", secondRunCsvIndex));
+                Assert.IsTrue(secondRunCsvIndex.Any(line => line.Contains(",Test Artist,,Second Song,") && line.EndsWith(",0,3,0")),
+                    string.Join("\n", secondRunCsvIndex));
+
+                var downloadedAfterRerun = Directory.GetFiles(outputDir, "*.mp3", SearchOption.AllDirectories);
+                Assert.AreEqual(2, downloadedAfterRerun.Length, "The rerun should skip existing indexed tracks instead of downloading again.");
+            }
+            finally
+            {
+                if (Directory.Exists(tempRoot))
+                    Directory.Delete(tempRoot, true);
+            }
+        }
+
+        [TestMethod]
         public async Task SingleSong_WriteIndex_UsesNameFormattedPath()
         {
             var musicRoot = Path.Combine(Path.GetTempPath(), "slsk-index-song-format-music-" + Guid.NewGuid());
