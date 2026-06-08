@@ -359,8 +359,7 @@ internal sealed class LocalCliBackend
             if (!manualSong.Candidates.Contains(candidate))
                 manualSong.Candidates.Insert(0, candidate);
             manualSong.UpdateState(JobState.Pending);
-            submissionOptionsResolver?.SetJobOptions(manualSong.Id, request.Options);
-            engine.Enqueue(manualSong, settings);
+            engine.Resume(manualSong);
             summaries.Add(stateStore.GetJobSummary(manualSong.Id) ?? BuildSubmittedJobSummary(manualSong));
             return Task.FromResult<IReadOnlyList<JobSummaryDto>?>(summaries);
         }
@@ -416,18 +415,6 @@ internal sealed class LocalCliBackend
 
         var settings = BuildFollowUpSettings(sourceJob, request.Options);
 
-        if (sourceJob is AlbumJob manualAlbum && manualAlbum.State == JobState.AwaitingSelection)
-        {
-            manualAlbum.ResolvedTarget = folder;
-            JobRequestMapper.ApplyFolderDownloadSelection(manualAlbum, request.Selection);
-            if (!manualAlbum.Results.Contains(folder))
-                manualAlbum.Results.Insert(0, folder);
-            manualAlbum.UpdateState(JobState.Pending);
-            submissionOptionsResolver?.SetJobOptions(manualAlbum.Id, request.Options);
-            engine.Enqueue(manualAlbum, settings);
-            return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(manualAlbum.Id) ?? BuildSubmittedJobSummary(manualAlbum));
-        }
-
         var albumQuery = request.AlbumQuery != null
             ? JobRequestMapper.ToAlbumQuery(request.AlbumQuery)
             : sourceJob switch
@@ -437,6 +424,19 @@ internal sealed class LocalCliBackend
                 AlbumAggregateJob aggregate => aggregate.Query,
                 _ => null,
             };
+
+        if (engine.TryStartManualAlbumSelection(
+            sourceJobId,
+            folder,
+            albumQuery,
+            album => JobRequestMapper.ApplyFolderDownloadSelection(album, request.Selection),
+            out var selectedAlbum))
+        {
+            if (sourceJob is AlbumAggregateJob)
+                stateStore.SetSourceJob(selectedAlbum!.Id, sourceJobId);
+
+            return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(selectedAlbum!.Id) ?? BuildSubmittedJobSummary(selectedAlbum!, sourceJobId));
+        }
         if (albumQuery == null)
             throw new ArgumentException("Album downloads from this job require an album query.");
 
@@ -461,19 +461,10 @@ internal sealed class LocalCliBackend
         return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(followUpAlbumJob.Id) ?? BuildSubmittedJobSummary(followUpAlbumJob, sourceJobId));
     }
 
-    public Task<bool> CompleteManualSelectionAsync(Guid jobId, CancellationToken ct = default)
+    public async Task<bool> CompleteManualSelectionAsync(Guid jobId, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-
-        var job = engine.GetJob(jobId);
-        if (job == null || job.State != JobState.AwaitingSelection)
-            return Task.FromResult(false);
-
-        if (job is AlbumAggregateJob)
-            job.SetDone();
-        else
-            job.Fail(FailureReason.NoSuitableFileFound);
-        return Task.FromResult(true);
+        return await engine.CompleteManualSelectionAsync(jobId);
     }
 
     private static bool ShouldPropagateSourceMutationToFollowUp(Job sourceJob)

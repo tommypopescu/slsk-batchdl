@@ -103,6 +103,12 @@ namespace Sockseek.Core.Jobs;
             State = JobState.Failed;
         }
 
+        public void ClearFailure()
+        {
+            FailureMessage = null;
+            FailureReason = FailureReason.None;
+        }
+
         public void UpdateState(JobState state)
         {
             if (state is JobState.Failed)

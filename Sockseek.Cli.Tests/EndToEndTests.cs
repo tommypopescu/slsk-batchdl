@@ -416,8 +416,9 @@ public class CliEndToEndTests
 
             Assert.AreEqual(2, pickerCalls, "A failed chosen album should reopen the picker with remaining candidates.");
 
-            var albumJob = app.Queue.Jobs.OfType<AlbumJob>().LastOrDefault();
-            Assert.IsNotNull(albumJob);
+            var albumJobs = app.Queue.AllJobs().OfType<AlbumJob>().ToList();
+            Assert.AreEqual(1, albumJobs.Count, "Interactive retry should reuse the extracted AlbumJob instead of creating a follow-up root job.");
+            var albumJob = albumJobs[0];
             Assert.AreEqual(JobState.Done, albumJob.State, "Album should eventually succeed with the remaining folder.");
 
             var files = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories);
@@ -517,6 +518,17 @@ public class CliEndToEndTests
                 },
                 lines,
                 "Interactive mode must clear successful CSV album rows using the original extracted jobs.");
+
+            var indexPath = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(csvPath), "_index.csv");
+            Assert.IsTrue(File.Exists(indexPath), $"Expected interactive CSV run to update list index at {indexPath}");
+            var indexLines = File.ReadAllLines(indexPath).Select(line => line.Replace('\\', '/')).ToList();
+
+            Assert.IsTrue(indexLines.Any(line => line.Contains("Sonic Youth,Daydream Nation,,-1,1,1,0")),
+                string.Join("\n", indexLines));
+            Assert.IsTrue(indexLines.Any(line => line.Contains("Mitski,Be the Cowboy,,-1,1,1,0")),
+                string.Join("\n", indexLines));
+            Assert.IsTrue(indexLines.Any(line => line == ",Talking Heads,Remain in Light,,-1,1,2,3"),
+                string.Join("\n", indexLines));
         }
         finally
         {

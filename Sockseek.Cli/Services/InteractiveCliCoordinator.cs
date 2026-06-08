@@ -296,6 +296,7 @@ internal sealed class InteractiveCliCoordinator
         if (summary == null)
             throw new InvalidOperationException("Failed to start interactive album download.");
 
+        handledManualSelections.Remove(summary.JobId);
         interactiveAlbumSessions[summary.JobId] = session;
     }
 

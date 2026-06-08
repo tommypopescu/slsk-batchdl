@@ -41,6 +41,8 @@ public class DownloadEngine
 
     private readonly ConcurrentDictionary<Guid, JobContext> _contexts = new();
     private readonly ConcurrentDictionary<string, byte> _appliedSourceMutations = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<Guid, Guid> _manualAggregateParentByAlbumId = new();
+    private readonly ConcurrentDictionary<Guid, byte> _closedManualAggregateSelections = new();
     private readonly SourceMutationExecutor _sourceMutationExecutor = new();
 
     private readonly ConcurrentDictionary<Guid, Job> _jobById = new();
@@ -121,12 +123,71 @@ public class DownloadEngine
 
     // ── job channel ──────────────────────────────────────────────────────────
 
-    private readonly Channel<(Job Job, DownloadSettings Settings)> _jobChannel =
-        Channel.CreateUnbounded<(Job, DownloadSettings)>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<QueuedEngineJob> _jobChannel =
+        Channel.CreateUnbounded<QueuedEngineJob>(new UnboundedChannelOptions { SingleReader = true });
 
-    /// <summary>Enqueues a job for processing. Call <see cref="CompleteEnqueue"/> when done adding jobs.</summary>
+    /// <summary>Enqueues a new root job for processing. Call <see cref="CompleteEnqueue"/> when done adding jobs.</summary>
     public void Enqueue(Job job, DownloadSettings settings) =>
-        _jobChannel.Writer.TryWrite((job, settings));
+        _jobChannel.Writer.TryWrite(QueuedEngineJob.Root(job, settings));
+
+    /// <summary>Resumes an existing job without re-parenting it or replacing its prepared context.</summary>
+    public void Resume(Job job) =>
+        _jobChannel.Writer.TryWrite(QueuedEngineJob.Resume(job));
+
+    /// <summary>
+    /// Applies a manual album-folder selection to an existing selection job and resumes it
+    /// without creating a follow-up job or rebuilding its prepared context.
+    /// </summary>
+    public bool TryStartManualAlbumSelection(
+        Guid sourceJobId,
+        AlbumFolder selectedFolder,
+        AlbumQuery? albumQuery,
+        Action<AlbumJob>? configureSelection,
+        out AlbumJob? selectedJob)
+    {
+        selectedJob = null;
+        var sourceJob = GetJob(sourceJobId);
+
+        if (sourceJob is AlbumJob albumJob && CanStartManualAlbumSelection(albumJob))
+        {
+            StartExistingAlbumSelection(albumJob, selectedFolder, configureSelection);
+            selectedJob = albumJob;
+            return true;
+        }
+
+        if (sourceJob is AlbumAggregateJob aggregateJob && aggregateJob.State == JobState.AwaitingSelection)
+        {
+            var childAlbum = FindAggregateAlbumForSelection(aggregateJob, selectedFolder, albumQuery);
+            if (childAlbum == null)
+                return false;
+
+            EnsureManualAggregateAlbumChildPrepared(aggregateJob, childAlbum);
+            StartExistingAlbumSelection(childAlbum, selectedFolder, configureSelection);
+            selectedJob = childAlbum;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Completes an AwaitingSelection job through the engine so terminal side effects stay centralized.</summary>
+    public async Task<bool> CompleteManualSelectionAsync(Guid jobId)
+    {
+        var job = GetJob(jobId);
+        if (job == null || job.State != JobState.AwaitingSelection || job.Config == null)
+            return false;
+
+        if (job is AlbumAggregateJob aggregateJob)
+        {
+            _closedManualAggregateSelections.TryAdd(aggregateJob.Id, 0);
+            await TryFinalizeClosedManualAggregateSelectionAsync(aggregateJob);
+            return true;
+        }
+
+        job.Fail(FailureReason.NoSuitableFileFound);
+        await FlushManualSelectionTerminalEffectsAsync(job);
+        return true;
+    }
 
     /// <summary>Signals that no more jobs will be enqueued. <see cref="RunAsync"/> will drain and exit.</summary>
     public void CompleteEnqueue() => _jobChannel.Writer.Complete();
@@ -192,6 +253,66 @@ public class DownloadEngine
         }
     }
 
+    private sealed record QueuedEngineJob(Job Job, DownloadSettings? Settings, bool IsResume)
+    {
+        public static QueuedEngineJob Root(Job job, DownloadSettings settings) => new(job, settings, false);
+        public static QueuedEngineJob Resume(Job job) => new(job, null, true);
+    }
+
+    private void StartExistingAlbumSelection(AlbumJob albumJob, AlbumFolder selectedFolder, Action<AlbumJob>? configureSelection)
+    {
+        albumJob.ClearFailure();
+        albumJob.ResolvedTarget = selectedFolder;
+        configureSelection?.Invoke(albumJob);
+        if (!albumJob.Results.Any(folder => SameAlbumFolder(folder, selectedFolder)))
+            albumJob.Results.Insert(0, selectedFolder);
+        albumJob.UpdateState(JobState.Pending);
+        Resume(albumJob);
+    }
+
+    private static bool CanStartManualAlbumSelection(AlbumJob albumJob)
+        => albumJob.DownloadBehavior == DownloadBehavior.Manual
+            && albumJob.State is JobState.AwaitingSelection or JobState.Failed;
+
+    private AlbumJob? FindAggregateAlbumForSelection(AlbumAggregateJob aggregateJob, AlbumFolder selectedFolder, AlbumQuery? albumQuery)
+        => aggregateJob.Albums.FirstOrDefault(album =>
+            (albumQuery == null || AlbumQueriesEqual(album.Query, albumQuery))
+            && album.Results.Any(folder => SameAlbumFolder(folder, selectedFolder)));
+
+    private void EnsureManualAggregateAlbumChildPrepared(AlbumAggregateJob aggregateJob, AlbumJob albumJob)
+    {
+        albumJob.WorkflowId = aggregateJob.WorkflowId;
+        albumJob.Config = aggregateJob.Config;
+        albumJob.ItemName ??= albumJob.ToString(noInfo: true);
+        albumJob.DownloadBehaviorPolicy = albumJob.DownloadBehaviorPolicy with { Album = DownloadBehavior.Manual };
+
+        _manualAggregateParentByAlbumId[albumJob.Id] = aggregateJob.Id;
+        RegisterJob(albumJob, aggregateJob);
+
+        if (_contexts.ContainsKey(albumJob.Id))
+            return;
+
+        var parentCtx = Ctx(aggregateJob);
+        _contexts[albumJob.Id] = new JobContext
+        {
+            IndexEditor = parentCtx.IndexEditor,
+            PlaylistEditor = parentCtx.PlaylistEditor,
+            OutputDirSkipper = parentCtx.OutputDirSkipper,
+            MusicDirSkipper = parentCtx.MusicDirSkipper,
+            PreprocessTracks = false,
+        };
+    }
+
+    private static bool SameAlbumFolder(AlbumFolder left, AlbumFolder right)
+        => string.Equals(left.Username, right.Username, StringComparison.Ordinal)
+            && string.Equals(left.FolderPath, right.FolderPath, StringComparison.Ordinal);
+
+    private static bool AlbumQueriesEqual(AlbumQuery left, AlbumQuery right)
+        => string.Equals(left.Artist, right.Artist, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(left.Album, right.Album, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(left.SearchHint, right.SearchHint, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(left.URI, right.URI, StringComparison.OrdinalIgnoreCase);
+
 
     // ── top-level entry point ─────────────────────────────────────────────────
 
@@ -201,15 +322,26 @@ public class DownloadEngine
         var rootTasks = new List<Task>();
 
         SockseekLog.Jobs.Trace("RunAsync: Starting to read from job channel.");
-        await foreach (var (rootJob, settings) in _jobChannel.Reader.ReadAllAsync(ct))
+        await foreach (var queuedJob in _jobChannel.Reader.ReadAllAsync(ct))
         {
-            SockseekLog.Jobs.Trace($"RunAsync: Read root job {rootJob.DisplayId} from channel.");
-            Queue.Jobs.Add(rootJob);
+            var rootJob = queuedJob.Job;
+            var settings = queuedJob.Settings;
+            SockseekLog.Jobs.Trace($"RunAsync: Read {(queuedJob.IsResume ? "resume" : "root")} job {rootJob.DisplayId} from channel.");
 
-            foreach (var (id, ctx) in JobPreparer.PrepareSubtree(rootJob, settings, _jobSettingsResolver))
-                _contexts[id] = ctx;
+            if (!queuedJob.IsResume)
+            {
+                Queue.Jobs.Add(rootJob);
 
-            if (settings.NeedLogin && !servicesInitialized)
+                foreach (var (id, ctx) in JobPreparer.PrepareSubtree(rootJob, settings!, _jobSettingsResolver))
+                    _contexts[id] = ctx;
+            }
+            else if (!_contexts.ContainsKey(rootJob.Id))
+            {
+                throw new InvalidOperationException($"Cannot resume job {rootJob.DisplayId}: no prepared job context exists.");
+            }
+
+            var effectiveSettings = settings ?? rootJob.Config!;
+            if (effectiveSettings.NeedLogin && !servicesInitialized)
             {
                 try
                 {
@@ -510,6 +642,13 @@ public class DownloadEngine
 
             SockseekLog.Jobs.Trace($"ProcessJob: Finished job {job.DisplayId} ({job.GetType().Name}). Raising execution completed.");
             RaiseJobExecutionCompleted();
+
+            if (job is AlbumJob albumJob
+                && _manualAggregateParentByAlbumId.TryGetValue(albumJob.Id, out var aggregateId)
+                && GetJob(aggregateId) is AlbumAggregateJob aggregateJob)
+            {
+                await TryFinalizeClosedManualAggregateSelectionAsync(aggregateJob);
+            }
         }
     }
 
@@ -550,6 +689,58 @@ public class DownloadEngine
             _ => job.State == JobState.Done || job.State == JobState.AlreadyExists,
         };
     }
+
+    async Task TryFinalizeClosedManualAggregateSelectionAsync(AlbumAggregateJob aggregateJob)
+    {
+        if (!_closedManualAggregateSelections.ContainsKey(aggregateJob.Id))
+            return;
+
+        if (aggregateJob.State is JobState.Done or JobState.AlreadyExists or JobState.Failed)
+            return;
+
+        var selectedAlbums = _manualAggregateParentByAlbumId
+            .Where(pair => pair.Value == aggregateJob.Id)
+            .Select(pair => GetJob(pair.Key))
+            .OfType<AlbumJob>()
+            .ToList();
+
+        if (selectedAlbums.Count == 0)
+        {
+            aggregateJob.Fail(FailureReason.NoSuitableFileFound);
+            await FlushManualSelectionTerminalEffectsAsync(aggregateJob);
+            return;
+        }
+
+        if (selectedAlbums.Any(album => IsActiveManualSelectionChild(album.State)))
+            return;
+
+        if (selectedAlbums.All(album => album.State is JobState.Done or JobState.AlreadyExists))
+            aggregateJob.SetDone();
+        else
+            aggregateJob.Fail(FailureReason.NoSuitableFileFound);
+
+        await FlushManualSelectionTerminalEffectsAsync(aggregateJob);
+    }
+
+    async Task FlushManualSelectionTerminalEffectsAsync(Job job)
+    {
+        if (_contexts.TryGetValue(job.Id, out var ctx))
+        {
+            ctx.IndexEditor?.Update();
+            ctx.PlaylistEditor?.Update();
+        }
+
+        await MaybeRemoveFromSource(job, job.Config);
+        Events.RaiseJobExecutionCompleted(job);
+    }
+
+    static bool IsActiveManualSelectionChild(JobState state)
+        => state is JobState.Pending
+            or JobState.Extracting
+            or JobState.Searching
+            or JobState.Downloading
+            or JobState.Running
+            or JobState.AwaitingSelection;
 
     static void SetJobListTerminalState(JobList jobList)
     {
@@ -971,6 +1162,34 @@ public class DownloadEngine
             await Task.WhenAll(tasks);
         }
 
+        bool ReturnSelectedFolderToManualPicker(AlbumFolder? failedFolder, FailureReason finalReason)
+        {
+            if (job.DownloadBehavior != DownloadBehavior.Manual || job.Cts?.IsCancellationRequested == true)
+            {
+                job.Fail(finalReason);
+                return false;
+            }
+
+            if (failedFolder != null)
+                job.Results.RemoveAll(folder => SameAlbumFolder(folder, failedFolder));
+
+            job.ResolvedTarget = null;
+            job.AllowBrowseResolvedTarget = true;
+            job.SkipResolvedTargetTrackCountVerification = false;
+            organizer.SetremoteBaseDir(null);
+
+            if (job.Results.Count == 0)
+            {
+                job.Fail(finalReason);
+                return false;
+            }
+
+            ctx.IndexEditor?.Update();
+            ctx.PlaylistEditor?.Update();
+            job.UpdateState(JobState.AwaitingSelection);
+            return true;
+        }
+
         int tried = 0;
         while (job.Results.Count > 0 && !config.Output.AlbumArtOnly)
         {
@@ -1022,7 +1241,8 @@ public class DownloadEngine
                         SockseekLog.Jobs.Info($"[{job.DisplayId}] AlbumJob: album track count verification was cancelled, skipping folder: {chosenFolder.FolderPath}");
                         if (wasPreselected)
                         {
-                            job.Fail(FailureReason.NoSuitableFileFound);
+                            if (ReturnSelectedFolderToManualPicker(chosenFolder, FailureReason.NoSuitableFileFound))
+                                return;
                             break;
                         }
 
@@ -1049,7 +1269,8 @@ public class DownloadEngine
                     if (wasPreselected)
                     {
                         SockseekLog.Jobs.Info($"[{job.DisplayId}] AlbumJob: preselected folder failed album track count condition, skipping album: {chosenFolder.FolderPath}");
-                        job.Fail(FailureReason.NoSuitableFileFound);
+                        if (ReturnSelectedFolderToManualPicker(chosenFolder, FailureReason.NoSuitableFileFound))
+                            return;
                         break;
                     }
 
@@ -1113,7 +1334,14 @@ public class DownloadEngine
             if (!succeeded)
             {
                 organizer.SetremoteBaseDir(null);
-                if (wasPreselected || tried >= config.Transfer.MaxDownloadRetries)
+                if (wasPreselected)
+                {
+                    if (ReturnSelectedFolderToManualPicker(lastChosenFolder, FailureReason.AllDownloadsFailed))
+                        return;
+                    break;
+                }
+
+                if (tried >= config.Transfer.MaxDownloadRetries)
                 {
                     job.Fail(FailureReason.AllDownloadsFailed);
                     break;
