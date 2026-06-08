@@ -691,7 +691,7 @@ namespace Tests.Unit
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
-            var results = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
+            var (results, _) = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
 
             // Expected groups:
             // 1. Time Standard (10 tracks, lengths 181..190 - shared by User1, User6)
@@ -719,7 +719,7 @@ namespace Tests.Unit
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
-            var results = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
+            var (results, _) = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
 
             // Only the "Standard Time" version (shared by User1 and User6) meets the threshold.
             Assert.AreEqual(1, results.Count, "High entropy filter (minShares=2) failed.");
@@ -1189,7 +1189,7 @@ namespace Tests.Unit
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
-            var results = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
+            var (results, _) = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
 
             // First result should be the one with 2 shares.
             Assert.AreEqual(2, results.Count);
@@ -1221,7 +1221,7 @@ namespace Tests.Unit
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
-            var results = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
+            var (results, _) = await searcher.SearchAggregateAlbum(job, config.Search, responseData, CancellationToken.None);
 
             Assert.AreEqual(2, results.Count, "Single-track album versions should not merge just because lengths match.");
             Assert.IsTrue(results.Any(r => r.Results[0].Files.Any(f => f.Query.Title.Contains("Blue Sky"))));

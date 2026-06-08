@@ -40,7 +40,7 @@ public partial class Searcher
 
     // ── raw search job ──────────────────────────────────────────────────────
 
-    public async Task Search(SearchJob job, SearchSettings search, ResponseData responseData, CancellationToken ct, Action? onSearch = null)
+    public async Task<JobOutcome> Search(SearchJob job, SearchSettings search, ResponseData responseData, CancellationToken ct, Action? onSearch = null, bool completeSessionOnError = true)
     {
         var session = job.Session;
         job.UpdateState(JobState.Searching);
@@ -62,21 +62,19 @@ public partial class Searcher
 
             responseData.lockedFilesCount += session.LockedFileCount;
             job.Discovery = new DiscoverySummary { ResultCount = session.Results.Count, LockedFileCount = session.LockedFileCount };
-            job.SetDone();
+            session.Complete();
+            return JobOutcome.Done();
         }
         catch (OperationCanceledException)
         {
-            job.Fail(FailureReason.Cancelled);
-            throw;
-        }
-        catch (Exception e)
-        {
-            job.Fail(FailureReason.Other, e.Message);
-            throw;
-        }
-        finally
-        {
             session.Complete();
+            return JobOutcome.Failed(FailureReason.Cancelled);
+        }
+        catch
+        {
+            if (completeSessionOnError)
+                session.Complete();
+            throw;
         }
     }
 
@@ -156,18 +154,22 @@ public partial class Searcher
     // ── album search ─────────────────────────────────────────────────────────
 
     // Populates job.Results with candidate AlbumFolders found on the network.
-    public async Task SearchAlbum(AlbumJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
+    public async Task<JobOutcome?> SearchAlbum(AlbumJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
     {
         var searchJob = new SearchJob(job.Query);
         job.UpdateState(JobState.Searching);
-        await Search(searchJob, search, responseData, ct);
+        var outcome = await Search(searchJob, search, responseData, ct);
+        if (outcome.State == JobState.Failed)
+            return outcome;
+
         job.Results = searchJob.GetAlbumFolders(search).Items.ToList();
+        return null;
     }
 
     // ── aggregate search ─────────────────────────────────────────────────────
 
     // Populates job.Songs: one SongJob per distinct inferred track version found.
-    public async Task SearchAggregate(AggregateJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
+    public async Task<JobOutcome?> SearchAggregate(AggregateJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
     {
         var session = new SearchSession();
 
@@ -180,28 +182,39 @@ public partial class Searcher
                 responseFilter: r => r.UploadSpeed > 0 && nec.UserSatisfies(r),
                 fileFilter: f => nec.FileSatisfies(f, job.Query, null));
 
-        job.UpdateState(JobState.Searching);
-        await concurrencySemaphore.WaitAsync(ct);
-        try { await RunSearches(job.Query, session.Results, getOpts, session.AddResponse, search, ct); }
-        finally { concurrencySemaphore.Release(); }
+        try
+        {
+            job.UpdateState(JobState.Searching);
+            await concurrencySemaphore.WaitAsync(ct);
+            try { await RunSearches(job.Query, session.Results, getOpts, session.AddResponse, search, ct); }
+            finally { concurrencySemaphore.Release(); }
+        }
+        catch (OperationCanceledException)
+        {
+            return JobOutcome.Failed(FailureReason.Cancelled);
+        }
 
         responseData.lockedFilesCount += session.LockedFileCount;
         job.Songs = SearchResultProjector.AggregateTracks(session.Snapshot(), job.Query, search, userStats.UserSuccessCounts);
+        return null;
     }
 
     // Returns new AlbumJobs (one per distinct album version found on the network).
-    public async Task<List<AlbumJob>> SearchAggregateAlbum(AlbumAggregateJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
+    public async Task<(List<AlbumJob> Albums, JobOutcome? Outcome)> SearchAggregateAlbum(AlbumAggregateJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
     {
         job.UpdateState(JobState.Searching);
         var searchJob = new SearchJob(job.Query);
-        await Search(searchJob, search, responseData, ct);
+        var outcome = await Search(searchJob, search, responseData, ct);
+        if (outcome.State == JobState.Failed)
+            return ([], outcome);
+
         var folders = searchJob.GetAlbumFolders(
             new FolderSearchProjection(
                 job.Query,
                 IgnoreStringSortConditions: true,
                 SortMode: FolderSortMode.DeterministicUnranked),
             search);
-        return SearchResultProjector.AggregateAlbums(folders.Items, job.Query, search);
+        return (SearchResultProjector.AggregateAlbums(folders.Items, job.Query, search), null);
     }
 
 
@@ -666,47 +679,3 @@ public partial class Searcher
         ["purple", "rain"],
     ];
 }
-
-// TODO [ARCHITECTURE]: Standardize on the Result/Outcome pattern across all job processors.
-// Currently, control flow is mixed:
-// 1. Expected domain failures in single-song downloads throw exceptions (e.g., NoSuitableFileFoundException).
-// 2. High-level processors (ProcessAlbumJob, ProcessAggregateJob) directly mutate the Job state (job.Fail()).
-//
-// We should refactor all job handlers (ProcessSongJob, ProcessAlbumJob, etc.) to return a 
-// standardized Result object (e.g., `JobOutcome`). This will:
-// - Eliminate boilerplate exceptions and stack-trace overhead for expected domain outcomes.
-// - Decouple execution from state mutation.
-// - Fix race conditions in EngineEvents by localizing Job state mutation to the main orchestration loop.
-// The old exception types should be removed.
-
-public abstract class SearchAndDownloadException : Exception
-{
-    public FailureReason Reason { get; }
-    protected SearchAndDownloadException(FailureReason reason, string message) : base(message) { Reason = reason; }
-    protected SearchAndDownloadException(FailureReason reason, string message, Exception inner) : base(message, inner) { Reason = reason; }
-}
-
-public class OutOfDownloadRetriesException : SearchAndDownloadException
-{
-    public OutOfDownloadRetriesException(Exception inner)
-        : base(FailureReason.OutOfDownloadRetries, "Out of download retries.", inner) { }
-}
-
-public class NoSuitableFileFoundException : SearchAndDownloadException
-{
-    public NoSuitableFileFoundException(string? details = null)
-        : base(FailureReason.NoSuitableFileFound, details ?? "") { }
-    public NoSuitableFileFoundException(string details, Exception inner)
-        : base(FailureReason.NoSuitableFileFound, details, inner) { }
-}
-
-public class AllDownloadsFailedException : SearchAndDownloadException
-{
-    public AllDownloadsFailedException()
-        : base(FailureReason.AllDownloadsFailed, "All downloads failed.") { }
-
-    public AllDownloadsFailedException(Exception inner)
-        : base(FailureReason.AllDownloadsFailed, inner.Message, inner) { }
-}
-
-public class ManuallySkippedException : Exception {}

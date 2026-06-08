@@ -10,6 +10,23 @@ using Sockseek.Core.Settings;
 namespace Sockseek.Core.Services;
 
 
+public sealed record FileDownloadResult(string OutputPath, FileCandidate Candidate);
+
+public enum FileDownloadStatus
+{
+    Completed,
+    ManuallySkipped,
+}
+
+public sealed record FileDownloadOutcome(FileDownloadStatus Status, FileDownloadResult? Result, FileCandidate Candidate)
+{
+    public static FileDownloadOutcome Completed(FileDownloadResult result)
+        => new(FileDownloadStatus.Completed, result, result.Candidate);
+
+    public static FileDownloadOutcome ManuallySkipped(FileCandidate candidate)
+        => new(FileDownloadStatus.ManuallySkipped, null, candidate);
+}
+
 public class Downloader
 {
     private readonly ISoulseekClient client;
@@ -28,18 +45,18 @@ public class Downloader
         this.events = events;
     }
 
-    public async Task DownloadFile(FileCandidate candidate, string outputPath, SongJob song,
+    public async Task<FileDownloadOutcome> DownloadFile(FileCandidate candidate, string outputPath, SongJob song,
         TransferSettings transfer, string? parentDir, CancellationToken? ct = null)
     {
         string fileKey = candidate.Username + '\\' + candidate.Filename;
 
-        if (downloadRegistry.DownloadedFiles.TryGetValue(fileKey, out var existingSong))
+        lock (downloadRegistry.DownloadedFiles)
         {
-            lock (downloadRegistry.DownloadedFiles)
+            if (downloadRegistry.DownloadedFiles.TryGetValue(fileKey, out var existingDownload))
             {
-                var existingPath     = existingSong.DownloadPath;
+                var existingPath     = existingDownload.OutputPath;
                 var outputFileInfo   = new FileInfo(outputPath);
-                var existingFileInfo = new FileInfo(existingPath ?? "");
+                var existingFileInfo = new FileInfo(existingPath);
 
                 if (existingFileInfo.Exists && existingFileInfo.Length == candidate.File.Size)
                 {
@@ -52,8 +69,7 @@ public class Downloader
                         File.Copy(existingPath!, outputPath, true);
                     }
 
-                    song.SetDone(outputPath, candidate);
-                    return;
+                    return FileDownloadOutcome.Completed(new FileDownloadResult(outputPath, existingDownload.Candidate));
                 }
                 else
                 {
@@ -148,7 +164,7 @@ public class Downloader
             }
             
             if (downloadRegistry.Downloads.TryRemove(candidate.Filename, out var ad) && ad.IsManuallySkipped)
-                throw new ManuallySkippedException();
+                return FileDownloadOutcome.ManuallySkipped(candidate);
 
             throw;
         }
@@ -160,13 +176,15 @@ public class Downloader
             catch (IOException e) { SockseekLog.Jobs.Error($"[{song.DisplayId}] SongJob: failed to rename incomplete file from '{incompleteOutputPath}' to '{outputPath}'. Error: {e}"); }
         }
 
-        downloadRegistry.DownloadedFiles[fileKey] = song;
+        var result = new FileDownloadResult(outputPath, candidate);
+        lock (downloadRegistry.DownloadedFiles)
+            downloadRegistry.DownloadedFiles[fileKey] = result;
         downloadRegistry.Downloads.TryRemove(candidate.Filename, out _);
 
         if (candidate.File.Size > 0)
             song.BytesTransferred = candidate.File.Size;
 
-        song.SetDone(outputPath, candidate);
+        return FileDownloadOutcome.Completed(result);
     }
 
     static string GetStateLabel(TransferStates s)

@@ -318,6 +318,62 @@ namespace Tests.EndToEnd
         }
 
         [TestMethod]
+        public async Task AlbumAggregateJob_NotFoundChild_DoesNotReportDone()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-test-out-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var file = TestHelpers.CreateSlFile(@"Album\01. Artist - Song.mp3", length: 180);
+            var response = new Soulseek.SearchResponse("User1", 1, true, 100, 0, [file]);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var indexPath = Path.Combine(outputDir, "_index.csv");
+
+                var missingAlbumSettings = new DownloadSettings();
+                missingAlbumSettings.Output.ParentDir = outputDir;
+                missingAlbumSettings.Output.WriteIndex = true;
+                missingAlbumSettings.Output.HasConfiguredIndex = true;
+                missingAlbumSettings.Output.IndexFilePath = indexPath;
+
+                var missingAlbum = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+                var firstRun = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(new ClientTests.MockSoulseekClient([]), eng));
+                firstRun.Enqueue(missingAlbum, missingAlbumSettings);
+                firstRun.CompleteEnqueue();
+                await firstRun.RunAsync(CancellationToken.None);
+                Assert.AreEqual(JobState.Failed, missingAlbum.State);
+                Assert.AreEqual(FailureReason.NoSuitableFileFound, missingAlbum.FailureReason);
+
+                var aggregateSettings = new DownloadSettings();
+                aggregateSettings.Extraction.Input = "artist=Artist";
+                aggregateSettings.Extraction.IsAlbum = true;
+                aggregateSettings.Output.ParentDir = outputDir;
+                aggregateSettings.Output.WriteIndex = true;
+                aggregateSettings.Output.HasConfiguredIndex = true;
+                aggregateSettings.Output.IndexFilePath = indexPath;
+                aggregateSettings.Search.IsAggregate = true;
+                aggregateSettings.Search.MinSharesAggregate = 1;
+                aggregateSettings.Skip.SkipNotFound = true;
+
+                var secondRun = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(new ClientTests.MockSoulseekClient([response]), eng));
+                secondRun.Enqueue(new ExtractJob(aggregateSettings.Extraction.Input, aggregateSettings.Extraction.InputType), aggregateSettings);
+                secondRun.CompleteEnqueue();
+                await secondRun.RunAsync(CancellationToken.None);
+
+                var aggJob = secondRun.Queue.AllJobs().OfType<AlbumAggregateJob>().FirstOrDefault();
+                Assert.IsNotNull(aggJob);
+                Assert.AreEqual(1, aggJob.Albums.Count);
+                Assert.AreEqual(JobState.Skipped, aggJob.Albums[0].State);
+                Assert.AreEqual(JobState.Skipped, aggJob.State, "Parent AlbumAggregateJob should not report Done when its only generated child was skipped.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task NormalJob_SkipsExistingFiles_RespectsLengthToleranceNotAggregateTol()
         {
             var outputDir = Path.Combine(Path.GetTempPath(), "slsk-test-out-" + Guid.NewGuid());

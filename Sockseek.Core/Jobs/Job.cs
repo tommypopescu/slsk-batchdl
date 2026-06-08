@@ -22,6 +22,10 @@ namespace Sockseek.Core.Jobs;
     // 2. Background workers should yield `ProgressEvent` structs to a Channel.
     // 3. A central reducer reads the channel, creates a *new* copy of the Job via the `with` expression, 
     //    and pushes the unified snapshot to the UI.
+    // Prerequisite roadmap:
+    // 1. Finish making all job processors return explicit JobOutcome values for lifecycle transitions.
+    // 2. Introduce a reducer/state-store boundary for lifecycle state before converting Job snapshots
+    //    to truly immutable values.
     public abstract class Job : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;

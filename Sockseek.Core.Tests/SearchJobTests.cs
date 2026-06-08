@@ -256,5 +256,107 @@ namespace Tests.Unit
             Assert.IsTrue(job.IsComplete);
             Assert.AreEqual(1, job.ResultCount);
         }
+
+        [TestMethod]
+        public async Task SearchJob_DisconnectDuringSearch_RetriesWithoutCompletingLiveSession()
+        {
+            var index = new List<SearchResponse>
+            {
+                new("User1", 1, true, 100, 0,
+                [
+                    TestHelpers.CreateSlFile(@"Music\Artist\Track.mp3", length: 180),
+                ]),
+            };
+
+            var (engineSettings, downloadSettings) = TestHelpers.CreateDefaultSettings();
+            engineSettings.Username = "test_user";
+            engineSettings.Password = "test_pass";
+
+            var client = new ClientTests.MockSoulseekClient(index);
+            client.FailNextSearchWithDisconnect();
+            var engine = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(client, engineSettings));
+            var job = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track" });
+            var streamed = new List<SearchRawResult>();
+            var readerTask = Task.Run(async () =>
+            {
+                await foreach (var result in job.ReadRawResultsAsync())
+                    streamed.Add(result);
+            });
+
+            engine.Enqueue(job, downloadSettings);
+            engine.CompleteEnqueue();
+
+            await engine.RunAsync(CancellationToken.None);
+            await readerTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.AreEqual(JobState.Done, job.State);
+            Assert.IsTrue(job.IsComplete);
+            Assert.IsTrue(client.SearchCallCount >= 2, "Search should retry after reconnect.");
+            Assert.AreEqual(1, streamed.Count, "The live raw-results stream should not complete before the retry succeeds.");
+            Assert.AreEqual(@"Music\Artist\Track.mp3", streamed[0].Filename);
+        }
+
+        [TestMethod]
+        public async Task SearchJob_TerminalSearchFailure_CompletesLiveSession()
+        {
+            var (engineSettings, downloadSettings) = TestHelpers.CreateDefaultSettings();
+            engineSettings.Username = "test_user";
+            engineSettings.Password = "test_pass";
+
+            var client = new ClientTests.MockSoulseekClient([]);
+            client.FailNextSearch();
+            var engine = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(client, engineSettings));
+            var job = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track" });
+            var streamed = new List<SearchRawResult>();
+            var readerTask = Task.Run(async () =>
+            {
+                await foreach (var result in job.ReadRawResultsAsync())
+                    streamed.Add(result);
+            });
+
+            engine.Enqueue(job, downloadSettings);
+            engine.CompleteEnqueue();
+
+            await engine.RunAsync(CancellationToken.None);
+            await readerTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.AreEqual(JobState.Failed, job.State);
+            Assert.AreEqual(FailureReason.Other, job.FailureReason);
+            Assert.IsTrue(job.IsComplete, "Terminal search failures should close live raw-result streams.");
+            Assert.AreEqual(0, streamed.Count);
+        }
+
+        [TestMethod]
+        public async Task Searcher_SearchJob_TerminalFailure_CompletesLiveSessionForDirectCallers()
+        {
+            var config = TestHelpers.CreateDefaultSettings().Download;
+            var registry = TestHelpers.CreateSessionRegistry();
+            var client = new ClientTests.MockSoulseekClient([]);
+            client.FailNextSearch();
+            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var job = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track" });
+            var streamed = new List<SearchRawResult>();
+            var readerTask = Task.Run(async () =>
+            {
+                await foreach (var result in job.ReadRawResultsAsync())
+                    streamed.Add(result);
+            });
+
+            var threw = false;
+            try
+            {
+                await searcher.Search(job, config.Search, new ResponseData(), CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                threw = true;
+            }
+
+            Assert.IsTrue(threw, "Expected Searcher.Search to throw on terminal search failure.");
+            await readerTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.IsTrue(job.IsComplete, "Direct Searcher.Search callers should not leave raw-result streams open after terminal errors.");
+            Assert.AreEqual(0, streamed.Count);
+        }
     }
 }

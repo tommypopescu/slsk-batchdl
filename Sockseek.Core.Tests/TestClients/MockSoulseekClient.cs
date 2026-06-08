@@ -7,15 +7,19 @@ namespace Tests.ClientTests
     {
         public IReadOnlyCollection<Transfer> Downloads => throw new NotImplementedException();
 
-        public SoulseekClientStates State => SoulseekClientStates.Connected | SoulseekClientStates.LoggedIn;
+        public SoulseekClientStates State { get; private set; } = SoulseekClientStates.Connected | SoulseekClientStates.LoggedIn;
 
         public SoulseekClientOptions Options => throw new NotImplementedException();
 
         private List<Soulseek.SearchResponse> index;
         private readonly int searchDelayMs;
         private readonly HashSet<string> failingUsers;
+        private readonly HashSet<string> disconnectingUsers = new(StringComparer.OrdinalIgnoreCase);
+        private int disconnectingSearches;
+        private int failingSearches;
 
         public int SearchesCancelledMidDelay { get; private set; }
+        public int SearchCallCount;
         public int DownloadCallCount;
         public int BrowseCallCount;
         public int DownloadCallCountAtFirstBrowse = -1;
@@ -23,6 +27,15 @@ namespace Tests.ClientTests
         public Func<string, string, CancellationToken, Task>? BeforeDownloadCompletesAsync;
         public bool BrowseReturnsBasenames { get; set; }
         public bool IsDisposed { get; private set; }
+
+        public void FailNextDownloadWithDisconnect(string username)
+            => disconnectingUsers.Add(username);
+
+        public void FailNextSearchWithDisconnect()
+            => Interlocked.Increment(ref disconnectingSearches);
+
+        public void FailNextSearch()
+            => Interlocked.Increment(ref failingSearches);
 
         public MockSoulseekClient(List<Soulseek.SearchResponse> index, int searchDelayMs = 0, IEnumerable<string>? failingUsers = null)
         {
@@ -112,6 +125,7 @@ namespace Tests.ClientTests
 
         public Task ConnectAsync(string address, int port, string username, string password, CancellationToken? cancellationToken = null)
         {
+            State = SoulseekClientStates.Connected | SoulseekClientStates.LoggedIn;
             return Task.CompletedTask;
         }
 
@@ -165,6 +179,31 @@ namespace Tests.ClientTests
 
         private async Task<(Search Search, IReadOnlyCollection<SearchResponse> Responses)> SearchAsyncInternal(SearchQuery query, Action<SearchResponse>? responseHandler, SearchScope? scope = null, int? token = null, SearchOptions? options = null, CancellationToken? cancellationToken = null)
         {
+            Interlocked.Increment(ref SearchCallCount);
+
+            while (true)
+            {
+                var current = Volatile.Read(ref disconnectingSearches);
+                if (current <= 0)
+                    break;
+
+                if (Interlocked.CompareExchange(ref disconnectingSearches, current - 1, current) == current)
+                {
+                    State = SoulseekClientStates.None;
+                    throw new SoulseekClientException("Simulated disconnect during search");
+                }
+            }
+
+            while (true)
+            {
+                var current = Volatile.Read(ref failingSearches);
+                if (current <= 0)
+                    break;
+
+                if (Interlocked.CompareExchange(ref failingSearches, current - 1, current) == current)
+                    throw new InvalidOperationException("Simulated search failure");
+            }
+
             options ??= new SearchOptions();
             var searchToken = token ?? Random.Shared.Next();
             var responses = new List<SearchResponse>();
@@ -274,8 +313,17 @@ namespace Tests.ClientTests
         {
             Interlocked.Increment(ref DownloadCallCount);
 
+            if (!State.HasFlag(SoulseekClientStates.Connected) || !State.HasFlag(SoulseekClientStates.LoggedIn))
+                throw new SoulseekClientException($"Mock client is disconnected while downloading from user {username}");
+
             if (failingUsers.Contains(username))
                 throw new SoulseekClientException($"Simulated download failure for user {username}");
+
+            if (disconnectingUsers.Remove(username))
+            {
+                State = SoulseekClientStates.None;
+                throw new SoulseekClientException($"Simulated disconnect during download for user {username}");
+            }
 
             var transferToken = token ?? Random.Shared.Next();
             long fileSize;

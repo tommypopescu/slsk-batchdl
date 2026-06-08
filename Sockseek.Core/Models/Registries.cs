@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Sockseek.Core.Jobs;
 using Sockseek.Core.Models;
+using Sockseek.Core.Services;
 
 namespace Sockseek.Core.Models;
     public interface ISearchRegistry
@@ -11,7 +12,7 @@ namespace Sockseek.Core.Models;
     public interface IDownloadRegistry
     {
         ConcurrentDictionary<string, ActiveDownload> Downloads { get; }
-        ConcurrentDictionary<string, SongJob> DownloadedFiles { get; }
+        ConcurrentDictionary<string, FileDownloadResult> DownloadedFiles { get; }
     }
 
     public interface IUserStats
@@ -23,6 +24,6 @@ namespace Sockseek.Core.Models;
     {
         public ConcurrentDictionary<SongJob, SearchInfo> Searches { get; } = new();
         public ConcurrentDictionary<string, ActiveDownload> Downloads { get; } = new();
-        public ConcurrentDictionary<string, SongJob> DownloadedFiles { get; } = new();
+        public ConcurrentDictionary<string, FileDownloadResult> DownloadedFiles { get; } = new();
         public ConcurrentDictionary<string, int> UserSuccessCounts { get; } = new();
     }

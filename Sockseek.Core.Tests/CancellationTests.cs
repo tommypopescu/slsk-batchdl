@@ -467,6 +467,198 @@ namespace Tests.Cancellation
         }
 
         [TestMethod]
+        public async Task AlbumJob_CancelledDuringSearch_RemainsCancelled()
+        {
+            var response = new SearchResponse(
+                username: "user1",
+                token: 1,
+                hasFreeUploadSlot: true,
+                uploadSpeed: 100,
+                queueLength: 0,
+                fileList:
+                [
+                    TestHelpers.CreateSlFile(@"Shares\ELO\Out Of The Blue\01. ELO - Turn Me On.mp3", length: 240),
+                ]);
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-cancel-album-search-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "u", Password = "p" };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Output.ParentDir = outputDir;
+
+                var albumJob = new AlbumJob(new AlbumQuery { Artist = "ELO", Album = "Out Of The Blue" });
+                var client = new ClientTests.MockSoulseekClient([response]);
+                var engine = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(client, engineSettings));
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (ReferenceEquals(job, albumJob) && state == JobState.Searching)
+                        job.Cancel();
+                };
+
+                engine.Enqueue(albumJob, downloadSettings);
+                engine.CompleteEnqueue();
+
+                var runTask = engine.RunAsync(CancellationToken.None);
+                await IgnoreCancellation(runTask);
+
+                Assert.AreEqual(JobState.Failed, albumJob.State);
+                Assert.AreEqual(FailureReason.Cancelled, albumJob.FailureReason);
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, recursive: true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AggregateJob_CancelledDuringSearch_RemainsCancelled()
+        {
+            var response = new SearchResponse(
+                username: "user1",
+                token: 1,
+                hasFreeUploadSlot: true,
+                uploadSpeed: 100,
+                queueLength: 0,
+                fileList:
+                [
+                    TestHelpers.CreateSlFile(@"Shares\ELO\Turn Me On.mp3", length: 240),
+                ]);
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-cancel-aggregate-search-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "u", Password = "p" };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Output.ParentDir = outputDir;
+                downloadSettings.Search.MinSharesAggregate = 1;
+
+                var aggregateJob = new AggregateJob(new SongQuery { Artist = "ELO", Title = "Turn Me On" });
+                var client = new ClientTests.MockSoulseekClient([response]);
+                var engine = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(client, engineSettings));
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (ReferenceEquals(job, aggregateJob) && state == JobState.Searching)
+                        job.Cancel();
+                };
+
+                engine.Enqueue(aggregateJob, downloadSettings);
+                engine.CompleteEnqueue();
+
+                var runTask = engine.RunAsync(CancellationToken.None);
+                await IgnoreCancellation(runTask);
+
+                Assert.AreEqual(JobState.Failed, aggregateJob.State);
+                Assert.AreEqual(FailureReason.Cancelled, aggregateJob.FailureReason);
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, recursive: true);
+            }
+        }
+
+        [TestMethod]
+        public async Task ManualSongJob_CancelledDuringSearch_RemainsCancelled()
+        {
+            var response = new SearchResponse(
+                username: "user1",
+                token: 1,
+                hasFreeUploadSlot: true,
+                uploadSpeed: 100,
+                queueLength: 0,
+                fileList:
+                [
+                    TestHelpers.CreateSlFile(@"Shares\ELO\Turn Me On.mp3", length: 240),
+                ]);
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-cancel-manual-song-search-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "u", Password = "p" };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Output.ParentDir = outputDir;
+
+                var songJob = new SongJob(new SongQuery { Artist = "ELO", Title = "Turn Me On" })
+                {
+                    DownloadBehaviorPolicy = new DownloadBehaviorPolicy { Song = DownloadBehavior.Manual },
+                };
+
+                var client = new ClientTests.MockSoulseekClient([response]);
+                var engine = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(client, engineSettings));
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (ReferenceEquals(job, songJob) && state == JobState.Searching)
+                        job.Cancel();
+                };
+
+                engine.Enqueue(songJob, downloadSettings);
+                engine.CompleteEnqueue();
+
+                var runTask = engine.RunAsync(CancellationToken.None);
+                await IgnoreCancellation(runTask);
+
+                Assert.AreEqual(JobState.Failed, songJob.State);
+                Assert.AreEqual(FailureReason.Cancelled, songJob.FailureReason);
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, recursive: true);
+            }
+        }
+
+        [TestMethod]
+        public async Task ExtractJob_CancelledDuringExtraction_RemainsCancelled()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-cancel-extract-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "u", Password = "p" };
+                var downloadSettings = new DownloadSettings();
+                downloadSettings.Extraction.Input = "Artist - Song";
+                downloadSettings.Output.ParentDir = outputDir;
+
+                var extractJob = new ExtractJob(downloadSettings.Extraction.Input, downloadSettings.Extraction.InputType);
+                var client = new ClientTests.MockSoulseekClient([]);
+                var engine = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(client, engineSettings));
+
+                engine.Events.JobStateChanged += (job, state) =>
+                {
+                    if (ReferenceEquals(job, extractJob) && state == JobState.Extracting)
+                        job.Cancel();
+                };
+
+                engine.Enqueue(extractJob, downloadSettings);
+                engine.CompleteEnqueue();
+
+                var runTask = engine.RunAsync(CancellationToken.None);
+                await IgnoreCancellation(runTask);
+
+                Assert.AreEqual(JobState.Failed, extractJob.State);
+                Assert.AreEqual(FailureReason.Cancelled, extractJob.FailureReason);
+                Assert.IsNull(extractJob.Result);
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, recursive: true);
+            }
+        }
+
+        [TestMethod]
         public async Task CancelAlbum_MarksAllUnfinishedFolderFilesCancelled()
         {
             var musicRoot = Path.Combine(Path.GetTempPath(), "slsk-album-cancel-music-" + Guid.NewGuid());

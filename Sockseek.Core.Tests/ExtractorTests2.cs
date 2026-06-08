@@ -524,6 +524,97 @@ namespace Tests.ExtractorTests2
                 if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
             }
         }
+
+        [TestMethod]
+        public async Task CsvInput_AggregateChildrenFail_RemoveFromSource_DoesNotClearRow()
+        {
+            var csvPath = Path.GetTempFileName() + ".csv";
+            File.WriteAllText(csvPath, "artist,title\nFail,Song\n");
+
+            var failingFile = TestHelpers.CreateSlFile(@"Music\Fail - Song.mp3", length: 180);
+            var response = new Soulseek.SearchResponse("failuser", 1, true, 100, 0, [failingFile]);
+            var testClient = new ClientTests.MockSoulseekClient([response], failingUsers: ["failuser"]);
+
+            var eng = new EngineSettings { Username = "u", Password = "p" };
+            var dl = new DownloadSettings();
+            dl.Extraction.Input = csvPath;
+            dl.Extraction.InputType = InputType.CSV;
+            dl.Extraction.RemoveTracksFromSource = true;
+            dl.Search.IsAggregate = true;
+            dl.Search.MinSharesAggregate = 1;
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-test-csv-agg-rfs-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+            dl.Output.ParentDir = outputDir;
+
+            try
+            {
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app.Enqueue(new ExtractJob(csvPath, InputType.CSV), dl);
+                app.CompleteEnqueue();
+                await app.RunAsync(CancellationToken.None);
+
+                var aggregateJob = app.Queue.AllJobs().OfType<AggregateJob>().FirstOrDefault();
+                Assert.IsNotNull(aggregateJob);
+                Assert.AreEqual(JobState.Failed, aggregateJob.State);
+
+                var lines = File.ReadAllLines(csvPath);
+                Assert.AreEqual("artist,title", lines[0]);
+                Assert.AreEqual("Fail,Song", lines[1], "Aggregate CSV row should NOT be cleared when its child download fails.");
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task CsvInput_AlbumAggregateChildrenFail_RemoveFromSource_DoesNotClearRow()
+        {
+            var csvPath = Path.GetTempFileName() + ".csv";
+            File.WriteAllText(csvPath, "artist,title,album\nFail,,Album\n");
+
+            var failingFile = TestHelpers.CreateSlFile(@"Music\Fail\Album\01. Fail - Song.mp3", length: 180);
+            var response = new Soulseek.SearchResponse("failuser", 1, true, 100, 0, [failingFile]);
+            var testClient = new ClientTests.MockSoulseekClient([response], failingUsers: ["failuser"]);
+
+            var eng = new EngineSettings { Username = "u", Password = "p" };
+            var dl = new DownloadSettings();
+            dl.Extraction.Input = csvPath;
+            dl.Extraction.InputType = InputType.CSV;
+            dl.Extraction.RemoveTracksFromSource = true;
+            dl.Search.IsAggregate = true;
+            dl.Search.MinSharesAggregate = 1;
+            dl.Search.NoBrowseFolder = true;
+
+            var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-test-csv-album-agg-rfs-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+            dl.Output.ParentDir = outputDir;
+
+            try
+            {
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app.Enqueue(new ExtractJob(csvPath, InputType.CSV), dl);
+                app.CompleteEnqueue();
+                await app.RunAsync(CancellationToken.None);
+
+                var aggregateJob = app.Queue.AllJobs().OfType<AlbumAggregateJob>().FirstOrDefault();
+                Assert.IsNotNull(aggregateJob);
+                Assert.IsTrue(
+                    aggregateJob.Albums.Any(album => album.State == JobState.Failed),
+                    "At least one generated album child should have failed.");
+
+                var lines = File.ReadAllLines(csvPath);
+                Assert.AreEqual("artist,title,album", lines[0]);
+                Assert.AreEqual("Fail,,Album", lines[1], "Album aggregate CSV row should NOT be cleared when its child album fails.");
+            }
+            finally
+            {
+                if (File.Exists(csvPath)) File.Delete(csvPath);
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
     }
 
     [TestClass]
