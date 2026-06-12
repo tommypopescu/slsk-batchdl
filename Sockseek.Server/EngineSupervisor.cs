@@ -68,7 +68,12 @@ public sealed class EngineSupervisor
                         continue;
 
                     while (submissionChannel.Reader.TryRead(out var submission))
-                        engine.Enqueue(submission.Job, submission.Settings);
+                    {
+                        if (submission.IsResume)
+                            engine.Resume(submission.Job);
+                        else
+                            engine.Enqueue(submission.Job, submission.Settings!);
+                    }
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -329,10 +334,11 @@ public sealed class EngineSupervisor
         if (albumJob == null)
             return null;
 
+        var folders = JobRequestMapper.ProjectAlbumJobFolders(albumJob, GetCurrentEngineUserSuccessCounts());
         return new SearchResultSnapshotDto<AlbumFolderDto>(
             Revision: 0,
             IsComplete: albumJob.State is not (JobState.Pending or JobState.Searching),
-            Items: albumJob.Results.Select(folder => ToAlbumFolderDto(folder, includeFiles)).ToList());
+            Items: folders.Select(folder => ToAlbumFolderDto(folder, includeFiles)).ToList());
     }
 
     public SearchResultSnapshotDto<AggregateTrackCandidateDto>? GetAggregateTrackResults(Guid jobId)
@@ -422,7 +428,7 @@ public sealed class EngineSupervisor
         if (sourceJob?.Config == null)
             return null;
 
-        var folder = FindAlbumFolder(sourceJob, request.Folder, request.AlbumQuery);
+        var folder = FindAlbumFolderForRetrieval(sourceJob, request.Folder, request.AlbumQuery);
         if (folder == null)
             throw new ArgumentException("Requested folder was not found in this job's album candidates.");
 
@@ -459,8 +465,7 @@ public sealed class EngineSupervisor
                 manualSong.Candidates.Insert(0, candidate);
             manualSong.UpdateState(JobState.Pending);
 
-            var manualSongSettings = jobSettingsResolver.ResolveFollowUp(manualSong, request.Options);
-            await submissionChannel.Writer.WriteAsync(new QueuedSubmission(manualSong, manualSongSettings), ct);
+            await submissionChannel.Writer.WriteAsync(QueuedSubmission.Resume(manualSong), ct);
             return new List<JobSummaryDto> { StateStore.GetJobSummary(manualSong.Id) ?? BuildSubmittedJobSummary(manualSong, sourceJobId) };
         }
 
@@ -506,27 +511,32 @@ public sealed class EngineSupervisor
 
         folder = JobRequestMapper.ApplyFolderDownloadSelection(folder, request.Selection);
 
-        if (sourceJob is AlbumJob manualAlbum && manualAlbum.State == JobState.AwaitingSelection)
-        {
-            manualAlbum.ResolvedTarget = folder;
-            JobRequestMapper.ApplyFolderDownloadSelection(manualAlbum, request.Selection);
-            if (!manualAlbum.Results.Contains(folder))
-                manualAlbum.Results.Insert(0, folder);
-            manualAlbum.UpdateState(JobState.Pending);
-
-            var manualAlbumSettings = jobSettingsResolver.ResolveFollowUp(manualAlbum, request.Options);
-            await submissionChannel.Writer.WriteAsync(new QueuedSubmission(manualAlbum, manualAlbumSettings), ct);
-            return StateStore.GetJobSummary(manualAlbum.Id) ?? BuildSubmittedJobSummary(manualAlbum, sourceJobId);
-        }
-
         var albumQuery = request.AlbumQuery != null
             ? JobRequestMapper.ToAlbumQuery(request.AlbumQuery)
             : sourceJob switch
             {
                 SearchJob searchJob => searchJob.DefaultFolderProjection?.Query,
+                AlbumJob album => album.Query,
                 AlbumAggregateJob aggregate => aggregate.Query,
                 _ => null,
             };
+
+        DownloadEngine? engine;
+        lock (engineGate)
+            engine = currentEngine;
+
+        if (engine?.TryStartManualAlbumSelection(
+            sourceJobId,
+            folder,
+            albumQuery,
+            album => JobRequestMapper.ApplyFolderDownloadSelection(album, request.Selection),
+            out var selectedAlbum) == true)
+        {
+            if (sourceJob is AlbumAggregateJob)
+                StateStore.SetSourceJob(selectedAlbum!.Id, sourceJobId);
+
+            return StateStore.GetJobSummary(selectedAlbum!.Id) ?? BuildSubmittedJobSummary(selectedAlbum!, sourceJobId);
+        }
         if (albumQuery == null)
             throw new ArgumentException("Album downloads from this job require an album query.");
 
@@ -547,18 +557,13 @@ public sealed class EngineSupervisor
         return await SubmitFollowUpJobAsync(sourceJobId, sourceJob, albumJob, followUpSettings, request.Options, isolateOptions: true, ct);
     }
 
-    public bool CompleteManualSelection(Guid jobId)
+    public async Task<bool> CompleteManualSelectionAsync(Guid jobId)
     {
         DownloadEngine? engine;
         lock (engineGate)
             engine = currentEngine;
 
-        var job = engine?.GetJob(jobId);
-        if (job == null || job.State != JobState.AwaitingSelection)
-            return false;
-
-        job.SetDone();
-        return true;
+        return engine != null && await engine.CompleteManualSelectionAsync(jobId);
     }
 
     private DownloadEngine CreateEngine()
@@ -661,6 +666,19 @@ public sealed class EngineSupervisor
         || (!string.IsNullOrWhiteSpace(engineSettings.Username)
             && !string.IsNullOrWhiteSpace(engineSettings.Password));
 
+    private AlbumFolder? FindAlbumFolderForRetrieval(Job sourceJob, AlbumFolderRefDto folderRef, AlbumQueryDto? albumQuery = null)
+    {
+        static bool Matches(AlbumFolder folder, AlbumFolderRefDto folderRef)
+            => string.Equals(folder.Username, folderRef.Username, StringComparison.Ordinal)
+                && string.Equals(folder.FolderPath, folderRef.FolderPath, StringComparison.Ordinal);
+
+        if (sourceJob is AlbumJob albumJob)
+            return albumJob.Results.FirstOrDefault(folder => Matches(folder, folderRef))
+                ?? FindAlbumFolder(sourceJob, folderRef, albumQuery);
+
+        return FindAlbumFolder(sourceJob, folderRef, albumQuery);
+    }
+
     private AlbumFolder? FindAlbumFolder(Job sourceJob, AlbumFolderRefDto folderRef, AlbumQueryDto? albumQuery = null)
     {
         static bool Matches(AlbumFolder folder, AlbumFolderRefDto folderRef)
@@ -682,7 +700,8 @@ public sealed class EngineSupervisor
         }
 
         if (sourceJob is AlbumJob albumJob)
-            return albumJob.Results.FirstOrDefault(folder => Matches(folder, folderRef));
+            return JobRequestMapper.FindProjectedAlbumFolder(albumJob, folderRef, GetCurrentEngineUserSuccessCounts())
+                ?? albumJob.Results.FirstOrDefault(folder => Matches(folder, folderRef));
 
         if (sourceJob is AlbumAggregateJob aggregateJob)
             return aggregateJob.Albums
@@ -774,6 +793,8 @@ public sealed class EngineSupervisor
         CancellationToken ct)
     {
         followUpJob.WorkflowId = sourceJob.WorkflowId;
+        if (ShouldPropagateSourceMutationToFollowUp(sourceJob))
+            followUpJob.CopySourceMutationFrom(sourceJob);
         StateStore.SetSourceJob(followUpJob.Id, sourceJobId);
         if (isolateOptions)
             jobSettingsResolver.SetJobOptions(followUpJob.Id, options);
@@ -781,5 +802,11 @@ public sealed class EngineSupervisor
         return StateStore.GetJobSummary(followUpJob.Id) ?? BuildSubmittedJobSummary(followUpJob, sourceJobId);
     }
 
-    private sealed record QueuedSubmission(Job Job, DownloadSettings Settings);
+    private static bool ShouldPropagateSourceMutationToFollowUp(Job sourceJob)
+        => sourceJob is not AlbumAggregateJob;
+
+    private sealed record QueuedSubmission(Job Job, DownloadSettings? Settings, bool IsResume = false)
+    {
+        public static QueuedSubmission Resume(Job job) => new(job, null, true);
+    }
 }

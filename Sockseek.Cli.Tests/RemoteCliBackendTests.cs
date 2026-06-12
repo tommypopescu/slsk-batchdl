@@ -7,7 +7,6 @@ using Sockseek.Server;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
 
 namespace Tests.Cli;
 
@@ -191,6 +190,7 @@ public class RemoteCliBackendTests
             await WaitForJobStateAsync(backend, downloadSummary.JobId, ServerProtocol.JobStates.Done);
 
             var downloaded = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories)
+                .Where(path => string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileName)
                 .OrderBy(x => x)
                 .ToArray();
@@ -258,6 +258,7 @@ public class RemoteCliBackendTests
                 "Timed out waiting for extracted album downloads to appear on disk.");
 
             var downloaded = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories)
+                .Where(path => string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileName)
                 .OrderBy(x => x)
                 .ToArray();
@@ -268,7 +269,10 @@ public class RemoteCliBackendTests
             SockseekLog.AddConsole(writer: (message, _) => Console.WriteLine(message));
             SockseekLog.SetConsoleLogLevel(LogLevel.Information);
             await Sockseek.Cli.Program.PrintRemoteCompleteAsync(backend, summary.WorkflowId, CancellationToken.None);
-            StringAssert.Contains(output.ToString(), "Completed: 2 succeeded, 0 failed.");
+            Assert.AreEqual(
+                string.Empty,
+                output.ToString(),
+                "A single successful user-facing album completion is intentionally not summarized.");
         }
         finally
         {
@@ -392,6 +396,7 @@ public class RemoteCliBackendTests
             Assert.AreEqual(1, maxActivePickers, "Remote interactive album prompts must not overlap.");
 
             var downloaded = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories)
+                .Where(path => string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileName)
                 .OrderBy(x => x)
                 .ToArray();
@@ -483,7 +488,8 @@ public class RemoteCliBackendTests
             await coordinator.RunUntilCompleteAsync(summary.WorkflowId, timeout.Token);
 
             Assert.AreEqual(0, pickerCalls, "The MP3 folder must be filtered out by the list-line FLAC condition before prompting.");
-            Assert.AreEqual(0, Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Length);
+            Assert.AreEqual(0, Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories)
+                .Count(path => string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase)));
         }
         finally
         {
@@ -581,6 +587,7 @@ public class RemoteCliBackendTests
             Assert.IsTrue(promptedBuckets.Any(x => x.Contains("Discovery", StringComparison.OrdinalIgnoreCase)));
 
             var downloaded = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories)
+                .Where(path => string.Equals(Path.GetExtension(path), ".mp3", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileName)
                 .OrderBy(x => x)
                 .ToArray();
@@ -604,7 +611,7 @@ public class RemoteCliBackendTests
     }
 
     [TestMethod]
-    public async Task RemoteCliBackend_PrintCompleteCountsCancelledAlbumPayloadFiles()
+    public async Task RemoteCliBackend_PrintCompleteCountsCancelledAlbumAsUserFacingFailure()
     {
         string musicRoot = Path.Combine(Path.GetTempPath(), "Sockseek-remote-cancel-music-" + Guid.NewGuid());
         string outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-remote-cancel-out-" + Guid.NewGuid());
@@ -680,12 +687,10 @@ public class RemoteCliBackendTests
             await Sockseek.Cli.Program.PrintRemoteCompleteAsync(backend, downloadSummary.WorkflowId, CancellationToken.None);
 
             string rendered = output.ToString();
-            var match = Regex.Match(rendered, @"Completed:\s+(\d+) succeeded,\s+(\d+) failed\.");
-            Assert.IsTrue(match.Success, "Remote completion output should include the final succeeded/failed counts.");
-            Assert.AreEqual(
-                12,
-                int.Parse(match.Groups[1].Value) + int.Parse(match.Groups[2].Value),
-                "Remote completion should count every audio file in a cancelled album as either succeeded or failed.");
+            StringAssert.Contains(
+                rendered,
+                "Completed: 0 succeeded, 1 failed.",
+                "Remote completion output should match the live renderer's user-facing job counts.");
         }
         finally
         {

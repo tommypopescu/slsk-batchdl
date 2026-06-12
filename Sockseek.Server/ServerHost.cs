@@ -338,9 +338,9 @@ public static class ServerHost
             .Produces(StatusCodes.Status404NotFound)
             .Produces<ApiErrorDto>(StatusCodes.Status400BadRequest);
 
-        app.MapPost("/api/jobs/{jobId:guid}/manual/complete", (Guid jobId, EngineSupervisor supervisor) =>
+        app.MapPost("/api/jobs/{jobId:guid}/manual/complete", async (Guid jobId, EngineSupervisor supervisor) =>
         {
-            return supervisor.CompleteManualSelection(jobId)
+            return await supervisor.CompleteManualSelectionAsync(jobId)
                 ? Results.Accepted($"/api/jobs/{jobId}")
                 : Results.NotFound();
         })
