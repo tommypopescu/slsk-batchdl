@@ -370,25 +370,25 @@ namespace Sockseek.Core.Extractors;
             var p          = await _client.Playlists.Get(playlistId);
 
             var songs = new List<SongJob>();
-            int limit = Math.Min(max, 100);
+            int limit = Math.Min(max, 50);
             int num   = offset + 1;
 
             while (true)
             {
-                var tracks = await _client.Playlists.GetItems(playlistId, new PlaylistGetItemsRequest { Limit = limit, Offset = offset });
+                var tracks = await _client.Playlists.GetPlaylistItems(playlistId, new PlaylistGetItemsRequest { Limit = limit, Offset = offset });
 
                 foreach (var track in tracks.Items)
                 {
                     try
                     {
-                        string[] artists = ((IEnumerable<object>)track.Track.ReadProperty("artists")).Select(a => (string)a.ReadProperty("name")).ToArray();
+                        string[] artists = ((IEnumerable<object>)track.Item.ReadProperty("artists")).Select(a => (string)a.ReadProperty("name")).ToArray();
                         var query = new SongQuery
                         {
                             Artist = artists[0],
-                            Album  = (string)track.Track.ReadProperty("album").ReadProperty("name"),
-                            Title  = (string)track.Track.ReadProperty("name"),
-                            Length = (int)track.Track.ReadProperty("durationMs") / 1000,
-                            URI    = (string)track.Track.ReadProperty("uri"),
+                            Album  = (string)track.Item.ReadProperty("album").ReadProperty("name"),
+                            Title  = (string)track.Item.ReadProperty("name"),
+                            Length = (int)track.Item.ReadProperty("durationMs") / 1000,
+                            URI    = (string)track.Item.ReadProperty("uri"),
                         };
                         songs.Add(new SongJob(query) { ItemNumber = num++ });
                     }
@@ -397,7 +397,7 @@ namespace Sockseek.Core.Extractors;
 
                 if (tracks.Items.Count < limit || songs.Count >= max) break;
                 offset += limit;
-                limit   = Math.Min(max - songs.Count, 100);
+                limit   = Math.Min(max - songs.Count, 50);
             }
 
             return (p.Name, p.Id, songs);
