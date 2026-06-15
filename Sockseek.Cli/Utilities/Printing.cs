@@ -314,6 +314,9 @@ public static class Printing
                 PrintPlannedOutput(extractJob.Result);
                 break;
 
+            case ExtractJob:
+                break;
+
             case JobList jobList:
                 var plannedJobs = CollectPlannedDownloadJobs(jobList).ToList();
                 if (plannedJobs.Count > 0)

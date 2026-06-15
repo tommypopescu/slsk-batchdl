@@ -99,10 +99,12 @@ namespace Sockseek.Core.Jobs;
 
         // Optional human-readable explanation for the failure (complements FailureReason).
         public string? FailureMessage { get; private set; }
+        public string? FailureDetail { get; private set; }
 
-        public void Fail(FailureReason reason, string? message = null)
+        public void Fail(FailureReason reason, string? message = null, string? detail = null)
         {
             FailureMessage = message;
+            FailureDetail = detail;
             FailureReason = reason;
             State = JobState.Failed;
         }
@@ -110,6 +112,7 @@ namespace Sockseek.Core.Jobs;
         public void ClearFailure()
         {
             FailureMessage = null;
+            FailureDetail = null;
             FailureReason = FailureReason.None;
         }
 

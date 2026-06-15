@@ -695,7 +695,8 @@ internal sealed class LocalCliBackend
             job.Discovery?.ResultCount,
             job.Discovery?.LockedFileCount,
             job.Config?.AppliedAutoProfiles?.ToList() ?? [],
-            []);
+            [],
+            job.FailureDetail);
 
     private JobSummaryDto GetSummary(Job job)
         => stateStore.GetJobSummary(job.Id) ?? BuildSubmittedJobSummary(job);

@@ -73,7 +73,8 @@ public sealed class ServerEventBroadcaster : IDisposable
             job.Discovery?.ResultCount,
             job.Discovery?.LockedFileCount,
             job.Config?.AppliedAutoProfiles?.ToList() ?? [],
-            []);
+            [],
+            job.FailureDetail);
 
     private static Guid? GetWorkflowId(object payload)
         => payload switch

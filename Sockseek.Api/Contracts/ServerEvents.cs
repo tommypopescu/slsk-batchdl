@@ -40,6 +40,17 @@ public sealed record SearchUpdatedDto(
     bool IsComplete);
 
 /// <summary>
+/// Diagnostic event emitted when an exception-backed failure has detailed context.
+/// </summary>
+public sealed record DiagnosticErrorEventDto(
+    string Scope,
+    string Message,
+    string ExceptionType,
+    string Exception,
+    JobSummaryDto? Summary = null,
+    Guid? WorkflowId = null);
+
+/// <summary>
 /// Activity event emitted when extraction starts.
 /// </summary>
 public sealed record ExtractionStartedEventDto(

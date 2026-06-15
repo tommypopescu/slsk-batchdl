@@ -978,6 +978,7 @@ namespace Tests.Eventing
             var engine = new DownloadEngine(engineSettings, clientManager);
 
             FailureReason capturedReason = FailureReason.None;
+            string? capturedDetail = null;
             bool failedFired = false;
 
             engine.Events.JobStateChanged += (job, state) =>
@@ -986,6 +987,7 @@ namespace Tests.Eventing
                 {
                     failedFired = true;
                     capturedReason = job.FailureReason;
+                    capturedDetail = job.FailureDetail;
                 }
             };
 
@@ -997,6 +999,7 @@ namespace Tests.Eventing
             Assert.IsTrue(failedFired, "JobStateChanged should fire with JobState.Failed.");
             Assert.AreEqual(FailureReason.ExtractionFailed, capturedReason, 
                 "FailureReason must be populated BEFORE the JobStateChanged event is fired for ExtractJobs.");
+            StringAssert.Contains(capturedDetail, nameof(FileNotFoundException));
         }
 
         [TestMethod]

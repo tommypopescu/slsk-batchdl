@@ -6,6 +6,7 @@ public static class ServerEventCatalog
 {
     public const string StateCategory = "state";
     public const string ActivityCategory = "activity";
+    public const string DiagnosticCategory = "diagnostic";
     public const string ProgressCategory = "progress";
 
     private static readonly IReadOnlyDictionary<string, ServerEventDescriptorDto> Descriptors =
@@ -14,6 +15,7 @@ public static class ServerEventCatalog
             State("job.upserted", nameof(JobSummaryDto)),
             State("workflow.upserted", nameof(WorkflowSummaryDto)),
             State("search.updated", nameof(SearchUpdatedDto)),
+            Diagnostic("diagnostic.error", nameof(DiagnosticErrorEventDto)),
             Progress("download.progress", nameof(DownloadProgressEventDto)),
             Activity("extraction.started", nameof(ExtractionStartedEventDto)),
             Activity("extraction.failed", nameof(ExtractionFailedEventDto)),
@@ -49,6 +51,9 @@ public static class ServerEventCatalog
 
     private static ServerEventDescriptorDto Activity(string type, string payloadDto)
         => new(type, ActivityCategory, false, payloadDto);
+
+    private static ServerEventDescriptorDto Diagnostic(string type, string payloadDto)
+        => new(type, DiagnosticCategory, false, payloadDto);
 
     private static ServerEventDescriptorDto Progress(string type, string payloadDto)
         => new(type, ProgressCategory, false, payloadDto);

@@ -5,6 +5,7 @@ using Sockseek.Cli;
 using Sockseek.Core;
 using Sockseek.Core.Jobs;
 using Sockseek.Core.Models;
+using Sockseek.Core.Settings;
 using Sockseek.Server;
 using Sockseek.Api;
 
@@ -72,6 +73,197 @@ public class CliProgressReporterTests
         Assert.AreEqual("OnComplete end: [9] Artist - Song", messages[2]);
         Assert.AreEqual("[11] ExtractJob: Input (List): input.txt", messages[3]);
         Assert.AreEqual($"[11] ExtractJob: Failed: input.txt\n  Reason:    Could not parse input", messages[4]);
+    }
+
+    [TestMethod]
+    public void EventLogger_ExtractionFailure_SuppressesGenericExtractUpsert()
+    {
+        SockseekLog.RemoveNonFileOutputs();
+        var messages = new List<string>();
+        SockseekLog.AddConsole(writer: (message, _) => messages.Add(message));
+
+        var eventLogger = new EventLogger(null!, liveMode: false);
+        var workflowId = Guid.NewGuid();
+        var extractSummary = CreateExtractSummary(
+            Guid.NewGuid(),
+            workflowId,
+            ServerProtocol.JobStates.Failed,
+            ServerProtocol.FailureReasons.ExtractionFailed) with
+        {
+            FailureMessage = "Could not parse input",
+        };
+
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("job.upserted", extractSummary));
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("extraction.failed", new ExtractionFailedEventDto(
+            extractSummary,
+            "Could not parse input")));
+
+        Assert.AreEqual(1, messages.Count);
+        Assert.AreEqual("[11] ExtractJob: Failed: input.txt\n  Reason:    Could not parse input", messages[0]);
+    }
+
+    [TestMethod]
+    public void EventLogger_DiagnosticError_PrintsExceptionDetail()
+    {
+        SockseekLog.RemoveNonFileOutputs();
+        var messages = new List<string>();
+        SockseekLog.AddConsole(writer: (message, _) => messages.Add(message));
+
+        var eventLogger = new EventLogger(null!, liveMode: false);
+        var workflowId = Guid.NewGuid();
+        var extractSummary = CreateExtractSummary(
+            Guid.NewGuid(),
+            workflowId,
+            ServerProtocol.JobStates.Failed,
+            ServerProtocol.FailureReasons.ExtractionFailed);
+
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("extraction.failed", new ExtractionFailedEventDto(
+            extractSummary,
+            "Object reference not set to an instance of an object.")));
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("diagnostic.error", new DiagnosticErrorEventDto(
+            "job",
+            "Object reference not set to an instance of an object.",
+            "System.NullReferenceException",
+            "System.NullReferenceException: Object reference not set to an instance of an object.\n   at Sockseek.Core.Extractors.Spotify.GetTracks()",
+            extractSummary,
+            workflowId)));
+
+        Assert.AreEqual(2, messages.Count);
+        StringAssert.Contains(messages[0], "Reason:    Object reference not set to an instance of an object.");
+        Assert.IsFalse(messages[0].Contains("Exception:", StringComparison.Ordinal));
+        StringAssert.Contains(messages[1], "[11] ExtractJob: diagnostic: Object reference not set to an instance of an object.");
+        StringAssert.Contains(messages[1], "Exception:");
+        StringAssert.Contains(messages[1], "System.NullReferenceException");
+        StringAssert.Contains(messages[1], "at Sockseek.Core.Extractors.Spotify.GetTracks()");
+    }
+
+    [TestMethod]
+    public void EventLogger_GenericFailure_PrintsDiagnosticDetailSeparately()
+    {
+        SockseekLog.RemoveNonFileOutputs();
+        var messages = new List<string>();
+        SockseekLog.AddConsole(writer: (message, _) => messages.Add(message));
+
+        var eventLogger = new EventLogger(null!, liveMode: false);
+        var summary = CreateAlbumSummary(
+            Guid.NewGuid(),
+            ServerProtocol.JobStates.Failed,
+            ServerProtocol.FailureReasons.Other) with
+        {
+            FailureMessage = "Infrastructure failure: engine crashed",
+            FailureDetail = "System.InvalidOperationException: engine crashed\n   at Sockseek.Core.DownloadEngine.RunAsync()",
+        };
+
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("job.upserted", summary));
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("diagnostic.error", new DiagnosticErrorEventDto(
+            "job",
+            "Infrastructure failure: engine crashed",
+            "System.InvalidOperationException",
+            "System.InvalidOperationException: engine crashed\n   at Sockseek.Core.DownloadEngine.RunAsync()",
+            summary,
+            summary.WorkflowId)));
+
+        Assert.AreEqual(2, messages.Count);
+        StringAssert.Contains(messages[0], "failed [Unknown error]: Artist Album");
+        StringAssert.Contains(messages[0], "Error: Infrastructure failure: engine crashed");
+        Assert.IsFalse(messages[0].Contains("Exception:", StringComparison.Ordinal));
+        StringAssert.Contains(messages[1], "[6] AlbumJob: diagnostic: Infrastructure failure: engine crashed");
+        StringAssert.Contains(messages[1], "Exception:");
+        StringAssert.Contains(messages[1], "System.InvalidOperationException");
+        StringAssert.Contains(messages[1], "at Sockseek.Core.DownloadEngine.RunAsync()");
+    }
+
+    [TestMethod]
+    public void EventLogger_SongFailure_PrintsDiagnosticDetailSeparately()
+    {
+        SockseekLog.RemoveNonFileOutputs();
+        var messages = new List<string>();
+        SockseekLog.AddConsole(writer: (message, _) => messages.Add(message));
+
+        var eventLogger = new EventLogger(null!, liveMode: false);
+        var workflowId = Guid.NewGuid();
+        var songId = Guid.NewGuid();
+        var query = new SongQueryDto("Artist", "Song", null, null, null, false);
+
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("song.state-changed", new SongStateChangedEventDto(
+            songId,
+            9,
+            workflowId,
+            query,
+            ServerProtocol.JobStates.Failed,
+            ServerProtocol.FailureReasons.Other,
+            DownloadPath: null,
+            ChosenCandidate: null,
+            FailureMessage: "Unhandled song failure")));
+        var summary = CreateSongSummary(songId, workflowId, null) with
+        {
+            DisplayId = 9,
+            State = ServerProtocol.JobStates.Failed,
+            FailureReason = ServerProtocol.FailureReasons.Other,
+            FailureMessage = "Unhandled song failure",
+        };
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("diagnostic.error", new DiagnosticErrorEventDto(
+            "job",
+            "Unhandled song failure",
+            "System.InvalidOperationException",
+            "System.InvalidOperationException: Unhandled song failure\n   at Sockseek.Core.DownloadEngine.DownloadSong()",
+            summary,
+            workflowId)));
+
+        Assert.AreEqual(2, messages.Count);
+        StringAssert.Contains(messages[0], "Error: Unhandled song failure");
+        Assert.IsFalse(messages[0].Contains("Exception:", StringComparison.Ordinal));
+        StringAssert.Contains(messages[1], "[9] SongJob: diagnostic: Unhandled song failure");
+        StringAssert.Contains(messages[1], "Exception:");
+        StringAssert.Contains(messages[1], "System.InvalidOperationException");
+        StringAssert.Contains(messages[1], "at Sockseek.Core.DownloadEngine.DownloadSong()");
+    }
+
+    [TestMethod]
+    public void EventLogger_DiagnosticError_CanBeSuppressedForRemoteClients()
+    {
+        SockseekLog.RemoveNonFileOutputs();
+        var messages = new List<string>();
+        SockseekLog.AddConsole(writer: (message, _) => messages.Add(message));
+
+        var eventLogger = new EventLogger(null!, liveMode: false, includeDiagnosticDetails: false);
+        var summary = CreateAlbumSummary(
+            Guid.NewGuid(),
+            ServerProtocol.JobStates.Failed,
+            ServerProtocol.FailureReasons.Other);
+
+        InvokePrivate(eventLogger, "HandleEvent", Envelope("diagnostic.error", new DiagnosticErrorEventDto(
+            "job",
+            "engine crashed",
+            "System.InvalidOperationException",
+            "System.InvalidOperationException: engine crashed\n   at Sockseek.Core.DownloadEngine.RunAsync()",
+            summary,
+            summary.WorkflowId)));
+
+        Assert.AreEqual(0, messages.Count);
+    }
+
+    [TestMethod]
+    public void CliProgressReporter_FailureDetailPolicy_IsExplicit()
+    {
+        var reporter = new CliProgressReporter(new CliSettings { NoProgress = true }, includeFailureDetails: true);
+
+        var withDetails = (string)InvokePrivate(
+            reporter,
+            "WithFailureDetail",
+            "failed: reason",
+            "System.InvalidOperationException: boom\n   at Test()",
+            true)!;
+        var withoutDetails = (string)InvokePrivate(
+            reporter,
+            "WithFailureDetail",
+            "failed: reason",
+            "System.InvalidOperationException: boom",
+            false)!;
+
+        StringAssert.Contains(withDetails, "Exception:");
+        StringAssert.Contains(withDetails, "System.InvalidOperationException");
+        Assert.AreEqual("failed: reason", withoutDetails);
     }
 
     [TestMethod]
@@ -1071,6 +1263,26 @@ public class CliProgressReporterTests
         Assert.IsTrue(
             messages.Any(message => message.Contains("Completed: 2 succeeded, 1 failed.", StringComparison.Ordinal)),
             string.Join(Environment.NewLine, messages));
+    }
+
+    [TestMethod]
+    public void Printing_PrintPlannedOutput_DoesNotPrintFailedExtractAsDownload()
+    {
+        SockseekLog.RemoveNonFileOutputs();
+        var messages = new List<string>();
+        SockseekLog.AddConsole(writer: (message, _) => messages.Add(message));
+
+        var extract = new ExtractJob("input.txt", InputType.List);
+        extract.Config = new DownloadSettings { PrintOption = PrintOption.Tracks };
+        extract.Fail(FailureReason.ExtractionFailed, "Could not parse input");
+        var queue = new JobList("root", [extract]);
+
+        Printing.PrintPlannedOutput(queue);
+
+        Assert.IsFalse(
+            messages.Any(message => message.Contains("Downloading", StringComparison.Ordinal)),
+            string.Join(Environment.NewLine, messages));
+        Assert.AreEqual(0, messages.Count, string.Join(Environment.NewLine, messages));
     }
 
     private static AlbumJob CompletedAlbum(string artist, string album, int trackCount)

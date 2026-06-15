@@ -4,6 +4,15 @@ using System.Text.Json;
 
 namespace Sockseek.Api;
 
+/// <summary>Exception raised for daemon HTTP responses that intentionally return an API error body.</summary>
+public sealed class SockseekApiRequestException : InvalidOperationException
+{
+    public SockseekApiRequestException(string message)
+        : base(message)
+    {
+    }
+}
+
 /// <summary>Reusable HTTP client for the daemon API. SignalR clients should pair this with the event DTOs and payload converter in this project.</summary>
 public sealed class SockseekApiClient
 {
@@ -315,7 +324,7 @@ public sealed class SockseekApiClient
 
         var body = await response.Content.ReadAsStringAsync(ct);
         var detail = TryReadApiError(body) ?? body;
-        throw new InvalidOperationException($"Server request failed with {(int)response.StatusCode} {response.ReasonPhrase}: {detail}");
+        throw new SockseekApiRequestException($"Server request failed with {(int)response.StatusCode} {response.ReasonPhrase}: {detail}");
     }
 
     private static string? TryReadApiError(string body)

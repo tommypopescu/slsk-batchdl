@@ -10,12 +10,14 @@ internal sealed class EventLogger
 
     private readonly ICliBackend _backend;
     private readonly bool _liveMode;
+    private readonly bool _includeDiagnosticDetails;
     private readonly JobActivityLogFormatter _formatter = new();
 
-    public EventLogger(ICliBackend backend, bool liveMode)
+    public EventLogger(ICliBackend backend, bool liveMode, bool includeDiagnosticDetails = true)
     {
         _backend = backend;
         _liveMode = liveMode;
+        _includeDiagnosticDetails = includeDiagnosticDetails;
     }
 
     public void Attach()
@@ -25,6 +27,9 @@ internal sealed class EventLogger
 
     private void HandleEvent(ServerEventEnvelopeDto envelope)
     {
+        if (envelope.Type == "diagnostic.error" && !_includeDiagnosticDetails)
+            return;
+
         var entry = _formatter.Format(envelope);
         if (entry == null)
             return;

@@ -24,6 +24,7 @@ public sealed class JobActivityLogFormatter
         "download.started",
         "on-complete.started",
         "on-complete.ended",
+        "diagnostic.error",
         "song.state-changed",
         "extraction.started",
         "extraction.failed",
@@ -52,6 +53,7 @@ public sealed class JobActivityLogFormatter
                 "download.started" when envelope.Payload is DownloadStartedEventDto payload => HandleDownloadStart(payload),
                 "on-complete.started" when envelope.Payload is OnCompleteStartedEventDto payload => Log(payload.JobId, $"OnComplete start: [{payload.DisplayId}] {SongQueryText(payload.Query)}"),
                 "on-complete.ended" when envelope.Payload is OnCompleteEndedEventDto payload => Log(payload.JobId, $"OnComplete end: [{payload.DisplayId}] {SongQueryText(payload.Query)}"),
+                "diagnostic.error" when envelope.Payload is DiagnosticErrorEventDto payload => HandleDiagnosticError(payload),
                 "song.state-changed" when envelope.Payload is SongStateChangedEventDto payload => HandleSongStateChanged(payload),
                 "extraction.started" when envelope.Payload is ExtractionStartedEventDto payload => HandleExtractionStart(payload),
                 "extraction.failed" when envelope.Payload is ExtractionFailedEventDto payload => HandleExtractionFailed(payload),
@@ -72,10 +74,20 @@ public sealed class JobActivityLogFormatter
     }
 
     private ActivityLogEntry? HandleExtractionFailed(ExtractionFailedEventDto job)
-        => Log(
-            job.Summary.JobId,
-            $"[{job.Summary.DisplayId}] ExtractJob: Failed: {job.Summary.QueryText}\n  Reason:    {job.Reason}",
-            ActivityLogSeverity.Error);
+    {
+        var message = $"[{job.Summary.DisplayId}] ExtractJob: Failed: {job.Summary.QueryText}\n  Reason:    {job.Reason}";
+
+        return Log(job.Summary.JobId, message, ActivityLogSeverity.Error);
+    }
+
+    private ActivityLogEntry? HandleDiagnosticError(DiagnosticErrorEventDto diagnostic)
+    {
+        var message = diagnostic.Summary is { } summary
+            ? $"[{summary.DisplayId}] {JobStatusPrefix(summary.Kind)}diagnostic: {diagnostic.Message}\n  Exception:\n{IndentContinuationLines(diagnostic.Exception, "    ")}"
+            : $"Diagnostic error ({diagnostic.Scope}): {diagnostic.Message}\n  Exception:\n{IndentContinuationLines(diagnostic.Exception, "    ")}";
+
+        return Log(diagnostic.Summary?.JobId ?? diagnostic.WorkflowId ?? Guid.Empty, message, ActivityLogSeverity.Error);
+    }
 
     private ActivityLogEntry? HandleJobStarted(JobStartedEventDto job)
     {
@@ -96,6 +108,8 @@ public sealed class JobActivityLogFormatter
     {
         RememberStructure(summary);
 
+        if (summary.Kind == ServerJobKind.Extract)
+            return null;
         if (summary.Kind == ServerJobKind.Song)
             return null;
         if (IsInlineChild(summary.JobId, summary.Kind))
@@ -257,13 +271,7 @@ public sealed class JobActivityLogFormatter
     {
         var name = summary.ItemName ?? "";
         var detail = summary.QueryText ?? name;
-        var prefix = summary.Kind switch
-        {
-            ServerJobKind.RetrieveFolder => "Retrieve Folder: ",
-            ServerJobKind.JobList => "Job List: ",
-            ServerJobKind.AlbumAggregate => "Album Aggregate: ",
-            _ => $"{char.ToUpperInvariant(summary.Kind.ToWireString()[0])}{summary.Kind.ToWireString()[1..]}Job: ",
-        };
+        var prefix = JobStatusPrefix(summary.Kind);
         var line = $"[{summary.DisplayId}] {prefix}{status}: {WithName(name, detail)}" + ProfileSuffix(summary);
 
         if (summary.State == ServerProtocol.JobStates.Done && summary.Kind == ServerJobKind.Search && summary.DiscoveryResultCount.HasValue)
@@ -274,6 +282,15 @@ public sealed class JobActivityLogFormatter
 
         return line;
     }
+
+    private static string JobStatusPrefix(ServerJobKind kind)
+        => kind switch
+        {
+            ServerJobKind.RetrieveFolder => "Retrieve Folder: ",
+            ServerJobKind.JobList => "Job List: ",
+            ServerJobKind.AlbumAggregate => "Album Aggregate: ",
+            _ => $"{char.ToUpperInvariant(kind.ToWireString()[0])}{kind.ToWireString()[1..]}Job: ",
+        };
 
     private static string AlbumCompletedLogMessage(JobSummaryDto summary, string? remoteFolderDisplay, string? completedPath)
     {
@@ -314,4 +331,8 @@ public sealed class JobActivityLogFormatter
         var displayed = truncated ? string.Join('\\', parts[^3..]) : filename;
         return truncated ? $"{candidate.Username}\\..\\{displayed}" : $"{candidate.Username}\\{displayed}";
     }
+
+    private static string IndentContinuationLines(string value, string indent)
+        => string.Join('\n', value.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(line => indent + line));
+
 }

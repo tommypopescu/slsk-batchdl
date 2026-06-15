@@ -189,7 +189,7 @@ public sealed class EngineStateStore
         }
     }
 
-    public void MarkActiveJobsInfrastructureFailed(string reason)
+    public void MarkActiveJobsInfrastructureFailed(string reason, string? detail = null)
     {
         List<JobSummaryDto> changedJobs;
         List<WorkflowSummaryDto> changedWorkflows;
@@ -197,7 +197,7 @@ public sealed class EngineStateStore
         {
             foreach (var job in jobs.Values.Where(IsActiveJob))
             {
-                job.Fail(FailureReason.Other, "Infrastructure failure: " + reason);
+                job.Fail(FailureReason.Other, "Infrastructure failure: " + reason, detail);
                 infrastructureFailedJobs.Add(job.Id);
                 UpdateJobRecord(job);
             }
@@ -568,7 +568,8 @@ public sealed class EngineStateStore
             job.Discovery?.ResultCount,
             job.Discovery?.LockedFileCount,
             job.Config?.AppliedAutoProfiles?.OrderBy(x => x).ToList() ?? [],
-            BuildActions(job));
+            BuildActions(job),
+            job.FailureDetail);
     }
 
     private JobPayloadDto BuildPayload(Job job)

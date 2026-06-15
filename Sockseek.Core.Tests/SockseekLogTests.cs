@@ -66,6 +66,19 @@ public class SockseekLogTests
     }
 
     [TestMethod]
+    public void ExceptionFormatting_SeparatesSummaryAndDetail()
+    {
+        var inner = new InvalidOperationException("inner broke");
+        var exception = new ApplicationException("outer wrapper", inner);
+
+        Assert.AreEqual("inner broke", SockseekLog.ExceptionSummary(exception));
+        StringAssert.Contains(SockseekLog.ExceptionDetail(exception), nameof(ApplicationException));
+        StringAssert.Contains(SockseekLog.ExceptionDetail(exception), "inner broke");
+        StringAssert.Contains(SockseekLog.FormatException("Operation failed", exception), "Operation failed:");
+        StringAssert.Contains(SockseekLog.FormatException("Operation failed", exception), nameof(ApplicationException));
+    }
+
+    [TestMethod]
     public async Task FileLogging_AllowsConcurrentWritesToSameLogFile()
     {
         var logPath = Path.Combine(Path.GetTempPath(), "Sockseek-logger-concurrent-" + Guid.NewGuid() + ".log");

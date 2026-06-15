@@ -12,6 +12,7 @@ public sealed record JobOutcome
     public JobState State { get; }
     public FailureReason FailureReason { get; }
     public string? FailureMessage { get; }
+    public string? FailureDetail { get; }
     public string? DownloadPath { get; }
     public FileCandidate? ChosenCandidate { get; }
 
@@ -20,6 +21,7 @@ public sealed record JobOutcome
         JobState state,
         FailureReason failureReason = FailureReason.None,
         string? failureMessage = null,
+        string? failureDetail = null,
         string? downloadPath = null,
         FileCandidate? chosenCandidate = null)
     {
@@ -27,6 +29,7 @@ public sealed record JobOutcome
         State = state;
         FailureReason = failureReason;
         FailureMessage = failureMessage;
+        FailureDetail = failureDetail;
         DownloadPath = downloadPath;
         ChosenCandidate = chosenCandidate;
     }
@@ -46,8 +49,8 @@ public sealed record JobOutcome
     public static JobOutcome Done(string? downloadPath = null, FileCandidate? chosenCandidate = null)
         => new(shouldCommit: true, JobState.Done, downloadPath: downloadPath, chosenCandidate: chosenCandidate);
 
-    public static JobOutcome Failed(FailureReason reason, string? message = null)
-        => new(shouldCommit: true, JobState.Failed, reason, failureMessage: message);
+    public static JobOutcome Failed(FailureReason reason, string? message = null, string? detail = null)
+        => new(shouldCommit: true, JobState.Failed, reason, failureMessage: message, failureDetail: detail);
 
     public static JobOutcome AlreadyExists(string? downloadPath = null)
         => new(shouldCommit: true, JobState.AlreadyExists, downloadPath: downloadPath);

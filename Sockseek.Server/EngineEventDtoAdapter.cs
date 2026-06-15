@@ -64,7 +64,9 @@ public sealed class EngineEventDtoAdapter
                 if (state == JobState.Extracting)
                     publish("extraction.started", new ExtractionStartedEventDto(getSummary(extractJob), extractJob.Input, extractJob.InputType?.ToString()));
                 else if (state == JobState.Failed)
-                    publish("extraction.failed", new ExtractionFailedEventDto(getSummary(extractJob), extractJob.FailureMessage ?? "Extraction failed"));
+                    publish("extraction.failed", new ExtractionFailedEventDto(
+                        getSummary(extractJob),
+                        extractJob.FailureMessage ?? "Extraction failed"));
             }
             else if (job is AggregateJob ag && state == JobState.Running)
             {
@@ -92,6 +94,8 @@ public sealed class EngineEventDtoAdapter
                 if (state == JobState.Searching)
                     publish("job.started", new JobStartedEventDto(getSummary(job)));
             }
+
+            PublishDiagnosticErrorIfNeeded(job, state);
         };
         events.DownloadStarted += (song, candidate) => publish("download.started", new DownloadStartedEventDto(song.Id, song.DisplayId, song.WorkflowId, ToSongQueryDto(song.Query), ToFileCandidateDto(candidate)));
         events.DownloadProgress += (song, transferred, total) => publish("download.progress", new DownloadProgressEventDto(song.Id, song.WorkflowId, transferred, total));
@@ -106,8 +110,8 @@ public sealed class EngineEventDtoAdapter
             attempt,
             maxAttempts,
             ex.GetType().Name,
-            ex.Message,
-            ex.ToString()));
+            SockseekLog.ExceptionSummary(ex),
+            SockseekLog.ExceptionDetail(ex)));
         events.OnCompleteStart += song => publish("on-complete.started", new OnCompleteStartedEventDto(song.Id, song.DisplayId, song.WorkflowId, ToSongQueryDto(song.Query)));
         events.OnCompleteEnd += song => publish("on-complete.ended", new OnCompleteEndedEventDto(song.Id, song.DisplayId, song.WorkflowId, ToSongQueryDto(song.Query)));
         events.SearchRateLimited += resetsAt => publish("search.rate-limited", new SearchRateLimitedEventDto(resetsAt));
@@ -122,6 +126,31 @@ public sealed class EngineEventDtoAdapter
             [.. SelectTrackBatchRows(pending,  job.Config.PrintOption, limit: 20)],
             [.. SelectTrackBatchRows(existing, job.Config.PrintOption, limit: 20)],
             [.. SelectTrackBatchRows(notFound, job.Config.PrintOption, limit: 20)]));
+    }
+
+    private void PublishDiagnosticErrorIfNeeded(Job job, JobState state)
+    {
+        if (state != JobState.Failed || string.IsNullOrWhiteSpace(job.FailureDetail))
+            return;
+
+        var summary = getSummary(job);
+        publish("diagnostic.error", new DiagnosticErrorEventDto(
+            "job",
+            job.FailureMessage ?? "Job failed",
+            ExceptionType(job.FailureDetail),
+            job.FailureDetail,
+            summary,
+            job.WorkflowId));
+    }
+
+    private static string ExceptionType(string exceptionDetail)
+    {
+        var firstLine = exceptionDetail
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n', 2)[0];
+        var separatorIndex = firstLine.IndexOf(':');
+        return separatorIndex > 0 ? firstLine[..separatorIndex] : firstLine;
     }
 
     private static IEnumerable<SongJobPayloadDto> SelectTrackBatchRows(

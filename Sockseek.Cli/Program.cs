@@ -18,11 +18,23 @@ internal static partial class Program
         if (Help.PrintAndExitIfNeeded(args))
             return;
 
-        bool daemonMode = args.Length > 0 && string.Equals(args[0], "daemon", StringComparison.OrdinalIgnoreCase);
-        var bindArgs = daemonMode ? args.Skip(1).ToArray() : args;
-
         SockseekLog.SetupExceptionHandling();
         SockseekLog.AddConsole(writer: (msg, color) => Printing.WriteLine(msg, color));
+
+        try
+        {
+            await MainCore(args);
+        }
+        catch (Exception ex)
+        {
+            SockseekLog.Fatal(ex, "Unhandled CLI startup error");
+        }
+    }
+
+    private static async Task MainCore(string[] args)
+    {
+        bool daemonMode = args.Length > 0 && string.Equals(args[0], "daemon", StringComparison.OrdinalIgnoreCase);
+        var bindArgs = daemonMode ? args.Skip(1).ToArray() : args;
 
         string configPath;
         ConfigFile configFile;
@@ -71,7 +83,7 @@ internal static partial class Program
                     }
                     catch (Exception ex)
                     {
-                        SockseekLog.Fatal($"Failed to retrieve profiles from remote daemon: {ex.Message}");
+                        SockseekLog.Fatal(ex, "Failed to retrieve profiles from remote daemon");
                     }
                 }
                 else
@@ -99,7 +111,14 @@ internal static partial class Program
 
         if (daemonMode)
         {
-            await RunDaemonAsync(bindArgs, configFile, engineSettings, rootSettings, daemonSettings);
+            try
+            {
+                await RunDaemonAsync(bindArgs, configFile, engineSettings, rootSettings, daemonSettings);
+            }
+            catch (Exception ex)
+            {
+                SockseekLog.Fatal(ex, "Unhandled daemon error");
+            }
             return;
         }
 
@@ -111,9 +130,13 @@ internal static partial class Program
             {
                 await RunRemoteAsync(bindArgs, rootSettings, cliSettings, remoteSettings, cts);
             }
-            catch (InvalidOperationException ex)
+            catch (SockseekApiRequestException ex)
             {
                 SockseekLog.Fatal(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                SockseekLog.Fatal(ex, "Unhandled remote CLI error");
             }
             return;
         }
@@ -129,7 +152,7 @@ internal static partial class Program
             }
             catch (Exception ex)
             {
-                SockseekLog.Fatal($"Diagnostic action failed: {ex.Message}");
+                SockseekLog.Fatal(ex, "Diagnostic action failed");
             }
 
             if (!rootSettings.PrintOption.HasFlag(PrintOption.Index))
@@ -164,11 +187,11 @@ internal static partial class Program
             new JsonStreamProgressReporter(Console.Out).Attach(backend);
         else if (ShouldAttachHumanProgressReporter(rootSettings.PrintOption))
         {
-            cliReporter = new CliProgressReporter(cliSettings);
+            cliReporter = new CliProgressReporter(cliSettings, includeFailureDetails: true);
             cliReporter.Attach(backend);
         }
 
-        var eventLogger = new EventLogger(backend, ShouldUseLiveRendering(cliSettings));
+        var eventLogger = new EventLogger(backend, ShouldUseLiveRendering(cliSettings), includeDiagnosticDetails: true);
         eventLogger.Attach();
 
         backend.EventReceived += envelope =>
@@ -342,6 +365,10 @@ internal static partial class Program
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
         }
+        catch (Exception ex)
+        {
+            SockseekLog.Fatal(ex, "Unhandled CLI error");
+        }
         finally
         {
             SockseekLog.Trace("Main: Entered finally block. Disposing clientManager...");
@@ -392,11 +419,11 @@ internal static partial class Program
             new JsonStreamProgressReporter(Console.Out).Attach(backend);
         else if (ShouldAttachHumanProgressReporter(rootSettings.PrintOption))
         {
-            cliReporter = new CliProgressReporter(cliSettings);
+            cliReporter = new CliProgressReporter(cliSettings, includeFailureDetails: false);
             cliReporter.Attach(backend);
         }
 
-        var eventLogger = new EventLogger(backend, ShouldUseLiveRendering(cliSettings));
+        var eventLogger = new EventLogger(backend, ShouldUseLiveRendering(cliSettings), includeDiagnosticDetails: false);
         eventLogger.Attach();
 
         backend.EventReceived += envelope =>
@@ -567,12 +594,19 @@ internal static partial class Program
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
         }
-        catch (InvalidOperationException ex)
+        catch (SockseekApiRequestException ex)
         {
             if (cliReporter != null)
                 cliReporter.ReportClientError(ex.Message);
             else
                 SockseekLog.Fatal(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            if (cliReporter != null)
+                cliReporter.ReportClientError(SockseekLog.FormatException("Unhandled remote CLI error", ex));
+            else
+                SockseekLog.Fatal(ex, "Unhandled remote CLI error");
         }
         finally
         {

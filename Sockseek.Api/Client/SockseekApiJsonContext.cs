@@ -111,6 +111,7 @@ namespace Sockseek.Api;
 [JsonSerializable(typeof(ServerEventEnvelopeDto))]
 [JsonSerializable(typeof(ServerEventDescriptorDto))]
 [JsonSerializable(typeof(SearchUpdatedDto))]
+[JsonSerializable(typeof(DiagnosticErrorEventDto))]
 [JsonSerializable(typeof(ExtractionStartedEventDto))]
 [JsonSerializable(typeof(ExtractionFailedEventDto))]
 [JsonSerializable(typeof(JobStartedEventDto))]

@@ -26,15 +26,29 @@ public static class SockseekLog
     private static readonly object Sync = new();
     private static readonly List<RoutingLoggerProvider> Providers = new();
     private static ILoggerFactory Factory = BuildFactory();
+    private static bool ExceptionHandlingConfigured;
 
     public static void SetupExceptionHandling()
     {
+        lock (Sync)
+        {
+            if (ExceptionHandlingConfigured)
+                return;
+
+            ExceptionHandlingConfigured = true;
+        }
+
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception exception)
-                NonConsoleCritical(exception, "Unhandled exception");
+                Critical(exception, "Unhandled exception");
             else
-                NonConsoleCritical("Unhandled exception: {ExceptionObject}", args.ExceptionObject);
+                Critical($"Unhandled exception: {args.ExceptionObject}");
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            Critical(args.Exception, "Unobserved task exception");
         };
     }
 
@@ -52,6 +66,8 @@ public static class SockseekLog
         public void Warn(string message, ConsoleColor? color = null) => SockseekLog.Warn(message, color, CategoryName);
         public void Error(string message, ConsoleColor? color = null) => SockseekLog.Error(message, color, CategoryName);
         public void Fatal(string message, ConsoleColor? color = null) => SockseekLog.Fatal(message, color, CategoryName);
+        public void Error(Exception exception, string message, ConsoleColor? color = null) => SockseekLog.Error(exception, message, color, CategoryName);
+        public void Fatal(Exception exception, string message, ConsoleColor? color = null) => SockseekLog.Fatal(exception, message, color, CategoryName);
         public void LogNonConsole(LogLevel level, string message) => SockseekLog.LogNonConsole(level, message, CategoryName);
         public void LogConsoleOnly(LogLevel level, string message, ConsoleColor? color = null) => SockseekLog.LogConsoleOnly(level, message, color, CategoryName);
     }
@@ -166,18 +182,25 @@ public static class SockseekLog
     public static void Warn(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Warning, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
     public static void Error(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Error, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
     public static void Fatal(string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "") => Log(LogLevel.Critical, message, color, categoryName: categoryName, callerFilePath: callerFilePath);
+    public static void Error(Exception exception, string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "")
+        => Log(LogLevel.Error, FormatException(message, exception), color, categoryName: categoryName, callerFilePath: callerFilePath);
+    public static void Fatal(Exception exception, string message, ConsoleColor? color = null, string? categoryName = null, [CallerFilePath] string callerFilePath = "")
+        => Log(LogLevel.Critical, FormatException(message, exception), color, categoryName: categoryName, callerFilePath: callerFilePath);
 
-    private static void NonConsoleCritical(Exception exception, string message)
-    {
-        foreach (var provider in SnapshotProviders().Where(provider => !provider.IsConsoleOutput))
-            provider.Write(LogLevel.Critical, Categories.Core, $"{message}. {exception}", null);
-    }
+    public static string ExceptionSummary(Exception exception)
+        => exception.InnerException?.Message
+            ?? (string.IsNullOrWhiteSpace(exception.Message) ? exception.GetType().Name : exception.Message);
 
-    private static void NonConsoleCritical(string message, object? arg)
-    {
-        foreach (var provider in SnapshotProviders().Where(provider => !provider.IsConsoleOutput))
-            provider.Write(LogLevel.Critical, Categories.Core, string.Format(message.Replace("{ExceptionObject}", "{0}"), arg), null);
-    }
+    public static string ExceptionDetail(Exception exception) => exception.ToString();
+
+    public static string FormatException(string message, Exception exception)
+        => $"{message}: {ExceptionDetail(exception)}";
+
+    private static void Critical(Exception exception, string message)
+        => Critical(FormatException(message, exception));
+
+    private static void Critical(string message)
+        => Log(LogLevel.Critical, message, categoryName: Categories.Core);
 
     private static void Log(
         LogLevel level,

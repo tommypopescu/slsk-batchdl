@@ -348,7 +348,7 @@ public class DownloadEngine
                 }
                 catch (Exception ex)
                 {
-                    SockseekLog.Soulseek.Error($"Initial Soulseek login failed: {ex.Message}. Reconnection will be attempted automatically in the background.");
+                    SockseekLog.Soulseek.Error(ex, "Initial Soulseek login failed. Reconnection will be attempted automatically in the background");
                 }
 
                 await _clientManager.WaitUntilReadyAsync(ct);
@@ -684,7 +684,7 @@ public class DownloadEngine
 
         SockseekLog.Jobs.Debug($"RemoveFromSource: '{job}' ({job.SourceMutation.Kind}, source='{job.SourceMutation.Source}', line={job.SourceMutation.LineNumber})");
         try { await _sourceMutationExecutor.ApplyAsync(job.SourceMutation, config); }
-        catch (Exception ex) { SockseekLog.Jobs.Error($"Error removing from source: {ex.Message}"); }
+        catch (Exception ex) { SockseekLog.Jobs.Error(ex, "Error removing from source"); }
     }
 
     async Task<JobOutcome> ProcessLeafJob(Job job)
@@ -790,7 +790,7 @@ public class DownloadEngine
         }
         catch (Exception e)
         {
-            return new(JobOutcome.Failed(FailureReason.ExtractionFailed, e.Message), null, null);
+            return new(ExtractionFailedOutcome(e), null, null);
         }
 
         job.InputType = inputType;
@@ -817,7 +817,7 @@ public class DownloadEngine
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            return new(JobOutcome.Failed(FailureReason.ExtractionFailed, e.Message), null, extractor);
+            return new(ExtractionFailedOutcome(e), null, extractor);
         }
 
         extracted = ApplyExtractedResultTransforms(job, extracted);
@@ -905,6 +905,15 @@ public class DownloadEngine
 
     sealed record ExtractJobResult(JobOutcome Outcome, Job? Result, IExtractor? Extractor);
 
+    static JobOutcome ExtractionFailedOutcome(Exception exception)
+        => ExceptionFailureOutcome(FailureReason.ExtractionFailed, exception);
+
+    static JobOutcome ExceptionFailureOutcome(FailureReason reason, Exception exception)
+        => JobOutcome.Failed(
+            reason,
+            SockseekLog.ExceptionSummary(exception),
+            SockseekLog.ExceptionDetail(exception));
+
     async Task<JobOutcome> ProcessSearchJob(SearchJob job)
     {
         var responseData = new ResponseData();
@@ -965,7 +974,7 @@ public class DownloadEngine
             if (job is SearchJob searchJob)
                 searchJob.Session.Complete();
 
-            var outcome = JobOutcome.Failed(FailureReason.Other, e.Message);
+            var outcome = ExceptionFailureOutcome(FailureReason.Other, e);
             CommitOutcome(job, outcome);
             return (default!, outcome);
         }
@@ -1270,7 +1279,8 @@ public class DownloadEngine
         if (failedAlbum != null)
             return JobOutcome.Failed(
                 failedAlbum.FailureReason == FailureReason.None ? FailureReason.AllDownloadsFailed : failedAlbum.FailureReason,
-                failedAlbum.FailureMessage);
+                failedAlbum.FailureMessage,
+                failedAlbum.FailureDetail);
 
         var skippedAlbum = job.Albums.FirstOrDefault(album => album.State is JobState.Skipped or JobState.NotFoundLastTime);
         if (skippedAlbum != null)
@@ -1385,7 +1395,8 @@ public class DownloadEngine
         if (failedOutcome != null)
             return JobOutcome.Failed(
                 failedOutcome.FailureReason == FailureReason.None ? FailureReason.AllDownloadsFailed : failedOutcome.FailureReason,
-                failedOutcome.FailureMessage);
+                failedOutcome.FailureMessage,
+                failedOutcome.FailureDetail);
 
         // Debatable: without a partial-success state, a locally cancelled child is
         // treated like a child-level result rather than parent cancellation.
@@ -1726,6 +1737,7 @@ public class DownloadEngine
         int tries = config.Transfer.UnknownErrorRetries;
         JobOutcome? finalOutcome = null;
         string? lastFailureMessage = null;
+        string? lastFailureDetail = null;
 
         while (tries > 0)
         {
@@ -1745,6 +1757,7 @@ public class DownloadEngine
                 else
                 {
                     lastFailureMessage = outcome.FailureMessage;
+                    lastFailureDetail = outcome.FailureDetail;
                     finalOutcome = outcome;
                 }
             }
@@ -1766,6 +1779,7 @@ public class DownloadEngine
                 else
                 {
                     lastFailureMessage = DownloadFailureMessage(ex);
+                    lastFailureDetail = SockseekLog.ExceptionDetail(ex);
                     tries--;
                     continue;
                 }
@@ -1776,7 +1790,7 @@ public class DownloadEngine
 
         if (tries == 0)
         {
-            return JobOutcome.Failed(FailureReason.AllDownloadsFailed, lastFailureMessage);
+            return JobOutcome.Failed(FailureReason.AllDownloadsFailed, lastFailureMessage, lastFailureDetail);
         }
 
         return finalOutcome ?? JobOutcome.NoChange();
@@ -1848,7 +1862,7 @@ public class DownloadEngine
     }
 
     static string? DownloadFailureMessage(Exception ex)
-        => ex.InnerException?.Message ?? (string.IsNullOrWhiteSpace(ex.Message) ? null : ex.Message);
+        => SockseekLog.ExceptionSummary(ex);
 
     static string JobLogKind(Job job) => job switch
     {
@@ -1992,16 +2006,22 @@ public class DownloadEngine
                     throw;
 
                 lastDownloadException = ex;
-                SockseekLog.Jobs.Debug($"Download attempt {tried} failed for '{candidate.Username}\\{candidate.Filename}' to '{outputPath}': {ex.Message}");
+                SockseekLog.Jobs.Debug(SockseekLog.FormatException($"Download attempt {tried} failed for '{candidate.Username}\\{candidate.Filename}' to '{outputPath}'", ex));
                 if (tried >= candidates.Count || tried >= config.Transfer.MaxDownloadRetries)
                 {
-                    return JobOutcome.Failed(FailureReason.AllDownloadsFailed, DownloadFailureMessage(ex));
+                    return JobOutcome.Failed(
+                        FailureReason.AllDownloadsFailed,
+                        DownloadFailureMessage(ex),
+                        SockseekLog.ExceptionDetail(ex));
                 }
             }
         }
 
         if (lastDownloadException != null)
-            return JobOutcome.Failed(FailureReason.AllDownloadsFailed, DownloadFailureMessage(lastDownloadException));
+            return JobOutcome.Failed(
+                FailureReason.AllDownloadsFailed,
+                DownloadFailureMessage(lastDownloadException),
+                SockseekLog.ExceptionDetail(lastDownloadException));
 
         return JobOutcome.Failed(FailureReason.NoSuitableFileFound);
     }
@@ -2023,7 +2043,7 @@ public class DownloadEngine
                 break;
 
             case JobState.Failed:
-                job.Fail(outcome.FailureReason, outcome.FailureMessage);
+                job.Fail(outcome.FailureReason, outcome.FailureMessage, outcome.FailureDetail);
                 break;
 
             case JobState.AlreadyExists:
@@ -2659,7 +2679,7 @@ public class DownloadEngine
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                SockseekLog.Jobs.Error($"Error in update loop: {ex.Message}");
+                SockseekLog.Jobs.Error(ex, "Error in update loop");
                 try { await Task.Delay(1000, cancellationToken); } catch { break; }
             }
         }

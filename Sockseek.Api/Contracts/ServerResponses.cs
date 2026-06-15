@@ -89,7 +89,8 @@ public sealed record JobSummaryDto(
     int? DiscoveryResultCount,
     int? DiscoveryLockedFileCount,
     IReadOnlyList<string> AppliedAutoProfiles,
-    IReadOnlyList<ResourceActionDto> AvailableActions);
+    IReadOnlyList<ResourceActionDto> AvailableActions,
+    string? FailureDetail = null);
 
 /// <summary>
 /// Selected-job snapshot: summary, typed payload, and direct child summaries for client navigation.

@@ -14,6 +14,7 @@ namespace Sockseek.Cli;
 public class CliProgressReporter
 {
     private readonly CliSettings _cli;
+    private readonly bool _includeFailureDetails;
     private readonly TerminalLiveRenderer? _live;
 
     private readonly ConcurrentDictionary<Guid, BarData> _bars = new();
@@ -73,9 +74,10 @@ public class CliProgressReporter
 
     public bool UsesLiveRendering => LiveMode;
 
-    public CliProgressReporter(CliSettings cli)
+    public CliProgressReporter(CliSettings cli, bool includeFailureDetails = false)
     {
         _cli = cli;
+        _includeFailureDetails = includeFailureDetails;
         if (!cli.NoProgress && !Console.IsOutputRedirected)
             _live = new TerminalLiveRenderer();
     }
@@ -172,6 +174,9 @@ public class CliProgressReporter
                     break;
                 case "track-batch.resolved" when envelope.Payload is TrackBatchResolvedEventDto e:
                     ReportTrackBatchResolved(e);
+                    break;
+                case "diagnostic.error" when envelope.Payload is DiagnosticErrorEventDto e:
+                    ReportDiagnosticError(e);
                     break;
                 case "search.rate-limited" when envelope.Payload is SearchRateLimitedEventDto rl:
                     if (LiveMode)
@@ -640,6 +645,11 @@ public class CliProgressReporter
     private static string WithFailureMessage(string display, string? failureMessage)
         => string.IsNullOrWhiteSpace(failureMessage) ? display : $"{display}\n    Error: {failureMessage}";
 
+    private static string WithFailureDetail(string display, string? failureDetail, bool includeFailureDetails)
+        => includeFailureDetails && !string.IsNullOrWhiteSpace(failureDetail)
+            ? $"{display}\n    Exception:\n{IndentContinuationLines(failureDetail, "        ")}"
+            : display;
+
     private static string IndentContinuationLines(string text, string indent)
     {
         var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
@@ -653,7 +663,6 @@ public class CliProgressReporter
         => song.State is ServerProtocol.JobStates.Done or ServerProtocol.JobStates.AlreadyExists
             ? SongCompletedDisplay(song)
             : WithFailureMessage(SongDisplay(song, shortPath: true), song.FailureMessage);
-
 
     private string AlbumTrackLogMessage(AlbumBlock block, SongStateChangedEventDto song)
     {
@@ -1042,12 +1051,6 @@ public class CliProgressReporter
             UpsertLiveJob(job.Summary, "extracting");
             return;
         }
-
-        if (LiveMode)
-        {
-            UpsertLiveJob(job.Summary, "extracting");
-            return;
-        }
     }
 
     private void ReportExtractionFailed(ExtractionFailedEventDto job)
@@ -1058,6 +1061,18 @@ public class CliProgressReporter
             LogLive(TerminalLogKind.JobFailed, job.Summary, $"failed: {job.Reason}");
             return;
         }
+    }
+
+    private void ReportDiagnosticError(DiagnosticErrorEventDto diagnostic)
+    {
+        if (!LiveMode || !_includeFailureDetails)
+            return;
+
+        var message = WithFailureDetail($"diagnostic: {diagnostic.Message}", diagnostic.Exception, includeFailureDetails: true);
+        if (diagnostic.Summary is { } summary)
+            LogLive(TerminalLogKind.JobFailed, summary, message);
+        else
+            _live!.Log(new TerminalLogLine(TerminalLogKind.JobFailed, Guid.Empty.ToString(), 0, diagnostic.Scope, message));
     }
 
     private void ReportJobStarted(JobStartedEventDto job)

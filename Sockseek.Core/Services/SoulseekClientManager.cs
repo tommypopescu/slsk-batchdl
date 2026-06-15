@@ -84,9 +84,9 @@ public class SoulseekClientManager : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            SockseekLog.Soulseek.Error($"Failed to ensure Soulseek connection and login: {ex.Message}");
+            SockseekLog.Soulseek.Error(ex, "Failed to ensure Soulseek connection and login");
             StartMonitoring(); // Ensure monitoring starts even on failure so we can retry
-            throw new InvalidOperationException($"Soulseek login failed: {ex.Message}", ex);
+            throw new InvalidOperationException($"Soulseek login failed: {SockseekLog.ExceptionSummary(ex)}", ex);
         }
         finally
         {
@@ -137,11 +137,11 @@ public class SoulseekClientManager : IDisposable
             {
                 if (!IsTransient(ex))
                 {
-                    SockseekLog.Soulseek.Fatal($"Permanent Soulseek error: {ex.Message}. Stopping reconnection attempts.");
+                    SockseekLog.Soulseek.Fatal(ex, "Permanent Soulseek error. Stopping reconnection attempts");
                     break;
                 }
 
-                SockseekLog.Soulseek.Debug($"Reconnection attempt failed: {ex.Message}");
+                SockseekLog.Soulseek.Debug(SockseekLog.FormatException("Reconnection attempt failed", ex));
                 retryDelay = Math.Min(retryDelay * 2, 8);
             }
 

@@ -42,6 +42,24 @@ public class RemoteCliBackendTests
     }
 
     [TestMethod]
+    public async Task SockseekApiClient_HttpErrorsUseSpecificExceptionType()
+    {
+        using var http = new HttpClient(new StaticResponseHandler(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("""{"error":"Bad request from daemon"}"""),
+        }))
+        {
+            BaseAddress = new Uri("http://127.0.0.1:5030/"),
+        };
+        var client = new SockseekApiClient(http);
+
+        var ex = await Assert.ThrowsExceptionAsync<SockseekApiRequestException>(
+            () => client.GetProfilesAsync(CancellationToken.None));
+
+        StringAssert.Contains(ex.Message, "Bad request from daemon");
+    }
+
+    [TestMethod]
     public async Task RemoteCliBackend_SearchProjectionAndDownloadFollowUp_Work()
     {
         string musicRoot = Path.Combine(Path.GetTempPath(), "Sockseek-remote-backend-test-" + Guid.NewGuid());
@@ -1113,5 +1131,11 @@ public class RemoteCliBackendTests
         }
 
         Assert.Fail(failureMessage);
+    }
+
+    private sealed class StaticResponseHandler(HttpResponseMessage response) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(response);
     }
 }
