@@ -1,6 +1,7 @@
 using SpotifyAPI.Web;
 using SpotifyAPI.Web.Auth;
 using Swan;
+using System.Text.Json;
 
 using Sockseek.Core.Models;
 using Sockseek.Core.Jobs;
@@ -32,10 +33,10 @@ namespace Sockseek.Core.Extractors;
 
             bool needLogin = input == "spotify-likes" || input == "spotify-albums" || extraction.RemoveTracksFromSource;
 
-            if (needLogin && _spotify.Token.Length == 0 && (_spotify.ClientId.Length == 0 || _spotify.ClientSecret.Length == 0))
-                throw new Exception("Credentials are required when downloading liked music or removing from source playlists.");
+            if (string.IsNullOrEmpty(_spotify.ClientId) || string.IsNullOrEmpty(_spotify.ClientSecret))
+                throw new Exception("Spotify client ID and secret are required. Create a Spotify developer app and pass --spotify-id and --spotify-secret.");
 
-            spotifyClient = new Spotify(_spotify.ClientId, _spotify.ClientSecret, _spotify.Token, _spotify.Refresh);
+            spotifyClient = new Spotify(_spotify.ClientId ?? "", _spotify.ClientSecret ?? "", _spotify.Token ?? "", _spotify.Refresh ?? "");
             await spotifyClient.Authorize(needLogin, extraction.RemoveTracksFromSource);
 
             Job result;
@@ -75,18 +76,21 @@ namespace Sockseek.Core.Extractors;
                     SockseekLog.Info("Loading Spotify playlist");
                     (playlistName, playlistUri, songs) = await spotifyClient.GetPlaylist(input, max, off);
                 }
-                catch (SpotifyAPI.Web.APIException)
+                catch (APIException ex)
                 {
-                    if (!needLogin && !spotifyClient.UsedDefaultCredentials)
+                    if (!needLogin)
                     {
                         await spotifyClient.Authorize(true, extraction.RemoveTracksFromSource);
-                        (playlistName, playlistUri, songs) = await spotifyClient.GetPlaylist(input, max, off);
+                        try
+                        {
+                            (playlistName, playlistUri, songs) = await spotifyClient.GetPlaylist(input, max, off);
+                        }
+                        catch (APIException retryEx)
+                        {
+                            throw SpotifyApiRequestException.Create("Spotify playlist request after user authorization", retryEx);
+                        }
                     }
-                    else if (!needLogin)
-                    {
-                        throw new Exception("Spotify playlist not found (it may be set to private, but no credentials have been provided).");
-                    }
-                    else throw;
+                    else throw SpotifyApiRequestException.Create("Spotify playlist request", ex);
                 }
 
                 if (!string.IsNullOrWhiteSpace(playlistUri))
@@ -118,6 +122,68 @@ namespace Sockseek.Core.Extractors;
     }
 
 
+    public sealed class SpotifyApiRequestException : Exception
+    {
+        private readonly APIException apiException;
+
+        private SpotifyApiRequestException(string message, APIException apiException)
+            : base(message)
+        {
+            this.apiException = apiException;
+        }
+
+        public static SpotifyApiRequestException Create(string operation, APIException apiException)
+            => new($"{operation} failed: {Describe(apiException)}", apiException);
+
+        public override string ToString()
+            => $"{base.ToString()}{Environment.NewLine}{Environment.NewLine}Original Spotify API exception:{Environment.NewLine}{apiException}";
+
+        private static string Describe(APIException exception)
+        {
+            if (exception.Response == null)
+                return exception.Message;
+
+            var parts = new List<string>
+            {
+                $"HTTP {(int)exception.Response.StatusCode} {exception.Response.StatusCode}",
+            };
+
+            if (!string.IsNullOrWhiteSpace(exception.Response.ContentType))
+                parts.Add($"content-type={exception.Response.ContentType}");
+
+            var body = FormatBody(exception.Response.Body);
+            if (!string.IsNullOrWhiteSpace(body))
+                parts.Add($"body={body}");
+
+            if (exception.Response.Headers != null
+                && exception.Response.Headers.TryGetValue("Retry-After", out var retryAfter)
+                && !string.IsNullOrWhiteSpace(retryAfter))
+            {
+                parts.Add($"retry-after={retryAfter}");
+            }
+
+            return string.Join("; ", parts);
+        }
+
+        private static string? FormatBody(object? body)
+        {
+            if (body == null)
+                return null;
+            if (body is string text)
+                return text;
+
+            try
+            {
+                return JsonSerializer.Serialize(body);
+            }
+            catch
+            {
+                return body.ToString();
+            }
+        }
+    }
+
+
     public class Spotify
     {
         private EmbedIOAuthServer _server;
@@ -128,23 +194,12 @@ namespace Sockseek.Core.Extractors;
         private SpotifyClient? _client;
         private bool loggedIn = false;
 
-        public const string encodedSpotifyId = "MWJmNDY5M1bLaH9WJiYjFhNGY0MWJjZWQ5YjJjMWNmZGJiZDI=";
-        public const string encodedSpotifySecret = "Y2JlM2QxYTE5MzJkNDQ2MmFiOGUy3shTuf4Y2JhY2M3ZDdjYWU=";
-        public bool UsedDefaultCredentials { get; private set; }
-
         public Spotify(string clientId = "", string clientSecret = "", string token = "", string refreshToken = "")
         {
-            _clientId           = clientId;
-            _clientSecret       = clientSecret;
-            _clientToken        = token;
-            _clientRefreshToken = refreshToken;
-
-            if (_clientToken.Length == 0 && (_clientId.Length == 0 || _clientSecret.Length == 0))
-            {
-                _clientId           = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encodedSpotifyId.Replace("1bLaH9", "")));
-                _clientSecret       = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encodedSpotifySecret.Replace("3shTuf4", "")));
-                UsedDefaultCredentials = true;
-            }
+            _clientId           = clientId ?? "";
+            _clientSecret       = clientSecret ?? "";
+            _clientToken        = token ?? "";
+            _clientRefreshToken = refreshToken ?? "";
         }
 
         public async Task Authorize(bool login = false, bool needModify = false)
@@ -370,25 +425,25 @@ namespace Sockseek.Core.Extractors;
             var p          = await _client.Playlists.Get(playlistId);
 
             var songs = new List<SongJob>();
-            int limit = Math.Min(max, 100);
+            int limit = Math.Min(max, 50);
             int num   = offset + 1;
 
             while (true)
             {
-                var tracks = await _client.Playlists.GetItems(playlistId, new PlaylistGetItemsRequest { Limit = limit, Offset = offset });
+                var tracks = await _client.Playlists.GetPlaylistItems(playlistId, new PlaylistGetItemsRequest { Limit = limit, Offset = offset });
 
                 foreach (var track in tracks.Items)
                 {
                     try
                     {
-                        string[] artists = ((IEnumerable<object>)track.Track.ReadProperty("artists")).Select(a => (string)a.ReadProperty("name")).ToArray();
+                        string[] artists = ((IEnumerable<object>)track.Item.ReadProperty("artists")).Select(a => (string)a.ReadProperty("name")).ToArray();
                         var query = new SongQuery
                         {
                             Artist = artists[0],
-                            Album  = (string)track.Track.ReadProperty("album").ReadProperty("name"),
-                            Title  = (string)track.Track.ReadProperty("name"),
-                            Length = (int)track.Track.ReadProperty("durationMs") / 1000,
-                            URI    = (string)track.Track.ReadProperty("uri"),
+                            Album  = (string)track.Item.ReadProperty("album").ReadProperty("name"),
+                            Title  = (string)track.Item.ReadProperty("name"),
+                            Length = (int)track.Item.ReadProperty("durationMs") / 1000,
+                            URI    = (string)track.Item.ReadProperty("uri"),
                         };
                         songs.Add(new SongJob(query) { ItemNumber = num++ });
                     }
@@ -397,7 +452,7 @@ namespace Sockseek.Core.Extractors;
 
                 if (tracks.Items.Count < limit || songs.Count >= max) break;
                 offset += limit;
-                limit   = Math.Min(max - songs.Count, 100);
+                limit   = Math.Min(max - songs.Count, 50);
             }
 
             return (p.Name, p.Id, songs);

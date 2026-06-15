@@ -325,16 +325,25 @@ search for 'youtube data', then follow the prompts.
 
 ### Spotify
 Any playlist or album url, or `spotify-likes` for your liked songs, or `spotify-albums` for liked albums.  
-Credentials are required when downloading a private playlist or liked music.
+Spotify API access now requires your own Spotify developer application for all Spotify inputs,
+including public playlists. Spotify also requires the owner of that application to have an
+active Spotify Premium subscription. If you do not have Premium, export the Spotify playlist
+with a Spotify-to-CSV converter and pass the CSV file to Sockseek instead.
 
 #### Using Credentials
 
 <details>
   <summary>Click to expand</summary>
 
-Create a Spotify application at https://developer.spotify.com/dashboard/applications with a redirect url http://127.0.0.1:48721/callback. Obtain an application ID and secret from the created application dashboard.
+Create a Spotify application at https://developer.spotify.com/dashboard/applications with a redirect url http://127.0.0.1:48721/callback. The Spotify account that owns the application must have an active Premium subscription. Obtain an application ID and secret from the created application dashboard.
 
-Start Sockseek with the obtained credentials and an authorized action to trigger the Spotify app login flow:
+For public playlists and albums, pass the application credentials:
+
+```
+sockseek "https://open.spotify.com/playlist/id" --spotify-id 123456 --spotify-secret 123456
+```
+
+For private playlists, liked songs, liked albums, or `--remove-from-source`, start Sockseek with the obtained credentials and an authorized action to trigger the Spotify app login flow:
 
 ```
 sockseek spotify-likes --spotify-id 123456 --spotify-secret 123456 -n 1 --print-tracks
@@ -702,13 +711,13 @@ sockseek "tracks.csv"
 
 ##### Download a Spotify playlist or your liked songs
 ```bash
-sockseek "https://open.spotify.com/playlist/id"
-sockseek "spotify-likes"
+sockseek "https://open.spotify.com/playlist/id" --spotify-id 123456 --spotify-secret 123456
+sockseek "spotify-likes" --spotify-id 123456 --spotify-secret 123456 --spotify-refresh 123456
 ```
 
 ##### Download the albums of a spotify playlist
 ```bash
-sockseek "https://open.spotify.com/playlist/id" -a
+sockseek "https://open.spotify.com/playlist/id" -a --spotify-id 123456 --spotify-secret 123456
 ```
 
 ##### Download a youtube playlist with yt-dlp fallback & retrieving deleted video names
@@ -853,7 +862,7 @@ Example => Run Sockseek every Sunday at 1am, search for missing tracks from the 
 
 ```
 # min   hour    day     month   weekday command
-0 1 * * 0 sockseek https://open.spotify.com/playlist/6sf1WR5grXGJ6dET -c /config -p /data --index-path /data/index.sockseek
+0 1 * * 0 sockseek https://open.spotify.com/playlist/6sf1WR5grXGJ6dET -c /config -p /data --index-path /data/index.sockseek --spotify-id 123456 --spotify-secret 123456
 ```
 
 [crontab.guru](https://crontab.guru/) could be used to help with the scheduling expression.
