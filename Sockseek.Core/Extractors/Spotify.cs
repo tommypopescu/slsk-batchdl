@@ -33,8 +33,8 @@ namespace Sockseek.Core.Extractors;
 
             bool needLogin = input == "spotify-likes" || input == "spotify-albums" || extraction.RemoveTracksFromSource;
 
-            if (needLogin && string.IsNullOrEmpty(_spotify.Token) && (string.IsNullOrEmpty(_spotify.ClientId) || string.IsNullOrEmpty(_spotify.ClientSecret)))
-                throw new Exception("Credentials are required when downloading liked music or removing from source playlists.");
+            if (string.IsNullOrEmpty(_spotify.ClientId) || string.IsNullOrEmpty(_spotify.ClientSecret))
+                throw new Exception("Spotify client ID and secret are required. Create a Spotify developer app and pass --spotify-id and --spotify-secret.");
 
             spotifyClient = new Spotify(_spotify.ClientId ?? "", _spotify.ClientSecret ?? "", _spotify.Token ?? "", _spotify.Refresh ?? "");
             await spotifyClient.Authorize(needLogin, extraction.RemoveTracksFromSource);
@@ -78,7 +78,7 @@ namespace Sockseek.Core.Extractors;
                 }
                 catch (APIException ex)
                 {
-                    if (!needLogin && !spotifyClient.UsedDefaultCredentials)
+                    if (!needLogin)
                     {
                         await spotifyClient.Authorize(true, extraction.RemoveTracksFromSource);
                         try
@@ -89,10 +89,6 @@ namespace Sockseek.Core.Extractors;
                         {
                             throw SpotifyApiRequestException.Create("Spotify playlist request after user authorization", retryEx);
                         }
-                    }
-                    else if (!needLogin)
-                    {
-                        throw SpotifyApiRequestException.Create("Spotify playlist request", ex);
                     }
                     else throw SpotifyApiRequestException.Create("Spotify playlist request", ex);
                 }
@@ -198,23 +194,12 @@ namespace Sockseek.Core.Extractors;
         private SpotifyClient? _client;
         private bool loggedIn = false;
 
-        public const string encodedSpotifyId = "MWJmNDY5M1bLaH9WJiYjFhNGY0MWJjZWQ5YjJjMWNmZGJiZDI=";
-        public const string encodedSpotifySecret = "Y2JlM2QxYTE5MzJkNDQ2MmFiOGUy3shTuf4Y2JhY2M3ZDdjYWU=";
-        public bool UsedDefaultCredentials { get; private set; }
-
         public Spotify(string clientId = "", string clientSecret = "", string token = "", string refreshToken = "")
         {
             _clientId           = clientId ?? "";
             _clientSecret       = clientSecret ?? "";
             _clientToken        = token ?? "";
             _clientRefreshToken = refreshToken ?? "";
-
-            if (_clientToken.Length == 0 && (_clientId.Length == 0 || _clientSecret.Length == 0))
-            {
-                _clientId           = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encodedSpotifyId.Replace("1bLaH9", "")));
-                _clientSecret       = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encodedSpotifySecret.Replace("3shTuf4", "")));
-                UsedDefaultCredentials = true;
-            }
         }
 
         public async Task Authorize(bool login = false, bool needModify = false)
