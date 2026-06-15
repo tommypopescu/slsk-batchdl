@@ -1,6 +1,7 @@
 using SpotifyAPI.Web;
 using SpotifyAPI.Web.Auth;
 using Swan;
+using System.Text.Json;
 
 using Sockseek.Core.Models;
 using Sockseek.Core.Jobs;
@@ -32,10 +33,10 @@ namespace Sockseek.Core.Extractors;
 
             bool needLogin = input == "spotify-likes" || input == "spotify-albums" || extraction.RemoveTracksFromSource;
 
-            if (needLogin && _spotify.Token.Length == 0 && (_spotify.ClientId.Length == 0 || _spotify.ClientSecret.Length == 0))
+            if (needLogin && string.IsNullOrEmpty(_spotify.Token) && (string.IsNullOrEmpty(_spotify.ClientId) || string.IsNullOrEmpty(_spotify.ClientSecret)))
                 throw new Exception("Credentials are required when downloading liked music or removing from source playlists.");
 
-            spotifyClient = new Spotify(_spotify.ClientId, _spotify.ClientSecret, _spotify.Token, _spotify.Refresh);
+            spotifyClient = new Spotify(_spotify.ClientId ?? "", _spotify.ClientSecret ?? "", _spotify.Token ?? "", _spotify.Refresh ?? "");
             await spotifyClient.Authorize(needLogin, extraction.RemoveTracksFromSource);
 
             Job result;
@@ -75,18 +76,25 @@ namespace Sockseek.Core.Extractors;
                     SockseekLog.Info("Loading Spotify playlist");
                     (playlistName, playlistUri, songs) = await spotifyClient.GetPlaylist(input, max, off);
                 }
-                catch (SpotifyAPI.Web.APIException)
+                catch (APIException ex)
                 {
                     if (!needLogin && !spotifyClient.UsedDefaultCredentials)
                     {
                         await spotifyClient.Authorize(true, extraction.RemoveTracksFromSource);
-                        (playlistName, playlistUri, songs) = await spotifyClient.GetPlaylist(input, max, off);
+                        try
+                        {
+                            (playlistName, playlistUri, songs) = await spotifyClient.GetPlaylist(input, max, off);
+                        }
+                        catch (APIException retryEx)
+                        {
+                            throw SpotifyApiRequestException.Create("Spotify playlist request after user authorization", retryEx);
+                        }
                     }
                     else if (!needLogin)
                     {
-                        throw new Exception("Spotify playlist not found (it may be set to private, but no credentials have been provided).");
+                        throw SpotifyApiRequestException.Create("Spotify playlist request", ex);
                     }
-                    else throw;
+                    else throw SpotifyApiRequestException.Create("Spotify playlist request", ex);
                 }
 
                 if (!string.IsNullOrWhiteSpace(playlistUri))
@@ -118,6 +126,68 @@ namespace Sockseek.Core.Extractors;
     }
 
 
+    public sealed class SpotifyApiRequestException : Exception
+    {
+        private readonly APIException apiException;
+
+        private SpotifyApiRequestException(string message, APIException apiException)
+            : base(message)
+        {
+            this.apiException = apiException;
+        }
+
+        public static SpotifyApiRequestException Create(string operation, APIException apiException)
+            => new($"{operation} failed: {Describe(apiException)}", apiException);
+
+        public override string ToString()
+            => $"{base.ToString()}{Environment.NewLine}{Environment.NewLine}Original Spotify API exception:{Environment.NewLine}{apiException}";
+
+        private static string Describe(APIException exception)
+        {
+            if (exception.Response == null)
+                return exception.Message;
+
+            var parts = new List<string>
+            {
+                $"HTTP {(int)exception.Response.StatusCode} {exception.Response.StatusCode}",
+            };
+
+            if (!string.IsNullOrWhiteSpace(exception.Response.ContentType))
+                parts.Add($"content-type={exception.Response.ContentType}");
+
+            var body = FormatBody(exception.Response.Body);
+            if (!string.IsNullOrWhiteSpace(body))
+                parts.Add($"body={body}");
+
+            if (exception.Response.Headers != null
+                && exception.Response.Headers.TryGetValue("Retry-After", out var retryAfter)
+                && !string.IsNullOrWhiteSpace(retryAfter))
+            {
+                parts.Add($"retry-after={retryAfter}");
+            }
+
+            return string.Join("; ", parts);
+        }
+
+        private static string? FormatBody(object? body)
+        {
+            if (body == null)
+                return null;
+            if (body is string text)
+                return text;
+
+            try
+            {
+                return JsonSerializer.Serialize(body);
+            }
+            catch
+            {
+                return body.ToString();
+            }
+        }
+    }
+
+
     public class Spotify
     {
         private EmbedIOAuthServer _server;
@@ -134,10 +204,10 @@ namespace Sockseek.Core.Extractors;
 
         public Spotify(string clientId = "", string clientSecret = "", string token = "", string refreshToken = "")
         {
-            _clientId           = clientId;
-            _clientSecret       = clientSecret;
-            _clientToken        = token;
-            _clientRefreshToken = refreshToken;
+            _clientId           = clientId ?? "";
+            _clientSecret       = clientSecret ?? "";
+            _clientToken        = token ?? "";
+            _clientRefreshToken = refreshToken ?? "";
 
             if (_clientToken.Length == 0 && (_clientId.Length == 0 || _clientSecret.Length == 0))
             {
