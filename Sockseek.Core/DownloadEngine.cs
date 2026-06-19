@@ -613,6 +613,11 @@ public class DownloadEngine
         try
         {
             // ── fan-out ───────────────────────────────────────────────────────
+            // TODO [PERFORMANCE]: Split bulk child registration/materialization from child execution.
+            // Today each ProcessJob(child) runs synchronously until its first incomplete await, so a
+            // large JobList can start skip/search/failure work for early children before later children
+            // are even registered. That makes "workflow registration" cost include real processing.
+            // Register/materialize all children in one cheap pass, then schedule execution separately.
             if (directSongs.Count > 0)
             {
                 var intervalReporter = engineSettings.ReportIntervalProgress

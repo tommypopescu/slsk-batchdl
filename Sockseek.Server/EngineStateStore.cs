@@ -11,8 +11,10 @@ namespace Sockseek.Server;
 public sealed class EngineStateStore
 {
     private readonly Lock gate = new();
+    // Keep records and workflow aggregate indexes in sync only through UpdateJobRecord.
     private readonly Dictionary<Guid, Job> jobs = [];
     private readonly Dictionary<Guid, JobRecord> records = [];
+    private readonly Dictionary<Guid, WorkflowStateRecord> workflows = [];
     private readonly Dictionary<Guid, Guid?> parentJobIds = [];
     private readonly Dictionary<Guid, Guid> resultJobIds = [];
     private readonly Dictionary<Guid, Guid> sourceJobIds = [];
@@ -127,11 +129,20 @@ public sealed class EngineStateStore
     {
         lock (gate)
         {
-            return records.Values
-                .GroupBy(record => record.WorkflowId)
-                .OrderBy(group => group.Min(record => record.Summary.DisplayId))
-                .Select(BuildWorkflowSummary)
+            return workflows.Values
+                .OrderBy(workflow => workflow.FirstDisplayId)
+                .Select(workflow => workflow.ToSummary(records))
                 .ToList();
+        }
+    }
+
+    public WorkflowSummaryDto? GetWorkflowSummary(Guid workflowId)
+    {
+        lock (gate)
+        {
+            return workflows.TryGetValue(workflowId, out var workflow)
+                ? workflow.ToSummary(records)
+                : null;
         }
     }
 
@@ -139,6 +150,9 @@ public sealed class EngineStateStore
     {
         lock (gate)
         {
+            if (!workflows.TryGetValue(workflowId, out var workflow))
+                return null;
+
             var workflowJobs = records.Values
                 .Where(record => record.WorkflowId == workflowId)
                 .OrderBy(record => record.Summary.DisplayId)
@@ -147,7 +161,7 @@ public sealed class EngineStateStore
             if (workflowJobs.Count == 0)
                 return null;
 
-            var summary = BuildWorkflowSummary(workflowJobs.GroupBy(record => record.WorkflowId).Single());
+            var summary = workflow.ToSummary(records);
             var jobSummaries = workflowJobs
                 .Where(record => includeAll || IsDefaultRoot(record))
                 .Select(record => record.Summary)
@@ -160,6 +174,9 @@ public sealed class EngineStateStore
     {
         lock (gate)
         {
+            if (!workflows.TryGetValue(workflowId, out var workflow))
+                return null;
+
             var workflowJobs = records.Values
                 .Where(record => record.WorkflowId == workflowId)
                 .ToList();
@@ -167,7 +184,7 @@ public sealed class EngineStateStore
             if (workflowJobs.Count == 0)
                 return null;
 
-            var summary = BuildWorkflowSummary(workflowJobs.GroupBy(record => record.WorkflowId).Single());
+            var summary = workflow.ToSummary(records);
             return new WorkflowTreeDto(summary, BuildWorkflowJobTree(workflowJobs));
         }
     }
@@ -177,13 +194,9 @@ public sealed class EngineStateStore
         lock (gate)
         {
             int totalJobCount = records.Count;
-            int activeJobCount = records.Values.Count(IsActiveRecord);
-            int totalWorkflowCount = records.Values.Select(record => record.WorkflowId).Distinct().Count();
-            int activeWorkflowCount = records.Values
-                .Where(IsActiveRecord)
-                .Select(record => record.WorkflowId)
-                .Distinct()
-                .Count();
+            int activeJobCount = workflows.Values.Sum(workflow => workflow.ActiveJobCount);
+            int totalWorkflowCount = workflows.Count;
+            int activeWorkflowCount = workflows.Values.Count(workflow => workflow.ActiveJobCount > 0);
 
             return new ServerStatusDto(
                 new SoulseekClientStatusDto("None", [], false),
@@ -283,7 +296,7 @@ public sealed class EngineStateStore
                 changedJobs.Add(UpdateJobRecord(result).Summary);
             }
 
-            if (records.Values.Any(candidate => candidate.WorkflowId == job.WorkflowId))
+            if (workflows.ContainsKey(job.WorkflowId))
                 workflowSummary = BuildWorkflowSummary(job.WorkflowId);
         }
 
@@ -440,31 +453,9 @@ public sealed class EngineStateStore
     }
 
     private WorkflowSummaryDto BuildWorkflowSummary(Guid workflowId)
-        => BuildWorkflowSummary(records.Values.Where(record => record.WorkflowId == workflowId).GroupBy(record => record.WorkflowId).Single());
-
-    private WorkflowSummaryDto BuildWorkflowSummary(IGrouping<Guid, JobRecord> workflow)
-    {
-        var workflowJobs = workflow.OrderBy(record => record.Summary.DisplayId).ToList();
-        var roots = workflowJobs
-            .Where(IsDefaultRoot)
-            .OrderBy(record => record.Summary.DisplayId)
-            .Select(record => record.Id)
-            .ToList();
-
-        string title = workflowJobs.FirstOrDefault(record => !string.IsNullOrWhiteSpace(record.Summary.ItemName))?.Summary.ItemName
-            ?? workflowJobs.First().Summary.QueryText
-            ?? workflowJobs.First().Summary.Kind.ToWireString();
-
-        int active = workflowJobs.Count(IsActiveRecord);
-        int failed = workflowJobs.Count(IsFailedRecord);
-        int completed = workflowJobs.Count(record => !IsActiveRecord(record));
-
-        var state = active > 0 ? ServerWorkflowState.Active
-            : failed > 0 ? ServerWorkflowState.Failed
-            : ServerWorkflowState.Completed;
-
-        return new WorkflowSummaryDto(workflow.Key, title, state, roots, active, failed, completed);
-    }
+        => workflows.TryGetValue(workflowId, out var workflow)
+            ? workflow.ToSummary(records)
+            : throw new InvalidOperationException($"Workflow {workflowId} is not registered.");
 
     private static List<WorkflowJobNodeDto> BuildWorkflowJobTree(IReadOnlyList<JobRecord> sourceRecords)
     {
@@ -523,6 +514,9 @@ public sealed class EngineStateStore
     private JobRecord UpdateJobRecord(Job job)
     {
         var parentJobId = parentJobIds.GetValueOrDefault(job.Id);
+        if (records.TryGetValue(job.Id, out var oldRecord))
+            RemoveWorkflowRecord(oldRecord);
+
         var record = new JobRecord(
             job.Id,
             job.WorkflowId,
@@ -530,7 +524,29 @@ public sealed class EngineStateStore
             BuildJobSummary(job),
             BuildPayload(job));
         records[job.Id] = record;
+        AddWorkflowRecord(record);
         return record;
+    }
+
+    private void AddWorkflowRecord(JobRecord record)
+    {
+        if (!workflows.TryGetValue(record.WorkflowId, out var workflow))
+        {
+            workflow = new WorkflowStateRecord(record.WorkflowId);
+            workflows[record.WorkflowId] = workflow;
+        }
+
+        workflow.Add(record);
+    }
+
+    private void RemoveWorkflowRecord(JobRecord record)
+    {
+        if (!workflows.TryGetValue(record.WorkflowId, out var workflow))
+            return;
+
+        workflow.Remove(record);
+        if (workflow.Count == 0)
+            workflows.Remove(record.WorkflowId);
     }
 
     private List<JobRecord> UpdateRecordsContainingJob(Guid jobId)
@@ -591,7 +607,7 @@ public sealed class EngineStateStore
                 extractJob.InputType?.ToString(),
                 extractJob.Result?.Id,
                 extractJob.AutoProcessResult,
-                ToJobDraft(extractJob.Result, extractJob.Config)),
+                BuildExtractResultDraft(extractJob)),
             SearchJob searchJob => new SearchJobPayloadDto(
                 searchJob.QueryText,
                 searchJob.DefaultFileProjection != null
@@ -648,6 +664,11 @@ public sealed class EngineStateStore
                 retrieveFolderJob.RetrievalCancelled),
             _ => new GenericJobPayloadDto(job.ToString(noInfo: true))
         };
+
+    private static JobDraftDto? BuildExtractResultDraft(ExtractJob extractJob)
+        => extractJob is { AutoProcessResult: false, Result: not null }
+            ? ToJobDraft(extractJob.Result, extractJob.Config)
+            : null;
 
     private static JobDraftDto? ToJobDraft(Job? job, DownloadSettings? inheritedConfig = null)
         => job switch
@@ -935,4 +956,98 @@ public sealed class EngineStateStore
         Guid? ParentJobId,
         JobSummaryDto Summary,
         JobPayloadDto Payload);
+
+    private readonly record struct WorkflowRecordRef(int DisplayId, Guid JobId);
+
+    private sealed class WorkflowStateRecord(Guid workflowId)
+    {
+        private static readonly IComparer<WorkflowRecordRef> RecordRefComparer =
+            Comparer<WorkflowRecordRef>.Create((x, y) =>
+            {
+                int displayIdComparison = x.DisplayId.CompareTo(y.DisplayId);
+                return displayIdComparison != 0
+                    ? displayIdComparison
+                    : x.JobId.CompareTo(y.JobId);
+            });
+
+        private readonly SortedSet<WorkflowRecordRef> allJobs = new(RecordRefComparer);
+        private readonly SortedSet<WorkflowRecordRef> rootJobs = new(RecordRefComparer);
+        private readonly SortedSet<WorkflowRecordRef> itemNameJobs = new(RecordRefComparer);
+
+        public int Count => allJobs.Count;
+        public int ActiveJobCount { get; private set; }
+        public int FailedJobCount { get; private set; }
+        public int CompletedJobCount { get; private set; }
+        public int FirstDisplayId => allJobs.Count == 0 ? int.MaxValue : allJobs.Min.DisplayId;
+
+        public void Add(JobRecord record)
+        {
+            var key = ToRef(record);
+            if (!allJobs.Add(key))
+                return;
+
+            if (IsDefaultRoot(record))
+                rootJobs.Add(key);
+
+            if (!string.IsNullOrWhiteSpace(record.Summary.ItemName))
+                itemNameJobs.Add(key);
+
+            if (IsActiveRecord(record))
+                ActiveJobCount++;
+            else
+                CompletedJobCount++;
+
+            if (IsFailedRecord(record))
+                FailedJobCount++;
+        }
+
+        public void Remove(JobRecord record)
+        {
+            var key = ToRef(record);
+            if (!allJobs.Remove(key))
+                return;
+
+            if (IsDefaultRoot(record))
+                rootJobs.Remove(key);
+
+            if (!string.IsNullOrWhiteSpace(record.Summary.ItemName))
+                itemNameJobs.Remove(key);
+
+            if (IsActiveRecord(record))
+                ActiveJobCount--;
+            else
+                CompletedJobCount--;
+
+            if (IsFailedRecord(record))
+                FailedJobCount--;
+        }
+
+        public WorkflowSummaryDto ToSummary(IReadOnlyDictionary<Guid, JobRecord> records)
+        {
+            var firstRecord = records[allJobs.Min.JobId];
+            string? itemNameTitle = itemNameJobs.Count > 0
+                ? records[itemNameJobs.Min.JobId].Summary.ItemName
+                : null;
+
+            string title = itemNameTitle
+                ?? firstRecord.Summary.QueryText
+                ?? firstRecord.Summary.Kind.ToWireString();
+
+            var state = ActiveJobCount > 0 ? ServerWorkflowState.Active
+                : FailedJobCount > 0 ? ServerWorkflowState.Failed
+                : ServerWorkflowState.Completed;
+
+            return new WorkflowSummaryDto(
+                workflowId,
+                title,
+                state,
+                rootJobs.Select(root => root.JobId).ToList(),
+                ActiveJobCount,
+                FailedJobCount,
+                CompletedJobCount);
+        }
+
+        private static WorkflowRecordRef ToRef(JobRecord record)
+            => new(record.Summary.DisplayId, record.Id);
+    }
 }

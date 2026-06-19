@@ -149,6 +149,86 @@ public class EngineStateStoreTests
     }
 
     [TestMethod]
+    public void WorkflowSummary_TracksRootsTitleAndCountsAcrossJobUpdates()
+    {
+        var store = new EngineStateStore();
+        var list = new JobList("batch");
+        var done = new SongJob(new SongQuery { Title = "Done" }) { WorkflowId = list.WorkflowId };
+        var failed = new SongJob(new SongQuery { Title = "Failed" }) { WorkflowId = list.WorkflowId };
+
+        Register(store, list);
+        Register(store, done, list);
+        Register(store, failed, list);
+
+        var initial = store.GetWorkflowSummary(list.WorkflowId);
+        Assert.IsNotNull(initial);
+        Assert.AreEqual("batch", initial.Title);
+        CollectionAssert.AreEqual(new[] { list.Id }, initial.RootJobIds.ToArray());
+        Assert.AreEqual(ServerWorkflowState.Active, initial.State);
+        Assert.AreEqual(3, initial.ActiveJobCount);
+        Assert.AreEqual(0, initial.CompletedJobCount);
+        Assert.AreEqual(0, initial.FailedJobCount);
+
+        done.SetDone();
+        UpdateState(store, done);
+        failed.Fail(JobFailureReason.Other);
+        UpdateState(store, failed);
+        list.SetDone();
+        UpdateState(store, list);
+
+        var terminal = store.GetWorkflowSummary(list.WorkflowId);
+        Assert.IsNotNull(terminal);
+        Assert.AreEqual(ServerWorkflowState.Failed, terminal.State);
+        Assert.AreEqual(0, terminal.ActiveJobCount);
+        Assert.AreEqual(3, terminal.CompletedJobCount);
+        Assert.AreEqual(1, terminal.FailedJobCount);
+    }
+
+    [TestMethod]
+    public void WorkflowSummaryCache_MatchesBruteForceSnapshotAcrossMutations()
+    {
+        var store = new EngineStateStore();
+        var extract = new ExtractJob("input.csv", InputType.CSV)
+        {
+            AutoProcessResult = true,
+        };
+        var list = new JobList("batch") { WorkflowId = extract.WorkflowId };
+        var done = new SongJob(new SongQuery { Title = "Done" }) { WorkflowId = extract.WorkflowId };
+        var failed = new SongJob(new SongQuery { Title = "Failed" }) { WorkflowId = extract.WorkflowId };
+        var projected = new SongJob(new SongQuery { Title = "Projected" }) { WorkflowId = extract.WorkflowId };
+        list.Add(done);
+        list.Add(failed);
+        list.Add(projected);
+        extract.Result = list;
+
+        Register(store, extract);
+        AssertWorkflowSummaryMatchesBruteForceSnapshot(store, extract.WorkflowId);
+
+        ResultCreated(store, extract, list);
+        AssertWorkflowSummaryMatchesBruteForceSnapshot(store, extract.WorkflowId);
+
+        Register(store, list);
+        Register(store, done, list);
+        Register(store, failed, list);
+        Register(store, projected, list);
+        AssertWorkflowSummaryMatchesBruteForceSnapshot(store, extract.WorkflowId);
+
+        store.SetSourceJob(done.Id, extract.Id);
+        AssertWorkflowSummaryMatchesBruteForceSnapshot(store, extract.WorkflowId);
+
+        done.SetDone();
+        UpdateState(store, done);
+        failed.Fail(JobFailureReason.Other);
+        UpdateState(store, failed);
+        ExecutionCompleted(store, projected);
+        list.SetDone();
+        UpdateState(store, list);
+        extract.SetDone();
+        UpdateState(store, extract);
+        AssertWorkflowSummaryMatchesBruteForceSnapshot(store, extract.WorkflowId);
+    }
+
+    [TestMethod]
     public void AlbumAggregatePayload_CountsProducedAlbumDescendants()
     {
         var store = new EngineStateStore();
@@ -232,6 +312,27 @@ public class EngineStateStoreTests
         Assert.AreEqual(3, roundTripped.SourceMutation?.CsvColumnCount);
     }
 
+    [TestMethod]
+    public void AutoProcessedExtractPayload_DoesNotInlineResultDraft()
+    {
+        var store = new EngineStateStore();
+        var list = new JobList("batch");
+        var extract = new ExtractJob("input.csv", InputType.CSV)
+        {
+            AutoProcessResult = true,
+            Result = list,
+        };
+        list.WorkflowId = extract.WorkflowId;
+        list.Add(new SongJob(new SongQuery { Artist = "Artist", Title = "One" }) { WorkflowId = list.WorkflowId });
+
+        Register(store, extract);
+
+        var payload = store.GetJobDetail(extract.Id)?.Payload as ExtractJobPayloadDto;
+        Assert.IsNotNull(payload);
+        Assert.AreEqual(list.Id, payload.ResultJobId);
+        Assert.IsNull(payload.ResultDraft);
+    }
+
     private static void Register(EngineStateStore store, Job job, Job? parent = null)
     {
         typeof(EngineStateStore)
@@ -246,10 +347,73 @@ public class EngineStateStoreTests
             .Invoke(store, [job]);
     }
 
+    private static void ResultCreated(EngineStateStore store, ExtractJob job, Job result)
+    {
+        typeof(EngineStateStore)
+            .GetMethod("OnJobResultCreated", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(store, [job, result]);
+    }
+
+    private static void ExecutionCompleted(EngineStateStore store, Job job)
+    {
+        typeof(EngineStateStore)
+            .GetMethod("OnJobExecutionCompleted", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(store, [job]);
+    }
+
     private static void DownloadStateChanged(EngineStateStore store, SongJob song, TransferStates state)
     {
         typeof(EngineStateStore)
             .GetMethod("OnDownloadStateChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(store, [song, state]);
     }
+
+    private static void AssertWorkflowSummaryMatchesBruteForceSnapshot(EngineStateStore store, Guid workflowId)
+    {
+        var cached = store.GetWorkflowSummary(workflowId);
+        var detail = store.GetWorkflow(workflowId, includeAll: true);
+
+        Assert.IsNotNull(cached);
+        Assert.IsNotNull(detail);
+
+        var expected = BuildBruteForceWorkflowSummary(workflowId, detail.Jobs);
+        Assert.AreEqual(expected.WorkflowId, cached.WorkflowId);
+        Assert.AreEqual(expected.Title, cached.Title);
+        Assert.AreEqual(expected.State, cached.State);
+        CollectionAssert.AreEqual(expected.RootJobIds.ToArray(), cached.RootJobIds.ToArray());
+        Assert.AreEqual(expected.ActiveJobCount, cached.ActiveJobCount);
+        Assert.AreEqual(expected.FailedJobCount, cached.FailedJobCount);
+        Assert.AreEqual(expected.CompletedJobCount, cached.CompletedJobCount);
+    }
+
+    private static WorkflowSummaryDto BuildBruteForceWorkflowSummary(Guid workflowId, IReadOnlyList<JobSummaryDto> jobs)
+    {
+        var ordered = jobs.OrderBy(job => job.DisplayId).ToList();
+        string title = ordered.FirstOrDefault(job => !string.IsNullOrWhiteSpace(job.ItemName))?.ItemName
+            ?? ordered.First().QueryText
+            ?? ordered.First().Kind.ToWireString();
+
+        int active = ordered.Count(job => job.LifecycleState != ServerJobLifecycleState.Terminal);
+        int failed = ordered.Count(IsFailed);
+        int completed = ordered.Count - active;
+        var state = active > 0 ? ServerWorkflowState.Active
+            : failed > 0 ? ServerWorkflowState.Failed
+            : ServerWorkflowState.Completed;
+
+        return new WorkflowSummaryDto(
+            workflowId,
+            title,
+            state,
+            ordered.Where(job => job.ParentJobId == null).Select(job => job.JobId).ToList(),
+            active,
+            failed,
+            completed);
+    }
+
+    private static bool IsFailed(JobSummaryDto job)
+        => job.TerminalOutcome is ServerJobTerminalOutcome.Failed
+            or ServerJobTerminalOutcome.Cancelled
+            or ServerJobTerminalOutcome.PartialSuccess
+            || (job.TerminalOutcome == ServerJobTerminalOutcome.Skipped
+                && job.SkipReason != ServerJobSkipReason.AlreadyExists);
 }

@@ -313,8 +313,8 @@ public class EventTrafficProfilingTests
 
         while (!timeout.IsCancellationRequested)
         {
-            var workflow = supervisor.StateStore.GetWorkflow(workflowId, includeAll: true);
-            lastCount = workflow?.Jobs.Count ?? 0;
+            var workflow = supervisor.StateStore.GetWorkflowSummary(workflowId);
+            lastCount = (workflow?.ActiveJobCount ?? 0) + (workflow?.CompletedJobCount ?? 0);
             if (lastCount >= expectedCount)
                 return;
 
@@ -338,7 +338,7 @@ public class EventTrafficProfilingTests
 
         while (!timeout.IsCancellationRequested)
         {
-            lastSummary = supervisor.StateStore.GetWorkflow(workflowId, includeAll: true)?.Summary;
+            lastSummary = supervisor.StateStore.GetWorkflowSummary(workflowId);
             if (lastSummary?.ActiveJobCount == 0)
                 return;
 
