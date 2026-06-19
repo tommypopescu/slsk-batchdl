@@ -186,6 +186,23 @@ namespace Tests.FileManagerTests
 
             Assert.AreEqual(@"C:\Music\Output|C:\Users\me\.config\sockseek", result);
         }
+
+        [TestMethod]
+        public void ReplaceVariables_LocalPathVariables_UseNativePathSeparators()
+        {
+            var nativePath = Path.Combine(Path.GetTempPath(), "sockseek path test", "01. Track.flac");
+            var storedPath = nativePath.Replace('\\', '/');
+            var ctx = MakeCtx() with
+            {
+                DownloadPath = storedPath,
+            };
+
+            string result = FileManager.ReplaceVariables("{path}|{path-noext}|{ext}", ctx, null);
+
+            var expectedPath = Path.GetFullPath(storedPath).TrimEnd('/').TrimEnd('\\');
+            var expectedNoExt = Path.Combine(Path.GetDirectoryName(expectedPath) ?? "", Path.GetFileNameWithoutExtension(expectedPath));
+            Assert.AreEqual($"{expectedPath}|{expectedNoExt}|.flac", result);
+        }
     }
 
     [TestClass]

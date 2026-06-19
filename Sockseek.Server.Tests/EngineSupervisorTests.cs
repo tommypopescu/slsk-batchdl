@@ -973,7 +973,7 @@ public class EngineSupervisorTests
         Task runTask = Task.CompletedTask;
         try
         {
-            var named = CreateProfile("base-command", settings => settings.Output.OnComplete = ["first"]);
+            var named = CreateProfile("base-command", settings => settings.Output.OnComplete = ["-- first"]);
             var supervisor = CreateSupervisor(musicRoot, outputDir, profiles: new ProfileCatalog
             {
                 NamedProfiles = [named],
@@ -987,14 +987,14 @@ public class EngineSupervisorTests
                         ProfileNames: ["base-command"],
                         DownloadSettings: new DownloadSettingsPatchDto(
                             Output: new OutputSettingsPatchDto(
-                                OnComplete: new CollectionPatchDto<string>(Append: ["second"]))))),
+                                OnComplete: new CollectionPatchDto<string>(Append: ["-- second"]))))),
                 CancellationToken.None);
 
             await WaitForJobStateAsync(supervisor, summary.JobId, ExpectedJobStatus.Succeeded);
 
             var job = supervisor.StateStore.GetJob<SearchJob>(summary.JobId);
             Assert.IsNotNull(job);
-            CollectionAssert.AreEqual(new[] { "first", "second" }, job.Config?.Output.OnComplete);
+            CollectionAssert.AreEqual(new[] { "-- first", "-- second" }, job.Config?.Output.OnComplete);
 
             cts.Cancel();
             await runTask;

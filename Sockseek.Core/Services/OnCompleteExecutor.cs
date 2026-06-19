@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Sockseek.Core.Jobs;
 using Sockseek.Core.Models;
 using Sockseek.Core;
@@ -8,18 +9,38 @@ namespace Sockseek.Core.Services;
 
 public static class OnCompleteExecutor
 {
+    private const int MaxLoggedCommandOutputChars = 600;
+    private const int MaxCapturedCommandOutputChars = 64 * 1024;
     private static readonly SemaphoreSlim _lockingSemaphore = new(1, 1);
+
+    private enum CommandScope
+    {
+        Any,
+        Track,
+        Album,
+    }
+
+    private enum CommandWhen
+    {
+        Default,
+        Any,
+        Success,
+        Failure,
+        Skipped,
+        AlreadyExists,
+        NotFoundLastTime,
+        Cancelled,
+        PartialSuccess,
+    }
 
     private struct CommandConfig
     {
         public string  Command                { get; set; }
         public bool    UseShellExecute        { get; set; }
         public bool    CreateNoWindow         { get; set; }
-        public bool    OnlyTrackOnComplete    { get; set; }
-        public bool    OnlyAlbumOnComplete    { get; set; }
-        public bool    ReadOutput             { get; set; }
+        public CommandScope Scope             { get; set; }
+        public CommandWhen  When              { get; set; }
         public bool    UseOutputToUpdateIndex { get; set; }
-        public int?    RequiredResultCode     { get; set; }
         public bool    UseLocking             { get; set; }
     }
 
@@ -28,9 +49,27 @@ public static class OnCompleteExecutor
         public int     ExitCode { get; set; }
         public string? Stdout   { get; set; }
         public string? Stderr   { get; set; }
+        public int     StdoutCharsRead { get; set; }
+        public int     StderrCharsRead { get; set; }
+        public bool    StdoutTruncated { get; set; }
+        public bool    StderrTruncated { get; set; }
     }
 
+    private readonly record struct CapturedProcessOutput(string? Text, int CharsRead, bool Truncated);
+
     private readonly record struct OnCompleteContext(FileManagerContext Variables, string? TagSourcePath);
+
+    public static void ValidateCommand(string rawCommand)
+        => _ = ParseCommand(rawCommand);
+
+    public static void ValidateCommands(IEnumerable<string>? commands)
+    {
+        if (commands == null)
+            return;
+
+        foreach (var command in commands)
+            ValidateCommand(command);
+    }
 
     // Execute on-complete actions for a job.
     // song is null when called for an album-level completion (no individual song).
@@ -78,9 +117,9 @@ public static class OnCompleteExecutor
             if (string.IsNullOrWhiteSpace(rawCommand))
                 continue;
 
-            CommandConfig config = ParseCommandFlags(rawCommand);
+            CommandConfig config = ParseCommand(rawCommand);
 
-            if (!ShouldExecuteCommand(config, outcome, isAlbumOnComplete))
+            if (!ShouldExecuteCommand(config, outcome, isTrack: song != null, isAlbum: isAlbumOnComplete))
                 continue;
 
             string preparedCommand = PrepareCommandString(config.Command, onCompleteContext, prevCommandResult, firstCommandResult);
@@ -90,8 +129,8 @@ public static class OnCompleteExecutor
                 continue;
             }
 
-            (string fileName, List<string> argList, string argString) = ParseFileNameAndArguments(preparedCommand);
-            ProcessStartInfo startInfo = ConfigureProcessStartInfo(fileName, argList, argString, config);
+            (string fileName, string argString) = ParseFileNameAndArguments(preparedCommand);
+            ProcessStartInfo startInfo = ConfigureProcessStartInfo(fileName, argString, config);
 
             ProcessResult? currentResult = null;
             bool acquiredLock = false;
@@ -120,11 +159,11 @@ public static class OnCompleteExecutor
                 return;
             }
 
-            prevCommandResult = currentResult;
-            if (i == 0) firstCommandResult = currentResult;
-
             if (ProcessCommandResult(currentResult.Value, config, song, job, OnCompleteLogPrefix(job, song)))
                 needUpdateIndex = true;
+
+            prevCommandResult = currentResult;
+            if (i == 0) firstCommandResult = currentResult;
         }
 
         if (needUpdateIndex)
@@ -147,7 +186,7 @@ public static class OnCompleteExecutor
             if (string.IsNullOrWhiteSpace(rawCommand))
                 continue;
 
-            if (ShouldExecuteCommand(ParseCommandFlags(rawCommand), outcome, isAlbumOnComplete))
+            if (ShouldExecuteCommand(ParseCommand(rawCommand), outcome, isTrack: song != null, isAlbum: isAlbumOnComplete))
                 return true;
         }
 
@@ -239,64 +278,174 @@ public static class OnCompleteExecutor
         };
     }
 
-    private static CommandConfig ParseCommandFlags(string rawCommand)
+    private static CommandConfig ParseCommand(string rawCommand)
     {
-        var config = new CommandConfig { Command = rawCommand };
+        if (string.IsNullOrWhiteSpace(rawCommand))
+            throw InvalidOnCompleteCommand(rawCommand, "Command is empty.");
 
-        while (config.Command.Length > 2 && config.Command[1] == ':')
-        {
-            char   flag      = config.Command[0];
-            string remaining = config.Command[2..];
+        var delimiterIndex = FindCommandDelimiter(rawCommand);
+        if (delimiterIndex < 0)
+            throw InvalidOnCompleteCommand(rawCommand, "Missing `--` command delimiter.");
 
-            switch (flag)
-            {
-                case 's': config.UseShellExecute        = true; config.Command = remaining; break;
-                case 't': config.OnlyTrackOnComplete    = true; config.Command = remaining; break;
-                case 'a': config.OnlyAlbumOnComplete    = true; config.Command = remaining; break;
-                case 'h': config.CreateNoWindow         = true; config.Command = remaining; break;
-                case 'u': config.UseOutputToUpdateIndex = true; config.Command = remaining; break;
-                case 'r': config.ReadOutput             = true; config.Command = remaining; break;
-                case 'l': config.UseLocking             = true; config.Command = remaining; break;
-                default:
-                    if (char.IsDigit(flag))
-                    {
-                        config.RequiredResultCode = flag - '0';
-                        config.Command = remaining;
-                    }
-                    else
-                    {
-                        return config;
-                    }
-                    break;
-            }
-        }
+        var optionText = rawCommand[..delimiterIndex].Trim();
+        var command = rawCommand[(delimiterIndex + 2)..].Trim();
+        if (string.IsNullOrWhiteSpace(command))
+            throw InvalidOnCompleteCommand(rawCommand, "Command after `--` is empty.");
+
+        var config = new CommandConfig { Command = command };
+        foreach (var option in SplitOptionTokens(optionText))
+            ApplyCommandOption(ref config, option, rawCommand);
+
         return config;
     }
 
-    private static bool ShouldExecuteCommand(CommandConfig config, JobOutcome outcome, bool isAlbum)
+    private static int FindCommandDelimiter(string rawCommand)
     {
-        if (config.OnlyTrackOnComplete && isAlbum)  return false;
-        if (config.OnlyAlbumOnComplete && !isAlbum) return false;
-        if (!config.RequiredResultCode.HasValue && outcome.TerminalOutcome == JobTerminalOutcome.Skipped)
-            return false;
-        if (config.RequiredResultCode.HasValue && !RequiredResultMatches(config.RequiredResultCode.Value, outcome))
-            return false;
+        var inSingleQuote = false;
+        var inDoubleQuote = false;
 
-        return true;
+        for (var i = 0; i < rawCommand.Length - 1; i++)
+        {
+            var c = rawCommand[i];
+            if (c == '\'' && !inDoubleQuote)
+                inSingleQuote = !inSingleQuote;
+            else if (c == '"' && !inSingleQuote)
+                inDoubleQuote = !inDoubleQuote;
+
+            if (inSingleQuote || inDoubleQuote)
+                continue;
+
+            if (rawCommand[i] != '-' || rawCommand[i + 1] != '-')
+                continue;
+
+            var beforeOk = i == 0 || char.IsWhiteSpace(rawCommand[i - 1]);
+            var afterIndex = i + 2;
+            var afterOk = afterIndex == rawCommand.Length || char.IsWhiteSpace(rawCommand[afterIndex]);
+            if (beforeOk && afterOk)
+                return i;
+        }
+
+        return -1;
     }
 
-    // Numeric on-complete prefixes predate the split state model. Keep their
-    // user-facing meanings here instead of leaking JobStateOld beyond index compatibility.
-    private static bool RequiredResultMatches(int code, JobOutcome outcome)
-        => code switch
+    private static IEnumerable<string> SplitOptionTokens(string optionText)
+        => string.IsNullOrWhiteSpace(optionText)
+            ? []
+            : optionText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static void ApplyCommandOption(ref CommandConfig config, string option, string rawCommand)
+    {
+        switch (option)
         {
-            1 => outcome.TerminalOutcome == JobTerminalOutcome.Succeeded,
-            2 => outcome.TerminalOutcome is JobTerminalOutcome.Failed or JobTerminalOutcome.PartialSuccess,
-            3 => outcome.TerminalOutcome == JobTerminalOutcome.Skipped && outcome.SkipReason == JobSkipReason.AlreadyExists,
-            4 => outcome.TerminalOutcome == JobTerminalOutcome.Skipped && outcome.SkipReason == JobSkipReason.NotFoundLastTime,
-            5 => outcome.TerminalOutcome == JobTerminalOutcome.Skipped,
+            case "hidden":
+                config.CreateNoWindow = true;
+                return;
+            case "shell":
+                config.UseShellExecute = true;
+                return;
+            case "lock":
+                config.UseLocking = true;
+                return;
+            case "update-index":
+                config.UseOutputToUpdateIndex = true;
+                return;
+        }
+
+        if (option.StartsWith("scope=", StringComparison.OrdinalIgnoreCase))
+        {
+            SetScope(ref config, option["scope=".Length..], rawCommand);
+            return;
+        }
+
+        if (option.StartsWith("when=", StringComparison.OrdinalIgnoreCase))
+        {
+            SetWhen(ref config, option["when=".Length..], rawCommand);
+            return;
+        }
+
+        throw InvalidOnCompleteCommand(rawCommand, $"Unknown option `{option}`.");
+    }
+
+    private static void SetScope(ref CommandConfig config, string value, string rawCommand)
+    {
+        if (config.Scope != CommandScope.Any)
+            throw InvalidOnCompleteCommand(rawCommand, "`scope` was specified more than once.");
+
+        config.Scope = value.ToLowerInvariant() switch
+        {
+            "track" => CommandScope.Track,
+            "album" => CommandScope.Album,
+            _ => throw InvalidOnCompleteCommand(rawCommand, $"Unknown scope `{value}`. Use `scope=track` or `scope=album`.")
+        };
+    }
+
+    private static void SetWhen(ref CommandConfig config, string value, string rawCommand)
+    {
+        if (config.When != CommandWhen.Default)
+            throw InvalidOnCompleteCommand(rawCommand, "`when` was specified more than once.");
+
+        config.When = value.ToLowerInvariant() switch
+        {
+            "any" => CommandWhen.Any,
+            "completed" => CommandWhen.Default,
+            "success" or "succeeded" => CommandWhen.Success,
+            "failure" or "failed" => CommandWhen.Failure,
+            "skipped" => CommandWhen.Skipped,
+            "already-exists" or "alreadyexists" => CommandWhen.AlreadyExists,
+            "not-found-last-time" or "not-found" or "notfound" => CommandWhen.NotFoundLastTime,
+            "cancelled" or "canceled" => CommandWhen.Cancelled,
+            "partial" or "partial-success" => CommandWhen.PartialSuccess,
+            _ => throw InvalidOnCompleteCommand(rawCommand, $"Unknown when value `{value}`.")
+        };
+    }
+
+    private static ArgumentException InvalidOnCompleteCommand(string rawCommand, string reason)
+    {
+        var legacyHint = LooksLikeLegacyPrefixSyntax(rawCommand)
+            ? " Legacy one-letter prefixes are no longer supported in 3.0."
+            : "";
+        return new ArgumentException(
+            $"Input error: Invalid on-complete command. {reason}{legacyHint} Use `--` to separate Sockseek options from the command, for example: `on-complete = when=success scope=album hidden -- cmd /d /c notify.cmd \"{{path}}\"`.");
+    }
+
+    private static bool LooksLikeLegacyPrefixSyntax(string rawCommand)
+    {
+        var command = rawCommand.TrimStart();
+        var consumedAny = false;
+        while (command.Length > 2 && command[1] == ':')
+        {
+            var flag = command[0];
+            if (!char.IsDigit(flag) && flag is not ('s' or 't' or 'a' or 'h' or 'u' or 'l' or 'r'))
+                return consumedAny;
+
+            consumedAny = true;
+            command = command[2..];
+        }
+
+        return consumedAny;
+    }
+
+    private static bool ShouldExecuteCommand(CommandConfig config, JobOutcome outcome, bool isTrack, bool isAlbum)
+    {
+        if (config.Scope == CommandScope.Track && !isTrack) return false;
+        if (config.Scope == CommandScope.Album && !isAlbum) return false;
+
+        return config.When switch
+        {
+            CommandWhen.Default => outcome.TerminalOutcome != JobTerminalOutcome.Skipped,
+            CommandWhen.Any => true,
+            CommandWhen.Success => outcome.TerminalOutcome == JobTerminalOutcome.Succeeded,
+            CommandWhen.Failure => outcome.TerminalOutcome is JobTerminalOutcome.Failed or JobTerminalOutcome.PartialSuccess,
+            CommandWhen.Skipped => outcome.TerminalOutcome == JobTerminalOutcome.Skipped,
+            CommandWhen.AlreadyExists => outcome.TerminalOutcome == JobTerminalOutcome.Skipped
+                && outcome.SkipReason == JobSkipReason.AlreadyExists,
+            CommandWhen.NotFoundLastTime => outcome.TerminalOutcome == JobTerminalOutcome.Skipped
+                && outcome.SkipReason == JobSkipReason.NotFoundLastTime,
+            CommandWhen.Cancelled => outcome.TerminalOutcome == JobTerminalOutcome.Cancelled,
+            CommandWhen.PartialSuccess => outcome.TerminalOutcome == JobTerminalOutcome.PartialSuccess,
             _ => false,
         };
+    }
 
     private static string PrepareCommandString(string commandTemplate, OnCompleteContext ctx, ProcessResult? prevResult, ProcessResult? firstResult)
     {
@@ -337,10 +486,10 @@ public static class OnCompleteExecutor
         }
     }
 
-    private static (string FileName, List<string> ArgumentList, string ArgumentsString) ParseFileNameAndArguments(string preparedCommand)
+    private static (string FileName, string ArgumentsString) ParseFileNameAndArguments(string preparedCommand)
     {
         preparedCommand = preparedCommand.Trim();
-        if (string.IsNullOrEmpty(preparedCommand)) return ("", new List<string>(), "");
+        if (string.IsNullOrEmpty(preparedCommand)) return ("", "");
 
         string fileName;
         string arguments = "";
@@ -373,78 +522,20 @@ public static class OnCompleteExecutor
             }
         }
 
-        var argList = SplitArguments(arguments);
-        return (fileName, argList, arguments);
+        return (fileName, arguments);
     }
 
-    private static List<string> SplitArguments(string commandLine)
-    {
-        var args = new List<string>();
-        var currentArg = new System.Text.StringBuilder();
-        bool inSingleQuote = false;
-        bool inDoubleQuote = false;
-        bool escapeNext = false;
-
-        for (int i = 0; i < commandLine.Length; i++)
-        {
-            char c = commandLine[i];
-
-            if (escapeNext)
-            {
-                currentArg.Append(c);
-                escapeNext = false;
-                continue;
-            }
-
-            if (c == '\\')
-            {
-                escapeNext = true;
-                continue;
-            }
-
-            if (c == '\'' && !inDoubleQuote)
-            {
-                inSingleQuote = !inSingleQuote;
-                continue;
-            }
-
-            if (c == '"' && !inSingleQuote)
-            {
-                inDoubleQuote = !inDoubleQuote;
-                continue;
-            }
-
-            if (char.IsWhiteSpace(c) && !inSingleQuote && !inDoubleQuote)
-            {
-                if (currentArg.Length > 0)
-                {
-                    args.Add(currentArg.ToString());
-                    currentArg.Clear();
-                }
-                continue;
-            }
-
-            currentArg.Append(c);
-        }
-
-        if (currentArg.Length > 0)
-        {
-            args.Add(currentArg.ToString());
-        }
-
-        return args;
-    }
-
-    private static ProcessStartInfo ConfigureProcessStartInfo(string fileName, List<string> argList, string argString, CommandConfig config)
+    private static ProcessStartInfo ConfigureProcessStartInfo(string fileName, string argString, CommandConfig config)
     {
         var startInfo = new ProcessStartInfo
         {
             FileName        = fileName,
+            Arguments       = argString,
             UseShellExecute = config.UseShellExecute,
             CreateNoWindow  = config.CreateNoWindow,
         };
 
-        if (config.UseOutputToUpdateIndex || config.ReadOutput)
+        if (!config.UseShellExecute || config.UseOutputToUpdateIndex)
         {
             startInfo.UseShellExecute          = false;
             startInfo.RedirectStandardOutput   = true;
@@ -453,27 +544,15 @@ public static class OnCompleteExecutor
             startInfo.StandardErrorEncoding    = System.Text.Encoding.UTF8;
         }
 
-        if (startInfo.UseShellExecute)
-        {
-            startInfo.Arguments = argString;
-        }
-        else
-        {
-            foreach (var arg in argList)
-                startInfo.ArgumentList.Add(arg);
-        }
-
         return startInfo;
     }
 
     private static string FormatProcessArgumentsForLog(ProcessStartInfo startInfo)
     {
-        if (startInfo.UseShellExecute)
+        if (startInfo.ArgumentList.Count == 0)
             return $"Arguments='{startInfo.Arguments}'";
 
-        var args = startInfo.ArgumentList.Count == 0
-            ? ""
-            : string.Join(", ", startInfo.ArgumentList.Select(arg => $"'{arg.Replace("'", "\\'")}'"));
+        var args = string.Join(", ", startInfo.ArgumentList.Select(arg => $"'{arg.Replace("'", "\\'")}'"));
         return $"ArgumentList=[{args}]";
     }
 
@@ -488,15 +567,24 @@ public static class OnCompleteExecutor
                 return null;
             }
 
-            Task<string>? readStdoutTask = startInfo.RedirectStandardOutput ? process.StandardOutput.ReadToEndAsync() : null;
-            Task<string>? readStderrTask = startInfo.RedirectStandardError  ? process.StandardError.ReadToEndAsync()  : null;
+            Task<CapturedProcessOutput>? readStdoutTask = startInfo.RedirectStandardOutput ? CaptureProcessOutputAsync(process.StandardOutput) : null;
+            Task<CapturedProcessOutput>? readStderrTask = startInfo.RedirectStandardError  ? CaptureProcessOutputAsync(process.StandardError)  : null;
 
             await process.WaitForExitAsync();
 
-            string? stdout = readStdoutTask != null ? (await readStdoutTask).Trim().Trim('"') : null;
-            string? stderr = readStderrTask != null ? (await readStderrTask).Trim().Trim('"') : null;
+            var stdout = readStdoutTask != null ? await readStdoutTask : default;
+            var stderr = readStderrTask != null ? await readStderrTask : default;
 
-            return new ProcessResult { ExitCode = process.ExitCode, Stdout = stdout, Stderr = stderr };
+            return new ProcessResult
+            {
+                ExitCode = process.ExitCode,
+                Stdout = CleanCapturedOutput(stdout.Text),
+                Stderr = CleanCapturedOutput(stderr.Text),
+                StdoutCharsRead = stdout.CharsRead,
+                StderrCharsRead = stderr.CharsRead,
+                StdoutTruncated = stdout.Truncated,
+                StderrTruncated = stderr.Truncated,
+            };
         }
         catch (Exception ex)
         {
@@ -505,6 +593,33 @@ public static class OnCompleteExecutor
         }
     }
 
+    private static async Task<CapturedProcessOutput> CaptureProcessOutputAsync(StreamReader reader)
+    {
+        var builder = new StringBuilder(Math.Min(MaxCapturedCommandOutputChars, 4096));
+        var buffer = new char[4096];
+        var charsRead = 0;
+
+        while (true)
+        {
+            var read = await reader.ReadAsync(buffer, 0, buffer.Length);
+            if (read == 0)
+                break;
+
+            charsRead += read;
+            var remaining = MaxCapturedCommandOutputChars - builder.Length;
+            if (remaining > 0)
+                builder.Append(buffer, 0, Math.Min(read, remaining));
+        }
+
+        return new CapturedProcessOutput(
+            builder.Length > 0 ? builder.ToString() : null,
+            charsRead,
+            charsRead > MaxCapturedCommandOutputChars);
+    }
+
+    private static string? CleanCapturedOutput(string? output)
+        => string.IsNullOrWhiteSpace(output) ? null : output.Trim().Trim('"');
+
     // Returns true if the index needs updating.
     private static bool ProcessCommandResult(ProcessResult result, CommandConfig config, SongJob? song, Job job, string logPrefix)
     {
@@ -512,6 +627,12 @@ public static class OnCompleteExecutor
 
         if (config.UseOutputToUpdateIndex && !string.IsNullOrWhiteSpace(result.Stdout))
         {
+            if (result.StdoutTruncated)
+            {
+                SockseekLog.Jobs.Warn($"{logPrefix} ignored on-complete stdout for index update because command output exceeded the capture limit.\n{FormatCommandOutputBlock("Stdout", result.Stdout, result.StdoutTruncated, result.StdoutCharsRead)}");
+                return needsUpdate;
+            }
+
             string[] parts = result.Stdout.Split(';', 2);
             if (parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1]) && song != null)
             {
@@ -525,13 +646,57 @@ public static class OnCompleteExecutor
             }
             else if (!string.IsNullOrWhiteSpace(result.Stdout))
             {
-                SockseekLog.Jobs.Warn($"{logPrefix} ignored on-complete stdout for index update. In 3.0 stdout can update the path using '<ignored>;<path>', but cannot mutate job state. Stdout: '{result.Stdout}'");
+                SockseekLog.Jobs.Warn($"{logPrefix} ignored on-complete stdout for index update. In 3.0 stdout can update the path using '<ignored>;<path>', but cannot mutate job state.\n{FormatCommandOutputBlock("Stdout", result.Stdout, result.StdoutTruncated, result.StdoutCharsRead)}");
             }
         }
 
         if (result.ExitCode != 0)
-            SockseekLog.Jobs.Debug($"{logPrefix} command finished with non-zero exit code {result.ExitCode}. Stdout: '{result.Stdout ?? "N/A"}', Stderr: '{result.Stderr ?? "N/A"}'");
+            SockseekLog.Jobs.Warn($"{logPrefix} on-complete command exited with code {result.ExitCode}. {FormatCommandOutputForLog(result)}");
 
         return needsUpdate;
+    }
+
+    private static string FormatCommandOutputForLog(ProcessResult result)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(result.Stdout))
+            parts.Add(FormatCommandOutputBlock("Stdout", result.Stdout, result.StdoutTruncated, result.StdoutCharsRead));
+        if (!string.IsNullOrWhiteSpace(result.Stderr))
+            parts.Add(FormatCommandOutputBlock("Stderr", result.Stderr, result.StderrTruncated, result.StderrCharsRead));
+
+        return parts.Count == 0
+            ? " No captured output."
+            : "\n" + string.Join("\n", parts);
+    }
+
+    private static string FormatCommandOutputBlock(string label, string output, bool captureTruncated = false, int charsRead = 0)
+        => $"    {label}:\n{IndentCommandOutput(SummarizeCommandOutput(output, captureTruncated, charsRead))}";
+
+    private static string SummarizeCommandOutput(string output, bool captureTruncated = false, int charsRead = 0)
+    {
+        var normalized = output
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Trim();
+
+        var totalLength = normalized.Length;
+        if (totalLength <= MaxLoggedCommandOutputChars && !captureTruncated)
+            return normalized;
+
+        var excerpt = normalized[..Math.Min(totalLength, MaxLoggedCommandOutputChars)].TrimEnd();
+        var logOmitted = Math.Max(0, totalLength - MaxLoggedCommandOutputChars);
+        var logNote = logOmitted > 0
+            ? $"log excerpt truncated, {logOmitted} chars omitted"
+            : "output capture truncated";
+        var captureNote = captureTruncated
+            ? $"; captured first {MaxCapturedCommandOutputChars} of {charsRead} chars"
+            : "";
+        return $"{excerpt}\n... ({logNote}{captureNote})";
+    }
+
+    private static string IndentCommandOutput(string output)
+    {
+        var lines = output.Split('\n');
+        return string.Join('\n', lines.Select(line => $"      {line}"));
     }
 }

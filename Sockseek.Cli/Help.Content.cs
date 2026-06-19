@@ -545,55 +545,72 @@ Configuration
 On-Complete Actions
   The --on-complete parameter allows executing commands after a track or album is downloaded.
   Multiple actions can be chained using the + prefix (note the space after +).
-  Syntax: --on-complete [prefixes:]command
+  Syntax: --on-complete [options] -- command
   Hint: You can use --mock-files-dir to test your commands (see Testing Options).
+  Every on-complete command must include the -- delimiter. Sockseek options go before it; everything
+  after it is the command passed to the operating system.
+  When passing an on-complete action on the command line, quote the whole value so the delimiter is
+  part of the --on-complete argument: --on-complete ""when=success scope=album -- notify-send
+  \""Downloaded\"" \""{path}\"""".
 
-  Prefixes
-    - 1: - Execute only if track downloaded successfully
-    - 2: - Execute only if track failed to download
-    - a: - Execute only after album download
-    - s: - Use shell execute
-    - h: - Hide window
-    - r: - Read command output
-    - u: - Use output to update index (implies r:)
-    When using u: prefix, the command output should be new_state;new_path to update the track state
-    and path in the index and playlist.
+  Options
+    - when=success - Execute only for successful downloads
+    - when=failure - Execute for failed or partially successful downloads
+    - when=skipped - Execute for skipped jobs
+    - when=already-exists - Execute only for already-existing skipped jobs
+    - when=not-found-last-time - Execute only for not-found-last-time skipped jobs
+    - when=cancelled - Execute only for cancelled jobs
+    - when=partial - Execute only for partially successful container jobs
+    - when=completed - Execute for all non-skipped terminal outcomes
+    - when=any - Execute for every terminal outcome
+    - scope=track - Execute only for track-level completions
+    - scope=album - Execute only for album-level completions
+    - hidden - Hide the command window
+    - shell - Use shell execute
+    - lock - Serialize this action across jobs
+    - update-index - Use stdout to update the index and playlist path
+    If when= is omitted, it behaves like when=completed. This preserves the usual ""run when work
+    completed"" behavior while avoiding commands for already-existing or not-found-last-time skips.
+    Sockseek captures bounded stdout/stderr for ordinary on-complete commands, so chained commands
+    can use output variables without an extra option. Commands launched with shell use shell execute
+    and cannot expose stdout/stderr. When using update-index, stdout should be ignored;new_path to
+    update the track path in the index and playlist.
 
   Variables
     The available variables are the same as in name-format, with the following additions:
     - {exitcode} - Previous command's exit code
-    - {stdout} - Previous command's stdout (requires r:)
-    - {stderr} - Previous command's stderr (requires r:)
+    - {stdout} - Previous command's stdout
+    - {stderr} - Previous command's stderr
     - {first-exitcode} - First command's exit code
-    - {first-stdout} - First command's stdout (requires r:)
-    - {first-stderr} - First command's stderr (requires r:)
-    For album-only (a:) actions, tag variables such as {title}, {artist}, and {album} are read from
-    the first audio file in the album. Job/source/path variables such as {sartist}, {salbum}, and
-    {path} describe the album-level completion itself.
+    - {first-stdout} - First command's stdout
+    - {first-stderr} - First command's stderr
+    For album-only (scope=album) actions, tag variables such as {title}, {artist}, and {album} are
+    read from the first audio file in the album. Job/source/path variables such as {sartist},
+    {salbum}, and {path} describe the album-level completion itself.
 
   Examples
     Send a Linux desktop notification for album downloads:
 
-    on-complete = 1:a: notify-send ""Downloaded: {album}"" ""{path}""
+    on-complete = when=success scope=album -- notify-send ""Downloaded: {album}"" ""{path}""
 
     Search album art with Cover Fetcher:
 
-    on-complete = 1:h:a: cmd /c start """" ""path\to\CoverFetcher.exe"" --from-dir ""{path}""
+    on-complete = when=success scope=album hidden -- cmd /c start """" ""path\to\CoverFetcher.exe"" --from-dir ""{path}""
 
     Queue downloaded audio files in foobar2000:
 
-    on-complete = 1:h: cmd /c if {is-audio}==true start """" ""path\to\foobar2000.exe"" /immediate /add ""{path}""
+    on-complete = when=success hidden -- cmd /c if {is-audio}==true start """" ""path\to\foobar2000.exe"" /immediate /add ""{path}""
 
     Convert downloaded audio files to MP3 on Windows (requires ffmpeg):
 
     # Check if file is audio and not already MP3
-    on-complete =   1:h:r: cmd /c if {is-audio}==true if /i not {ext}==.mp3 if not exist ""{path-noext}.mp3"" echo true
+    on-complete =   when=success hidden -- cmd /c if ""{is-audio}""==""true"" if /i not ""{ext}""=="".mp3"" if not exist ""{path-noext}.mp3"" echo true
     
     # Convert to MP3 if check passed
-    on-complete = + 1:h:r: cmd /c if {stdout}==true (ffmpeg -i ""{path}"" -q:a 0 ""{path-noext}.mp3"" && echo success)
+    on-complete = + when=success hidden -- cmd /c if /i ""{stdout}""==""true"" (ffmpeg -i ""{path}"" -q:a 0 ""{path-noext}.mp3"" && echo success)
     
     # Delete original and update index if conversion succeeded
-    on-complete = + 1:h:u: cmd /c if {stdout}==success (del ""{path}"" & echo ""1;{path-noext}.mp3"")";
+    on-complete = + when=success hidden update-index -- cmd /c if /i ""{stdout}""==""success"" (del ""{path}"" & echo ""ignored;{path-noext}.mp3"")";
 
     const string shortcutsHelp = @"
 Shortcuts & interactive mode

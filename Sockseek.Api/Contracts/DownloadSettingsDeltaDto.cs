@@ -1,5 +1,6 @@
 using Sockseek.Core;
 using Sockseek.Core.Models;
+using Sockseek.Core.Services;
 using Sockseek.Core.Settings;
 
 namespace Sockseek.Api;
@@ -92,6 +93,7 @@ public static class DownloadSettingsDeltaMapper
             case "Output.IndexFilePath": settings.Output.IndexFilePath = op.StringValue; break;
             case "Output.FailedAlbumPath": settings.Output.FailedAlbumPath = op.StringValue; break;
             case "Output.OnComplete":
+                ValidateOnCompleteOperation(op);
                 var onComplete = settings.Output.OnComplete;
                 ApplyStringList(ref onComplete, op);
                 settings.Output.OnComplete = onComplete;
@@ -398,6 +400,9 @@ public static class DownloadSettingsDeltaMapper
             target = op.StringListValue?.ToList();
         }
     }
+
+    private static void ValidateOnCompleteOperation(DownloadSettingOperationDto op)
+        => OnCompleteExecutor.ValidateCommands(op.StringListValue);
 
     private static void ApplyStringList(List<string> target, DownloadSettingOperationDto op)
     {

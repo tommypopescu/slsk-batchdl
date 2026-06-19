@@ -393,9 +393,9 @@ namespace Tests.ConfigParsingTests
         [TestMethod]
         public void RemotePatch_OnCompleteAppend_IsRepresentedAsAppend()
         {
-            var patch = ConfigManager.CreateCliDownloadSettingsPatch(["x", "--on-complete", "+ second"]);
+            var patch = ConfigManager.CreateCliDownloadSettingsPatch(["x", "--on-complete", "+ -- second"]);
             Assert.IsNotNull(patch);
-            CollectionAssert.AreEqual(new[] { "second" }, patch.Output?.OnComplete?.Append?.ToArray());
+            CollectionAssert.AreEqual(new[] { "-- second" }, patch.Output?.OnComplete?.Append?.ToArray());
             Assert.IsNull(patch.Output?.OnComplete?.Replace);
         }
 
@@ -464,15 +464,21 @@ namespace Tests.ConfigParsingTests
         [TestMethod]
         public void OnComplete_AppendMode()
         {
-            var (_, dl, _) = Bind("x", "--on-complete", "cmd1", "--on-complete", "+ cmd2");
-            CollectionAssert.AreEqual(new[] { "cmd1", "cmd2" }, dl.Output.OnComplete);
+            var (_, dl, _) = Bind("x", "--on-complete", "-- cmd1", "--on-complete", "+ -- cmd2");
+            CollectionAssert.AreEqual(new[] { "-- cmd1", "-- cmd2" }, dl.Output.OnComplete);
         }
 
         [TestMethod]
         public void OnComplete_OverwriteMode()
         {
-            var (_, dl, _) = Bind("x", "--on-complete", "cmd1", "--on-complete", "cmd2");
-            CollectionAssert.AreEqual(new[] { "cmd2" }, dl.Output.OnComplete);
+            var (_, dl, _) = Bind("x", "--on-complete", "-- cmd1", "--on-complete", "-- cmd2");
+            CollectionAssert.AreEqual(new[] { "-- cmd2" }, dl.Output.OnComplete);
+        }
+
+        [TestMethod]
+        public void OnComplete_MissingDelimiter_Throws()
+        {
+            Assert.ThrowsException<ArgumentException>(() => Bind("x", "--on-complete", "cmd1"));
         }
 
         [TestMethod]

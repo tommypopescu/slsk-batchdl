@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.Extensions.Logging;
 using Sockseek.Core.Models;
 using Sockseek.Core;
 using System.Reflection;
@@ -10,113 +11,237 @@ namespace Tests.OnCompleteExecutorTests
     // following the established pattern in this test suite.
 
     [TestClass]
-    public class ParseCommandFlagsTests
+    public class ParseCommandSyntaxTests
     {
-        private static dynamic InvokeParseCommandFlags(string rawCommand)
+        private static object InvokeParseCommand(string rawCommand)
         {
-            var method = typeof(OnCompleteExecutor).GetMethod("ParseCommandFlags", BindingFlags.NonPublic | BindingFlags.Static)!;
-            return method.Invoke(null, new object[] { rawCommand })!;
+            var method = typeof(OnCompleteExecutor).GetMethod("ParseCommand", BindingFlags.NonPublic | BindingFlags.Static)!;
+            try
+            {
+                return method.Invoke(null, new object[] { rawCommand })!;
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                throw ex.InnerException!;
+            }
         }
 
         private static T Get<T>(object obj, string prop) =>
             (T)obj.GetType().GetProperty(prop)!.GetValue(obj)!;
 
         [TestMethod]
-        public void ParseCommandFlags_NoFlags_ReturnsCommandUnchanged()
+        public void ParseCommand_NoOptions_ReturnsCommandAfterDelimiter()
         {
-            var result = InvokeParseCommandFlags("mycommand arg1");
+            var result = InvokeParseCommand("-- mycommand arg1");
             Assert.AreEqual("mycommand arg1", Get<string>(result, "Command"));
             Assert.IsFalse(Get<bool>(result, "UseShellExecute"));
         }
 
         [TestMethod]
-        public void ParseCommandFlags_ShellExecuteFlag_SetsUseShellExecute()
+        public void ParseCommand_ShellOption_SetsUseShellExecute()
         {
-            var result = InvokeParseCommandFlags("s:mycommand");
+            var result = InvokeParseCommand("shell -- mycommand");
             Assert.IsTrue(Get<bool>(result, "UseShellExecute"));
             Assert.AreEqual("mycommand", Get<string>(result, "Command"));
         }
 
         [TestMethod]
-        public void ParseCommandFlags_TrackOnlyFlag_SetsOnlyTrack()
+        public void ParseCommand_TrackScope_SetsScope()
         {
-            var result = InvokeParseCommandFlags("t:mycommand");
-            Assert.IsTrue(Get<bool>(result, "OnlyTrackOnComplete"));
-            Assert.IsFalse(Get<bool>(result, "OnlyAlbumOnComplete"));
+            var result = InvokeParseCommand("scope=track -- mycommand");
+            Assert.AreEqual("Track", Get<object>(result, "Scope").ToString());
         }
 
         [TestMethod]
-        public void ParseCommandFlags_AlbumOnlyFlag_SetsOnlyAlbum()
+        public void ParseCommand_AlbumScope_SetsScope()
         {
-            var result = InvokeParseCommandFlags("a:mycommand");
-            Assert.IsTrue(Get<bool>(result, "OnlyAlbumOnComplete"));
+            var result = InvokeParseCommand("scope=album -- mycommand");
+            Assert.AreEqual("Album", Get<object>(result, "Scope").ToString());
         }
 
         [TestMethod]
-        public void ParseCommandFlags_MultipleFlags_AllParsed()
+        public void ParseCommand_MultipleOptions_AreParsed()
         {
-            var result = InvokeParseCommandFlags("s:h:t:mycommand");
+            var result = InvokeParseCommand("when=success scope=album shell hidden -- mycommand");
             Assert.IsTrue(Get<bool>(result, "UseShellExecute"));
             Assert.IsTrue(Get<bool>(result, "CreateNoWindow"));
-            Assert.IsTrue(Get<bool>(result, "OnlyTrackOnComplete"));
+            Assert.AreEqual("Album", Get<object>(result, "Scope").ToString());
+            Assert.AreEqual("Success", Get<object>(result, "When").ToString());
             Assert.AreEqual("mycommand", Get<string>(result, "Command"));
         }
 
         [TestMethod]
-        public void ParseCommandFlags_ResultAndAlbumFlags_AllParsed()
+        public void ParseCommand_UpdateIndexOption_SetsUseOutputToUpdateIndex()
         {
-            var result = InvokeParseCommandFlags("1:a:s:mycommand");
-            Assert.AreEqual(1, Get<int?>(result, "RequiredResultCode"));
-            Assert.IsTrue(Get<bool>(result, "OnlyAlbumOnComplete"));
-            Assert.IsTrue(Get<bool>(result, "UseShellExecute"));
-            Assert.AreEqual("mycommand", Get<string>(result, "Command"));
-        }
-
-        [TestMethod]
-        public void ParseCommandFlags_UpdateIndexFlag_SetsUseOutputToUpdateIndex()
-        {
-            var result = InvokeParseCommandFlags("u:mycommand");
+            var result = InvokeParseCommand("update-index -- mycommand");
             Assert.IsTrue(Get<bool>(result, "UseOutputToUpdateIndex"));
         }
 
         [TestMethod]
-        public void ParseCommandFlags_ReadOutputFlag_SetsReadOutput()
+        public void ParseCommand_LockOption_SetsUseLocking()
         {
-            var result = InvokeParseCommandFlags("r:mycommand");
-            Assert.IsTrue(Get<bool>(result, "ReadOutput"));
-        }
-
-        [TestMethod]
-        public void ParseCommandFlags_LockFlag_SetsUseLocking()
-        {
-            var result = InvokeParseCommandFlags("l:mycommand");
+            var result = InvokeParseCommand("lock -- mycommand");
             Assert.IsTrue(Get<bool>(result, "UseLocking"));
         }
 
-        // Helper for nullable property
-        private static object? obj_get(object obj, string prop) =>
-            obj.GetType().GetProperty(prop)!.GetValue(obj);
+        [TestMethod]
+        public void ParseCommand_MissingDelimiter_ThrowsHelpfulError()
+        {
+            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("mycommand"));
+            StringAssert.Contains(ex.Message, "Missing `--` command delimiter");
+        }
+
+        [TestMethod]
+        public void ParseCommand_LegacyPrefixSyntax_ThrowsMigrationHint()
+        {
+            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("1:a:h: mycommand"));
+            StringAssert.Contains(ex.Message, "Legacy one-letter prefixes are no longer supported");
+        }
+
+        [TestMethod]
+        public void ParseCommand_EmptyCommandAfterDelimiter_Throws()
+        {
+            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("hidden -- "));
+            StringAssert.Contains(ex.Message, "Command after `--` is empty");
+        }
+
+        [TestMethod]
+        public void ParseCommand_UnknownOption_Throws()
+        {
+            var ex = Assert.ThrowsException<ArgumentException>(() => InvokeParseCommand("bogus -- mycommand"));
+            StringAssert.Contains(ex.Message, "Unknown option `bogus`");
+        }
+    }
+
+    [TestClass]
+    public class ProcessCommandResultTests
+    {
+        [TestMethod]
+        public void ProcessCommandResult_NonZeroExit_LogsVisibleBoundedWarning()
+        {
+            SockseekLog.RemoveNonFileOutputs();
+            SockseekLog.RemoveFileOutputs();
+
+            var entries = new List<SockseekLog.StructuredLogEntry>();
+            SockseekLog.AddStructuredSink((entry, _) => entries.Add(entry), LogLevel.Information);
+
+            try
+            {
+                var result = CreateProcessResult(
+                    exitCode: 1,
+                    stdout: new string('o', 900),
+                    stderr: "'win-notify-send.wrong.cmd' is not recognized\r\n" + new string('e', 900));
+                var config = CreateCommandConfig();
+                var job = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+
+                var needsUpdate = InvokeProcessCommandResult(result, config, null, job, "[4] AlbumJob:");
+
+                Assert.IsFalse(needsUpdate);
+                var warning = entries.Single(entry => entry.Level == LogLevel.Warning);
+                Assert.AreEqual(SockseekLog.Categories.Jobs, warning.CategoryName);
+                StringAssert.Contains(warning.Message, "[4] AlbumJob: on-complete command exited with code 1.");
+                StringAssert.Contains(warning.Message, "Stdout:");
+                StringAssert.Contains(warning.Message, "Stderr:");
+                StringAssert.Contains(warning.Message, "\n    Stderr:\n");
+                StringAssert.Contains(warning.Message, "\n      'win-notify-send.wrong.cmd' is not recognized\n");
+                StringAssert.Contains(warning.Message, "truncated");
+                Assert.IsFalse(warning.Message.Contains('\r'));
+                Assert.IsFalse(warning.Message.Contains("\\n"));
+                Assert.IsTrue(warning.Message.Length < 1600, warning.Message);
+            }
+            finally
+            {
+                SockseekLog.RemoveNonFileOutputs();
+                SockseekLog.RemoveFileOutputs();
+            }
+        }
+
+        [TestMethod]
+        public void ProcessCommandResult_UpdateIndexWithTruncatedStdout_DoesNotMutateSongPath()
+        {
+            SockseekLog.RemoveNonFileOutputs();
+            SockseekLog.RemoveFileOutputs();
+
+            var entries = new List<SockseekLog.StructuredLogEntry>();
+            SockseekLog.AddStructuredSink((entry, _) => entries.Add(entry), LogLevel.Information);
+
+            try
+            {
+                var result = CreateProcessResult(
+                    exitCode: 0,
+                    stdout: "ignored;C:/partial/path",
+                    stderr: null,
+                    stdoutTruncated: true,
+                    stdoutCharsRead: 70000);
+                var config = CreateCommandConfig(useOutputToUpdateIndex: true);
+                var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" })
+                {
+                    DownloadPath = "C:/old/path.flac",
+                };
+                var job = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+
+                var needsUpdate = InvokeProcessCommandResult(result, config, song, job, "[4] AlbumJob:");
+
+                Assert.IsFalse(needsUpdate);
+                Assert.AreEqual("C:/old/path.flac", song.DownloadPath);
+                var warning = entries.Single(entry => entry.Level == LogLevel.Warning);
+                StringAssert.Contains(warning.Message, "ignored on-complete stdout for index update because command output exceeded the capture limit");
+            }
+            finally
+            {
+                SockseekLog.RemoveNonFileOutputs();
+                SockseekLog.RemoveFileOutputs();
+            }
+        }
+
+        private static object CreateProcessResult(
+            int exitCode,
+            string? stdout,
+            string? stderr,
+            int stdoutCharsRead = 0,
+            bool stdoutTruncated = false,
+            int stderrCharsRead = 0,
+            bool stderrTruncated = false)
+        {
+            var type = typeof(OnCompleteExecutor).GetNestedType("ProcessResult", BindingFlags.NonPublic)!;
+            var result = Activator.CreateInstance(type)!;
+            type.GetProperty("ExitCode")!.SetValue(result, exitCode);
+            type.GetProperty("Stdout")!.SetValue(result, stdout);
+            type.GetProperty("Stderr")!.SetValue(result, stderr);
+            type.GetProperty("StdoutCharsRead")!.SetValue(result, stdoutCharsRead);
+            type.GetProperty("StdoutTruncated")!.SetValue(result, stdoutTruncated);
+            type.GetProperty("StderrCharsRead")!.SetValue(result, stderrCharsRead);
+            type.GetProperty("StderrTruncated")!.SetValue(result, stderrTruncated);
+            return result;
+        }
+
+        private static object CreateCommandConfig(bool useOutputToUpdateIndex = false)
+        {
+            var type = typeof(OnCompleteExecutor).GetNestedType("CommandConfig", BindingFlags.NonPublic)!;
+            var config = Activator.CreateInstance(type)!;
+            type.GetProperty("UseOutputToUpdateIndex")!.SetValue(config, useOutputToUpdateIndex);
+            return config;
+        }
+
+        private static bool InvokeProcessCommandResult(object result, object config, SongJob? song, Job job, string logPrefix)
+        {
+            var method = typeof(OnCompleteExecutor).GetMethod("ProcessCommandResult", BindingFlags.NonPublic | BindingFlags.Static)!;
+            return (bool)method.Invoke(null, new[] { result, config, song, job, logPrefix })!;
+        }
     }
 
     [TestClass]
     public class ShouldExecuteCommandTests
     {
         private static bool InvokeShouldExecute(
-            bool onlyTrack,
-            bool onlyAlbum,
+            string command,
+            bool isTrack,
             bool isAlbum,
             JobTerminalOutcome terminalOutcome = JobTerminalOutcome.Succeeded,
-            JobSkipReason skipReason = JobSkipReason.None,
-            int? requiredResultCode = null)
+            JobSkipReason skipReason = JobSkipReason.None)
         {
-            var method = typeof(OnCompleteExecutor).GetMethod("ShouldExecuteCommand", BindingFlags.NonPublic | BindingFlags.Static)!;
-
-            // Build a CommandConfig struct via reflection
-            var configType = typeof(OnCompleteExecutor).GetNestedType("CommandConfig", BindingFlags.NonPublic)!;
-            var config = Activator.CreateInstance(configType)!;
-            configType.GetProperty("OnlyTrackOnComplete")!.SetValue(config, onlyTrack);
-            configType.GetProperty("OnlyAlbumOnComplete")!.SetValue(config, onlyAlbum);
-            configType.GetProperty("RequiredResultCode")!.SetValue(config, requiredResultCode);
+            var parseMethod = typeof(OnCompleteExecutor).GetMethod("ParseCommand", BindingFlags.NonPublic | BindingFlags.Static)!;
+            var config = parseMethod.Invoke(null, new object[] { command })!;
 
             var outcome = terminalOutcome switch
             {
@@ -128,86 +253,78 @@ namespace Tests.OnCompleteExecutorTests
                 _ => JobOutcome.NoChange(),
             };
 
-            return (bool)method.Invoke(null, new object[] { config, outcome, isAlbum })!;
+            var method = typeof(OnCompleteExecutor).GetMethod("ShouldExecuteCommand", BindingFlags.NonPublic | BindingFlags.Static)!;
+            return (bool)method.Invoke(null, new object[] { config, outcome, isTrack, isAlbum })!;
         }
 
         [TestMethod]
-        public void ShouldExecute_NoFlags_AlwaysTrue()
+        public void ShouldExecute_Default_RunsForNonSkippedOutcomes()
         {
-            Assert.IsTrue(InvokeShouldExecute(false, false, false));
-            Assert.IsTrue(InvokeShouldExecute(false, false, true));
+            Assert.IsTrue(InvokeShouldExecute("-- cmd", isTrack: true, isAlbum: false));
+            Assert.IsTrue(InvokeShouldExecute("-- cmd", isTrack: false, isAlbum: true, terminalOutcome: JobTerminalOutcome.Failed));
+            Assert.IsFalse(InvokeShouldExecute("-- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Skipped, skipReason: JobSkipReason.AlreadyExists));
         }
 
         [TestMethod]
-        public void ShouldExecute_TrackOnly_OnAlbum_ReturnsFalse()
+        public void ShouldExecute_TrackScope_OnlyRunsForTrackContext()
         {
-            Assert.IsFalse(InvokeShouldExecute(true, false, true));
+            Assert.IsTrue(InvokeShouldExecute("scope=track -- cmd", isTrack: true, isAlbum: false));
+            Assert.IsFalse(InvokeShouldExecute("scope=track -- cmd", isTrack: false, isAlbum: true));
         }
 
         [TestMethod]
-        public void ShouldExecute_TrackOnly_OnTrack_ReturnsTrue()
+        public void ShouldExecute_AlbumScope_OnlyRunsForAlbumContext()
         {
-            Assert.IsTrue(InvokeShouldExecute(true, false, false));
+            Assert.IsTrue(InvokeShouldExecute("scope=album -- cmd", isTrack: false, isAlbum: true));
+            Assert.IsFalse(InvokeShouldExecute("scope=album -- cmd", isTrack: true, isAlbum: false));
         }
 
         [TestMethod]
-        public void ShouldExecute_AlbumOnly_OnTrack_ReturnsFalse()
+        public void ShouldExecute_SuccessWhen_OnlyRunsForSucceeded()
         {
-            Assert.IsFalse(InvokeShouldExecute(false, true, false));
+            Assert.IsTrue(InvokeShouldExecute("when=success -- cmd", isTrack: true, isAlbum: false));
+            Assert.IsFalse(InvokeShouldExecute("when=success -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Failed));
         }
 
         [TestMethod]
-        public void ShouldExecute_AlbumOnly_OnAlbum_ReturnsTrue()
+        public void ShouldExecute_FailureWhen_RunsForFailedAndPartialSuccess()
         {
-            Assert.IsTrue(InvokeShouldExecute(false, true, true));
+            Assert.IsTrue(InvokeShouldExecute("when=failure -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Failed));
+            Assert.IsTrue(InvokeShouldExecute("when=failure -- cmd", isTrack: false, isAlbum: true, terminalOutcome: JobTerminalOutcome.PartialSuccess));
+            Assert.IsFalse(InvokeShouldExecute("when=failure -- cmd", isTrack: true, isAlbum: false));
         }
 
         [TestMethod]
-        public void ShouldExecute_AlbumOnly_OnAlbumTrackCompletion_ReturnsFalse()
+        public void ShouldExecute_SkippedWhen_RunsForAnySkippedOutcome()
         {
-            Assert.IsFalse(InvokeShouldExecute(false, true, false));
+            Assert.IsTrue(InvokeShouldExecute("when=skipped -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Skipped, skipReason: JobSkipReason.AlreadyExists));
         }
 
         [TestMethod]
-        public void ShouldExecute_RequiredSuccess_OnSucceededJob_ReturnsTrue()
+        public void ShouldExecute_AlreadyExistsWhen_RunsOnlyForAlreadyExistsSkippedOutcome()
         {
-            Assert.IsTrue(InvokeShouldExecute(false, false, false, requiredResultCode: 1));
+            Assert.IsTrue(InvokeShouldExecute("when=already-exists -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Skipped, skipReason: JobSkipReason.AlreadyExists));
+            Assert.IsFalse(InvokeShouldExecute("when=already-exists -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Skipped, skipReason: JobSkipReason.NotFoundLastTime));
         }
 
         [TestMethod]
-        public void ShouldExecute_RequiredSuccess_OnFailedJob_ReturnsFalse()
+        public void ShouldExecute_NotFoundLastTimeWhen_RunsOnlyForNotFoundLastTimeSkippedOutcome()
         {
-            Assert.IsFalse(InvokeShouldExecute(false, false, false, JobTerminalOutcome.Failed, requiredResultCode: 1));
+            Assert.IsTrue(InvokeShouldExecute("when=not-found-last-time -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Skipped, skipReason: JobSkipReason.NotFoundLastTime));
+            Assert.IsFalse(InvokeShouldExecute("when=not-found-last-time -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Skipped, skipReason: JobSkipReason.AlreadyExists));
         }
 
         [TestMethod]
-        public void ShouldExecute_RequiredFailure_OnFailedJob_ReturnsTrue()
+        public void ShouldExecute_CancelledWhen_RunsOnlyForCancelled()
         {
-            Assert.IsTrue(InvokeShouldExecute(false, false, false, JobTerminalOutcome.Failed, requiredResultCode: 2));
+            Assert.IsTrue(InvokeShouldExecute("when=cancelled -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Cancelled));
+            Assert.IsFalse(InvokeShouldExecute("when=cancelled -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Failed));
         }
 
         [TestMethod]
-        public void ShouldExecute_RequiredFailure_OnPartialSuccessJob_ReturnsTrue()
+        public void ShouldExecute_AnyWhen_RunsForSkippedToo()
         {
-            Assert.IsTrue(InvokeShouldExecute(false, false, false, JobTerminalOutcome.PartialSuccess, requiredResultCode: 2));
-        }
-
-        [TestMethod]
-        public void ShouldExecute_NoResultPrefix_OnSkippedTrack_ReturnsFalse()
-        {
-            Assert.IsFalse(InvokeShouldExecute(false, false, false, JobTerminalOutcome.Skipped, JobSkipReason.AlreadyExists));
-        }
-
-        [TestMethod]
-        public void ShouldExecute_NoResultPrefix_OnSkippedAlbum_ReturnsFalse()
-        {
-            Assert.IsFalse(InvokeShouldExecute(false, false, true, JobTerminalOutcome.Skipped, JobSkipReason.AlreadyExists));
-        }
-
-        [TestMethod]
-        public void ShouldExecute_ExplicitSkippedPrefix_OnSkippedTrack_ReturnsTrue()
-        {
-            Assert.IsTrue(InvokeShouldExecute(false, false, false, JobTerminalOutcome.Skipped, JobSkipReason.AlreadyExists, requiredResultCode: 5));
+            Assert.IsTrue(InvokeShouldExecute("when=any -- cmd", isTrack: true, isAlbum: false, terminalOutcome: JobTerminalOutcome.Skipped, skipReason: JobSkipReason.AlreadyExists));
         }
     }
 
@@ -226,9 +343,9 @@ namespace Tests.OnCompleteExecutorTests
                 settings.Output.ParentDir = tempDir;
                 settings.Output.OnComplete =
                 [
-                    $"1:a:h:{AppendMarkerCommand(markerPath, "album")}",
-                    $"1:t:h:{AppendMarkerCommand(markerPath, "track")}",
-                    $"2:a:h:{AppendMarkerCommand(markerPath, "failed")}",
+                    $"when=success scope=album hidden -- {AppendMarkerCommand(markerPath, "album")}",
+                    $"when=success scope=track hidden -- {AppendMarkerCommand(markerPath, "track")}",
+                    $"when=failure scope=album hidden -- {AppendMarkerCommand(markerPath, "failed")}",
                 ];
 
                 var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" })
@@ -277,7 +394,7 @@ namespace Tests.OnCompleteExecutorTests
                 settings.Output.ParentDir = outputDir;
                 settings.Output.OnComplete =
                 [
-                    $"1:a:h:{AppendMarkerCommand(markerPath, "album")}",
+                    $"when=success scope=album hidden -- {AppendMarkerCommand(markerPath, "album")}",
                 ];
 
                 var client = LocalFilesSoulseekClient.FromLocalPaths(useTags: false, slowMode: false, albumDir);
@@ -311,7 +428,7 @@ namespace Tests.OnCompleteExecutorTests
         public void HasApplicableCommand_AlbumOnlyCommand_DoesNotApplyToAlbumTrackCompletion()
         {
             var settings = new DownloadSettings();
-            settings.Output.OnComplete = ["1:a:notify"];
+            settings.Output.OnComplete = ["when=success scope=album -- notify"];
 
             var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" })
             {
@@ -338,9 +455,9 @@ namespace Tests.OnCompleteExecutorTests
                 settings.Output.ParentDir = tempDir;
                 settings.Output.OnComplete =
                 [
-                    $"h:{AppendMarkerCommand(markerPath, "ran")}",
-                    $"a:h:{AppendMarkerCommand(markerPath, "album")}",
-                    $"t:h:{AppendMarkerCommand(markerPath, "track")}",
+                    $"hidden -- {AppendMarkerCommand(markerPath, "ran")}",
+                    $"scope=album hidden -- {AppendMarkerCommand(markerPath, "album")}",
+                    $"scope=track hidden -- {AppendMarkerCommand(markerPath, "track")}",
                 ];
 
                 var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" })
@@ -363,6 +480,38 @@ namespace Tests.OnCompleteExecutorTests
                 Assert.IsFalse(File.Exists(markerPath));
                 Assert.IsFalse(OnCompleteExecutor.HasApplicableCommand(album, track, skipped));
                 Assert.IsFalse(OnCompleteExecutor.HasApplicableCommand(album, null, skipped));
+            }
+            finally
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+
+        [TestMethod]
+        public async Task ExecuteAsync_StdoutVariables_AreAvailableWithoutReadOutputPrefix()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "sockseek-oncomplete-" + Guid.NewGuid());
+            Directory.CreateDirectory(tempDir);
+            try
+            {
+                var markerPath = Path.Combine(tempDir, "marker.txt");
+                var settings = new DownloadSettings();
+                settings.Output.ParentDir = tempDir;
+                settings.Output.OnComplete =
+                [
+                    $"when=success hidden -- {WriteStdoutCommand("ready")}",
+                    $"when=success hidden -- {AppendMarkerCommand(markerPath, "{stdout}")}",
+                ];
+
+                var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" })
+                {
+                    Config = settings,
+                };
+                album.SetDone(tempDir);
+
+                await OnCompleteExecutor.ExecuteAsync(album, null, new JobContext(), JobOutcome.Done(tempDir));
+
+                CollectionAssert.AreEqual(new[] { "ready" }, File.ReadAllLines(markerPath));
             }
             finally
             {
@@ -396,7 +545,7 @@ namespace Tests.OnCompleteExecutorTests
                 settings.Output.ParentDir = tempDir;
                 settings.Output.OnComplete =
                 [
-                    $"1:a:h:{AppendMarkerCommand(markerPath, "{title}|{artist}|{album}|{sartist}|{salbum}|{path}")}",
+                    $"when=success scope=album hidden -- {AppendMarkerCommand(markerPath, "{title}|{artist}|{album}|{sartist}|{salbum}|{path}")}",
                 ];
 
                 var album = new AlbumJob(new AlbumQuery { Artist = "AlbumSourceArtist", Album = "AlbumSourceAlbum" })
@@ -419,7 +568,7 @@ namespace Tests.OnCompleteExecutorTests
                 await OnCompleteExecutor.ExecuteAsync(album, null, new JobContext(), JobOutcome.Done(albumPath));
 
                 Assert.AreEqual(
-                    $"TagTitle|TagArtist|TagAlbum|AlbumSourceArtist|AlbumSourceAlbum|{albumPath}",
+                    $"TagTitle|TagArtist|TagAlbum|AlbumSourceArtist|AlbumSourceAlbum|{Path.GetFullPath(albumPath)}",
                     File.ReadAllText(markerPath).Trim());
             }
             finally
@@ -429,6 +578,18 @@ namespace Tests.OnCompleteExecutorTests
                     File.Delete(tagPath);
                 Directory.Delete(tempDir, recursive: true);
             }
+        }
+
+        private static string WriteStdoutCommand(string value)
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var cmdValue = value.Replace("\"", "\\\"");
+                return $"cmd /d /c echo {cmdValue}";
+            }
+
+            var shellValue = value.Replace("'", "'\\''");
+            return $"/bin/sh -c \"printf '%s\\n' '{shellValue}'\"";
         }
 
         private static string AppendMarkerCommand(string markerPath, string marker)
@@ -455,7 +616,19 @@ namespace Tests.OnCompleteExecutorTests
             var result = method.Invoke(null, new object[] { command })!;
             // ValueTuple named fields aren't accessible via dynamic; use positional fields
             var fields = result.GetType().GetFields();
-            return ((string)fields[0].GetValue(result)!, (string)fields[2].GetValue(result)!);
+            return ((string)fields[0].GetValue(result)!, (string)fields[1].GetValue(result)!);
+        }
+
+        private static ProcessStartInfo InvokeConfigure(string command, bool useShellExecute = false, bool useOutputToUpdateIndex = false)
+        {
+            var (file, args) = InvokeParse(command);
+            var configType = typeof(OnCompleteExecutor).GetNestedType("CommandConfig", BindingFlags.NonPublic)!;
+            var config = Activator.CreateInstance(configType)!;
+            configType.GetProperty("UseShellExecute")!.SetValue(config, useShellExecute);
+            configType.GetProperty("UseOutputToUpdateIndex")!.SetValue(config, useOutputToUpdateIndex);
+
+            var method = typeof(OnCompleteExecutor).GetMethod("ConfigureProcessStartInfo", BindingFlags.NonPublic | BindingFlags.Static)!;
+            return (ProcessStartInfo)method.Invoke(null, new[] { file, args, config })!;
         }
 
         private static string InvokeFormatProcessArgumentsForLog(ProcessStartInfo startInfo)
@@ -481,6 +654,21 @@ namespace Tests.OnCompleteExecutorTests
         }
 
         [TestMethod]
+        public void ConfigureProcessStartInfo_NonShellExecute_PreservesRawWindowsArguments()
+        {
+            var command = "cmd /c if true==true if not exist \"C:\\Users\\fiso\\Temp\\Some Album\\01. Track.mp3\" echo true";
+            var startInfo = InvokeConfigure(command);
+
+            Assert.AreEqual("cmd", startInfo.FileName);
+            Assert.IsFalse(startInfo.UseShellExecute);
+            Assert.IsTrue(startInfo.RedirectStandardOutput);
+            Assert.AreEqual(
+                "/c if true==true if not exist \"C:\\Users\\fiso\\Temp\\Some Album\\01. Track.mp3\" echo true",
+                startInfo.Arguments);
+            Assert.AreEqual(0, startInfo.ArgumentList.Count);
+        }
+
+        [TestMethod]
         public void ParseFileName_NoArgs_ReturnsEmptyArguments()
         {
             var (file, args) = InvokeParse("singlecommand");
@@ -497,20 +685,17 @@ namespace Tests.OnCompleteExecutorTests
         }
 
         [TestMethod]
-        public void FormatProcessArgumentsForLog_NonShellExecute_UsesArgumentList()
+        public void FormatProcessArgumentsForLog_NonShellExecute_UsesArgumentsString()
         {
             var startInfo = new ProcessStartInfo
             {
                 FileName = "cmd",
+                Arguments = "/d /c win-notify-send.cmd \"Downloaded: Sonic Youth C:/Music\"",
                 UseShellExecute = false,
             };
-            startInfo.ArgumentList.Add("/d");
-            startInfo.ArgumentList.Add("/c");
-            startInfo.ArgumentList.Add("win-notify-send.cmd");
-            startInfo.ArgumentList.Add("Downloaded: Sonic Youth C:/Music");
 
             Assert.AreEqual(
-                "ArgumentList=['/d', '/c', 'win-notify-send.cmd', 'Downloaded: Sonic Youth C:/Music']",
+                "Arguments='/d /c win-notify-send.cmd \"Downloaded: Sonic Youth C:/Music\"'",
                 InvokeFormatProcessArgumentsForLog(startInfo));
         }
 

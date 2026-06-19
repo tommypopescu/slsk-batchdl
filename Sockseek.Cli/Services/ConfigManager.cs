@@ -315,7 +315,17 @@ public static partial class ConfigManager
 
     private static void PostProcessDownload(DownloadSettings dl, PathVariableContext pathContext)
     {
+        OnCompleteExecutor.ValidateCommands(dl.Output.OnComplete);
         SettingsNormalizer.NormalizeDownloadPaths(dl, pathContext);
+    }
+
+    private static (bool Append, string Command) ParseOnCompleteConfigValue(string value)
+    {
+        var trimmed = value.TrimStart();
+        var append = trimmed.StartsWith("+ ", StringComparison.Ordinal);
+        var command = append ? trimmed[2..] : value.Trim();
+        OnCompleteExecutor.ValidateCommand(command);
+        return (append, command);
     }
 
     // ── Config file parsing ───────────────────────────────────────────────────
@@ -497,16 +507,17 @@ public static partial class ConfigManager
             case "--failed-album-path":
                 Download(d => d.Output.FailedAlbumPath = value); break;
             case "--oc": case "--on-complete":
+                var onComplete = ParseOnCompleteConfigValue(value);
                 Download(d =>
                 {
-                    if (value.TrimStart().StartsWith("+ "))
+                    if (onComplete.Append)
                     {
                         d.Output.OnComplete ??= [];
-                        d.Output.OnComplete.Add(value.TrimStart()[2..]);
+                        d.Output.OnComplete.Add(onComplete.Command);
                     }
                     else
                     {
-                        d.Output.OnComplete = [value];
+                        d.Output.OnComplete = [onComplete.Command];
                     }
                 });
                 break;
@@ -841,11 +852,12 @@ public static partial class ConfigManager
 
                 case "--oc":
                 case "--on-complete":
-                    if (value.TrimStart().StartsWith("+ "))
+                    var onComplete = ParseOnCompleteConfigValue(value);
+                    if (onComplete.Append)
                     {
                         Add(DownloadSettingsDeltaMapper.Append(
                             "Output.OnComplete",
-                            [value.TrimStart()[2..]]));
+                            [onComplete.Command]));
                         return true;
                     }
                     return false;

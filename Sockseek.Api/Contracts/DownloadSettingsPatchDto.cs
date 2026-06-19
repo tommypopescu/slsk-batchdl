@@ -1,5 +1,6 @@
 using Sockseek.Core;
 using Sockseek.Core.Models;
+using Sockseek.Core.Services;
 using Sockseek.Core.Settings;
 
 namespace Sockseek.Api;
@@ -192,6 +193,7 @@ public static class DownloadSettingsPatchDtoMapper
         if (patch.FailedAlbumPath is { } failedAlbumPath) target.FailedAlbumPath = failedAlbumPath;
         if (patch.OnComplete is { } onComplete)
         {
+            ValidateOnCompletePatch(onComplete);
             target.OnComplete ??= [];
             onComplete.ApplyTo(target.OnComplete);
         }
@@ -658,6 +660,12 @@ public static class DownloadSettingsPatchDtoMapper
         => op.Operation == SettingOperationKind.Append
             ? current == null ? new CollectionPatchDto<string>(Append: op.StringListValue ?? []) : current with { Append = [.. current.Append ?? [], .. op.StringListValue ?? []] }
             : current == null ? new CollectionPatchDto<string>(Replace: op.StringListValue ?? []) : current with { Replace = op.StringListValue ?? [] };
+
+    private static void ValidateOnCompletePatch(CollectionPatchDto<string> patch)
+    {
+        OnCompleteExecutor.ValidateCommands(patch.Replace);
+        OnCompleteExecutor.ValidateCommands(patch.Append);
+    }
 
     private static CollectionPatchDto<RegexRuleDto> RegexCollection(CollectionPatchDto<RegexRuleDto>? current, DownloadSettingOperationDto op)
         => op.Operation == SettingOperationKind.Append

@@ -354,8 +354,8 @@ public partial class FileManager
         { "configdir",      (ctx, _) => ctx.ConfigDir },
 
         // Local path vars (from the downloaded file's local path)
-        { "path",      (ctx, _) => (ctx.DownloadPath ?? "").TrimEnd('/').TrimEnd('\\') },
-        { "path-noext",(ctx, _) => ctx.DownloadPath != null ? Path.Combine(Path.GetDirectoryName(ctx.DownloadPath), Path.GetFileNameWithoutExtension(ctx.DownloadPath)) : "" },
+        { "path",      (ctx, _) => LocalCommandPath(ctx.DownloadPath) },
+        { "path-noext",(ctx, _) => LocalCommandPathNoExtension(ctx.DownloadPath) },
         { "ext",       (ctx, _) => ctx.DownloadPath != null ? Path.GetExtension(ctx.DownloadPath) : "" },
         { "bindir",    (_, _)   => AppDomain.CurrentDomain.BaseDirectory.TrimEnd('/').TrimEnd('\\') },
     };
@@ -385,6 +385,20 @@ public partial class FileManager
     public static bool HasTagVariables(string x)
     {
         return TagVars.Any(v => x.Contains($"{{{v}}}"));
+    }
+
+    private static string LocalCommandPath(string? path)
+        => string.IsNullOrWhiteSpace(path)
+            ? ""
+            : Path.GetFullPath(path).TrimEnd('/').TrimEnd('\\');
+
+    private static string LocalCommandPathNoExtension(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "";
+
+        var fullPath = Path.GetFullPath(path);
+        return Path.Combine(Path.GetDirectoryName(fullPath) ?? "", Path.GetFileNameWithoutExtension(fullPath));
     }
 
     private static string FormatSplitState(FileManagerContext ctx)

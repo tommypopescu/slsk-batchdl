@@ -203,19 +203,19 @@ namespace Tests.ConfigTests
         public void Resolver_DoesNotDuplicateAppendableArgs()
         {
             string content =
-                "on-complete = + action_default\n" +
+                "on-complete = + -- action_default\n" +
                 "[auto-profile]\n" +
                 "profile-cond = interactive\n" +
                 "fast-search = true";
 
-            var (file, root, _, args) = Bind(content, "--interactive", "--on-complete", "+ action_cli");
+            var (file, root, _, args) = Bind(content, "--interactive", "--on-complete", "+ -- action_cli");
             var cli = new CliSettings { InteractiveMode = true };
             var result = Resolve(file, root, cli, args, new SongJob(new SongQuery { Title = "test" }));
 
             Assert.IsTrue(result.Search.FastSearch);
             Assert.AreEqual(2, result.Output.OnComplete!.Count);
-            Assert.AreEqual("action_default", result.Output.OnComplete[0]);
-            Assert.AreEqual("action_cli", result.Output.OnComplete[1]);
+            Assert.AreEqual("-- action_default", result.Output.OnComplete[0]);
+            Assert.AreEqual("-- action_cli", result.Output.OnComplete[1]);
         }
     }
 
@@ -395,18 +395,18 @@ namespace Tests.ConfigTests
         {
             var (file, root, _, args) = ProfileTestHelpers.Bind(
                 testConfigPath,
-                "on-complete = + action_default\n" +
-                "[auto]\nprofile-cond = interactive\non-complete = + action_profile",
+                "on-complete = + -- action_default\n" +
+                "[auto]\nprofile-cond = interactive\non-complete = + -- action_profile",
                 "--interactive");
             var resolver = ConfigManager.CreateJobSettingsResolver(file, args, new CliSettings { InteractiveMode = true });
 
             var first = resolver.Resolve(root, new SongJob(new SongQuery { Title = "a" }));
-            first.Output.OnComplete!.Add("mutated");
+            first.Output.OnComplete!.Add("-- mutated");
             var second = resolver.Resolve(root, new SongJob(new SongQuery { Title = "b" }));
 
-            CollectionAssert.Contains(second.Output.OnComplete, "action_default");
-            CollectionAssert.Contains(second.Output.OnComplete, "action_profile");
-            CollectionAssert.DoesNotContain(second.Output.OnComplete, "mutated");
+            CollectionAssert.Contains(second.Output.OnComplete, "-- action_default");
+            CollectionAssert.Contains(second.Output.OnComplete, "-- action_profile");
+            CollectionAssert.DoesNotContain(second.Output.OnComplete, "-- mutated");
             Assert.AreEqual(2, second.Output.OnComplete!.Count);
         }
 
