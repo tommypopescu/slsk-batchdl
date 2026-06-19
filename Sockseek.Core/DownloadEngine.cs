@@ -2610,6 +2610,10 @@ public class DownloadEngine
         var rfJob = new RetrieveFolderJob(folder) { WorkflowId = parentJob.WorkflowId, Config = parentJob.Config };
         rfJob.Cts = CancellationTokenSource.CreateLinkedTokenSource(appCts.Token, parentJob.Cts!.Token);
         RegisterJob(rfJob, parentJob);
+        var parentActivityBeforeRetrieval = parentJob.ActivityPhase;
+        var parentActivityUntilBeforeRetrieval = parentJob.ActivityUntilUtc;
+        if (!parentJob.IsTerminal)
+            parentJob.UpdateActivity(JobActivityPhase.RetrievingFolder);
         rfJob.UpdateActivity(JobActivityPhase.RetrievingFolder);
         SockseekLog.Jobs.Debug($"[{rfJob.DisplayId}] RetrieveFolderJob: retrieving folder for parent [{parentJob.DisplayId}] {JobLogKind(parentJob)}: {folder.FolderPath}");
 
@@ -2642,6 +2646,13 @@ public class DownloadEngine
         }
         finally
         {
+            if (!parentJob.IsTerminal
+                && parentJob.Cts?.IsCancellationRequested != true
+                && parentJob.ActivityPhase == JobActivityPhase.RetrievingFolder)
+            {
+                parentJob.UpdateActivity(parentActivityBeforeRetrieval, parentActivityUntilBeforeRetrieval);
+            }
+
             rfJob.Discovery = new DiscoverySummary { ResultCount = count, LockedFileCount = 0 };
             Events.RaiseJobExecutionCompleted(rfJob);
         }

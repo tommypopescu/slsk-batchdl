@@ -845,6 +845,77 @@ namespace Tests.Eventing
             }
         }
 
+        [TestMethod]
+        public async Task AlbumFolderRetrievalBeforeTrackCountDownload_SetsParentAlbumActivityWhileBrowsing()
+            => await AssertAlbumFolderRetrievalSetsParentActivityWhileBrowsing(postDownloadBrowse: false);
+
+        [TestMethod]
+        public async Task AlbumFolderRetrievalAfterVisibleTrackDownload_SetsParentAlbumActivityWhileBrowsing()
+            => await AssertAlbumFolderRetrievalSetsParentActivityWhileBrowsing(postDownloadBrowse: true);
+
+        private static async Task AssertAlbumFolderRetrievalSetsParentActivityWhileBrowsing(bool postDownloadBrowse)
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-album-retrieving-phase-" + Guid.NewGuid());
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            try
+            {
+                var files = AlbumFiles(2, @"Music\Artist\retrieving-phase");
+                var response = new SearchResponse(
+                    username: "retrieving-phase-user",
+                    token: 1,
+                    hasFreeUploadSlot: true,
+                    uploadSpeed: 100_000,
+                    queueLength: 0,
+                    fileList: files);
+                var folder = AlbumFolderFromSearch(response, files.Take(1));
+                var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "retrieving-phase" })
+                {
+                    Results = [folder],
+                };
+
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var downloadSettings = AlbumDownloadSettings(outputDir);
+                downloadSettings.Search.NoBrowseFolder = postDownloadBrowse ? false : true;
+                if (!postDownloadBrowse)
+                    downloadSettings.Search.NecessaryFolderCond.MinTrackCount = 2;
+
+                var client = new ClientTests.MockSoulseekClient([response]);
+                bool parentWasRetrievingAtBrowseStart = false;
+                int expectedDownloadsBeforeBrowse = postDownloadBrowse ? 1 : 0;
+                client.BrowseStarted = () =>
+                    parentWasRetrievingAtBrowseStart =
+                        client.DownloadCallCount == expectedDownloadsBeforeBrowse
+                        && album.ActivityPhase == JobActivityPhase.RetrievingFolder;
+
+                var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
+                var engine = new DownloadEngine(engineSettings, clientManager);
+                var albumActivityPhases = new List<JobActivityPhase>();
+                engine.Events.JobActivityChanged += (job, phase, _) =>
+                {
+                    if (ReferenceEquals(job, album))
+                        albumActivityPhases.Add(phase);
+                };
+
+                engine.Enqueue(album, downloadSettings);
+                engine.CompleteEnqueue();
+
+                await engine.RunAsync(CancellationToken.None);
+
+                var browseTiming = postDownloadBrowse ? "post-download" : "pre-download";
+                Assert.IsTrue(parentWasRetrievingAtBrowseStart, $"Album parent should expose RetrievingFolder while {browseTiming} folder browse is running.");
+                Assert.IsTrue(albumActivityPhases.Contains(JobActivityPhase.RetrievingFolder), "Album parent should publish a RetrievingFolder activity change.");
+                Assert.AreEqual(2, client.DownloadCallCount, "Folder browse should discover and download the hidden track.");
+                Assert.AreEqual(JobTerminalOutcome.Succeeded, album.TerminalOutcome);
+                Assert.AreEqual(JobActivityPhase.None, album.ActivityPhase, "Terminal albums should not remain stuck in the retrieval activity.");
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(outputDir))
+                    System.IO.Directory.Delete(outputDir, true);
+            }
+        }
+
         private static List<Soulseek.File> AlbumFiles(int count, string folder)
         {
             var files = new List<Soulseek.File>();

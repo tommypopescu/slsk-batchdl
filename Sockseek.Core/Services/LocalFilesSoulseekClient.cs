@@ -133,7 +133,7 @@ namespace Sockseek.Core.Services
             return Task.CompletedTask;
         }
 
-        public Task<BrowseResponse> BrowseAsync(string username, BrowseOptions? options = null, CancellationToken? cancellationToken = null)
+        public async Task<BrowseResponse> BrowseAsync(string username, BrowseOptions? options = null, CancellationToken? cancellationToken = null)
         {
             var user = index.FirstOrDefault(x => x.Username == username);
 
@@ -141,6 +141,10 @@ namespace Sockseek.Core.Services
             {
                 throw new UserNotFoundException($"User {username} not found");
             }
+
+            var ct = cancellationToken.GetValueOrDefault(CancellationToken.None);
+            if (slowMode)
+                await Task.Delay(Random.Shared.Next(1000, 3001), ct);
 
             var directories = user.Files
                 .GroupBy(x => Utils.GetDirectoryNameSlsk(x.Filename))
@@ -155,7 +159,7 @@ namespace Sockseek.Core.Services
                     )).ToList()
                 ));
 
-            return Task.FromResult(new BrowseResponse(directories));
+            return new BrowseResponse(directories);
         }
 
         public Task<(Search Search, IReadOnlyCollection<SearchResponse> Responses)> SearchAsync(SearchQuery query, SearchScope scope = null, int? token = null, SearchOptions options = null, CancellationToken? cancellationToken = null)

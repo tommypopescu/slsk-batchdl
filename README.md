@@ -295,7 +295,7 @@ sockseek daemon                 Start the HTTP/SignalR daemon instead of running
 
 --mock-files-dir <path>         Directory containing files to simulate download results
 --mock-files-no-read-tags       Only read filenames when simulating (much faster)
---mock-files-slow               Simulate slow mock-file downloads
+--mock-files-slow               Simulate slow mock-file downloads and folder browses
 --mock-files-fail-downloads <n> Simulate n failed mock-file downloads
 ```
 ### Notes
