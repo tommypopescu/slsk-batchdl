@@ -43,6 +43,41 @@ namespace Tests.ExtractorTests2
         }
 
         [TestMethod]
+        public async Task GetTracks_ModePrefixes_SetExplicitRequestedModeOverrides()
+        {
+            File.WriteAllText(_tempList,
+                "s:\"Artist - Song\"\n" +
+                "a:\"Artist - Album\"\n" +
+                "\"Artist - Default\"");
+
+            var extractor = new ListExtractor();
+            var config = TestHelpers.CreateDefaultSettings().Download;
+
+            var result = await extractor.GetTracks(_tempList, config.Extraction);
+            var jobList = (JobList)result;
+
+            Assert.AreEqual(3, jobList.Jobs.Count);
+            Assert.AreEqual(ExtractionMode.Song, ((ExtractJob)jobList.Jobs[0]).RequestedModeOverride);
+            Assert.AreEqual(ExtractionMode.Album, ((ExtractJob)jobList.Jobs[1]).RequestedModeOverride);
+            Assert.IsNull(((ExtractJob)jobList.Jobs[2]).RequestedModeOverride);
+        }
+
+        [TestMethod]
+        public async Task GetTracks_AlbumPrefix_DoesNotRewriteInputWithHiddenProtocol()
+        {
+            File.WriteAllText(_tempList, "a:\"Artist - Album\"");
+
+            var extractor = new ListExtractor();
+            var config = TestHelpers.CreateDefaultSettings().Download;
+
+            var result = await extractor.GetTracks(_tempList, config.Extraction);
+            var jobList = (JobList)result;
+            var ej = (ExtractJob)jobList.Jobs[0];
+
+            Assert.AreEqual("Artist - Album", ej.Input);
+        }
+
+        [TestMethod]
         public async Task GetTracks_AlbumLineWithAlbumTrackCountGe_SetsMinOnly()
         {
             File.WriteAllText(_tempList, "a:\"some album\"    album-track-count>=8");

@@ -31,6 +31,7 @@ namespace Tests.Core
                 var eng = new EngineSettings { Username = "u", Password = "p" };
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = "Artist - Song";
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
                 dl.Output.ParentDir = outputDir;
 
                 var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
@@ -66,6 +67,7 @@ namespace Tests.Core
                 var eng = new EngineSettings { Username = "u", Password = "p" };
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = "Artist - Song";
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
                 dl.Output.ParentDir = outputDir;
 
                 var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
@@ -138,6 +140,7 @@ namespace Tests.Core
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = listPath;
                 dl.Extraction.InputType = InputType.List;
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
                 dl.Output.ParentDir = outputDir;
                 dl.Output.NameFormat = "{artist}/{title}";
                 dl.Skip.SkipExisting = false;
@@ -262,6 +265,7 @@ namespace Tests.Core
                 var eng = new EngineSettings { Username = "u", Password = "p" };
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = "Artist - Song";
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
                 dl.Search.IsAggregate = true;
                 dl.Search.MinSharesAggregate = 1;
                 dl.Output.ParentDir = outputDir;
@@ -304,6 +308,7 @@ namespace Tests.Core
                 var eng = new EngineSettings { Username = "u", Password = "p" };
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = "Artist - Song";
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
                 dl.Output.ParentDir = outputDir;
                 dl.Transfer.MaxDownloadRetries = 1; // Limit to 1 attempt
 

@@ -244,6 +244,9 @@ namespace Tests.ConfigTests
         private static DownloadSettings Resolve(ConfigFile file, DownloadSettings root, CliSettings cli, string[] args)
             => ProfileTestHelpers.Resolve(file, root, cli, args, new SongJob(new SongQuery { Title = "test" }));
 
+        private static DownloadSettings Resolve(ConfigFile file, DownloadSettings root, CliSettings cli, string[] args, Job job)
+            => ProfileTestHelpers.Resolve(file, root, cli, args, job);
+
         [TestMethod]
         public void Priority_DefaultAppliesWhenNoAutoProfileMatches()
         {
@@ -318,7 +321,7 @@ namespace Tests.ConfigTests
                 "[second]\nprofile-cond = album\nmax-stale-time = 20",
                 "--interactive", "--album");
 
-            var result = Resolve(file, root, new CliSettings { InteractiveMode = true }, args);
+            var result = Resolve(file, root, new CliSettings { InteractiveMode = true }, args, new AlbumJob(new AlbumQuery()));
 
             Assert.AreEqual(20, result.Search.MaxStaleTime);
             CollectionAssert.AreEqual(new[] { "first", "second" }, result.AppliedAutoProfiles.ToList());
@@ -332,7 +335,7 @@ namespace Tests.ConfigTests
                 "[second]\nprofile-cond = album\nfast-search = true",
                 "--interactive", "--album");
 
-            var result = Resolve(file, root, new CliSettings { InteractiveMode = true }, args);
+            var result = Resolve(file, root, new CliSettings { InteractiveMode = true }, args, new AlbumJob(new AlbumQuery()));
 
             Assert.AreEqual(10, result.Search.MaxStaleTime);
             Assert.IsTrue(result.Search.FastSearch);
@@ -564,6 +567,16 @@ namespace Tests.ConfigTests
         {
             Assert.IsTrue(Satisfied("download-mode == \"song\"", new SongJob(new SongQuery { Title = "test" })));
             Assert.IsFalse(Satisfied("download-mode == \"album\"", new SongJob(new SongQuery { Title = "test" })));
+        }
+
+        [TestMethod]
+        public void ProfileConditionEvaluator_AlbumConditionUsesJobShapeWhenJobIsAvailable()
+        {
+            dl.Extraction.RequestedMode = ExtractionMode.Album;
+
+            Assert.IsFalse(Satisfied("album", new SongJob(new SongQuery { Title = "test" })),
+                "An explicit album request must not make a concrete SongJob match album auto-profiles.");
+            Assert.IsTrue(Satisfied("album", new AlbumJob(new AlbumQuery())));
         }
     }
 }

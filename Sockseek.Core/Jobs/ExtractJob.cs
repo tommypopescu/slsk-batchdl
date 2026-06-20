@@ -9,6 +9,7 @@ namespace Sockseek.Core.Jobs;
     {
         public string     Input     { get; }
         public InputType? InputType { get; set; }
+        public ExtractionMode? RequestedModeOverride { get; set; }
         public bool AutoProcessResult { get; set; } = true;
         public DownloadBehaviorPolicy? ResultDownloadBehaviorPolicy { get; set; }
 

@@ -310,8 +310,10 @@ public static partial class ProfileConditionEvaluator
             AggregateJob => "aggregate",
             SongJob => "song",
             _ when job != null => ToKebab(job.GetType().Name.Replace("Job", "")),
-            _ when settings.Extraction.IsAlbum && settings.Search.IsAggregate => "album-aggregate",
-            _ when settings.Extraction.IsAlbum => "album",
+            _ when SettingsMode(settings) == "album" && settings.Search.IsAggregate => "album-aggregate",
+            _ when SettingsMode(settings) == "song" && settings.Search.IsAggregate => "aggregate",
+            _ when SettingsMode(settings) == "album" => "album",
+            _ when SettingsMode(settings) == "song" => "song",
             _ when settings.Search.IsAggregate => "aggregate",
             _ => "normal",
         };
@@ -320,12 +322,21 @@ public static partial class ProfileConditionEvaluator
         {
             "input-type" => settings.Extraction.InputType.ToString().ToLower(),
             "download-mode" => mode,
-            "album" => settings.Extraction.IsAlbum || mode is "album" or "album-aggregate",
+            "album" => mode is "album" or "album-aggregate",
             "aggregate" => settings.Search.IsAggregate || mode is "aggregate" or "album-aggregate",
             _ when context?.Values.TryGetValue(var, out var value) == true => value,
             _ => throw new Exception($"Input error: Unrecognized profile condition variable '{var}'"),
         };
     }
+
+    private static string SettingsMode(DownloadSettings settings)
+        => settings.Extraction.RequestedMode switch
+        {
+            ExtractionMode.Album => "album",
+            ExtractionMode.Song => "song",
+            _ when settings.Extraction.InputType is InputType.String or InputType.List or InputType.None => "album",
+            _ => "normal",
+        };
 
     [GeneratedRegex(@"(\s+|\(|\)|&&|\|\||==|!=|!|\"".*?\"")")]
     private static partial Regex CondTokenRegex();
@@ -451,7 +462,8 @@ public static class SettingsCloner
         Offset = source.Offset,
         Reverse = source.Reverse,
         RemoveTracksFromSource = source.RemoveTracksFromSource,
-        IsAlbum = source.IsAlbum,
+        RequestedMode = source.RequestedMode,
+        UpgradeToAlbum = source.UpgradeToAlbum,
         SetAlbumMinTrackCount = source.SetAlbumMinTrackCount,
         SetAlbumMaxTrackCount = source.SetAlbumMaxTrackCount,
     };

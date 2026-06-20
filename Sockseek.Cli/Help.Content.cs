@@ -31,9 +31,10 @@ public static partial class Help
     -p, --path <path>               Download directory
     --input-type <type>             [csv|youtube|spotify|bandcamp|string|list|soulseek|
                                     musicbrainz] (default: auto)
+    -s, --song                      Song mode for string input and string lines in list files
     --name-format <format>          Name format for downloaded tracks. See `--help name-format`
     --invalid-replace-str <str>     Replacement string for invalid path characters (default: space)
-    
+
     -n, --number <maxtracks>        Download the first n tracks of a playlist
     -o, --offset <offset>           Skip a specified number of tracks
     -r, --reverse                   Download tracks in reverse order
@@ -49,7 +50,7 @@ public static partial class Help
     --index-path <path>             Override default path for Sockseek index
     --no-incomplete-ext             Save files with their final name instead of a temporary
                                     `.incomplete` extension.
-    
+
     --no-skip-existing              Do not skip downloaded tracks
     --skip-mode-output-dir <mode>   How to match files in the output dir: name|tag|index
                                     (default: index)
@@ -60,14 +61,14 @@ public static partial class Help
                                     (default: name)
     --skip-not-found                Skip searching for tracks that weren't found on Soulseek
                                     during the last run.
-    
+
     --listen-port <port>            Port for incoming connections (default: 49998)
     --no-listen                     Disable the incoming connection listener
     --connect-timeout <ms>          Timeout used when logging in to Soulseek (default: 20000ms)
     --user-description <desc>       Optional description text for your Soulseek account
     --shared-files <int>            Number of files you share on Soulseek (default: 0)
     --shared-folders <int>          Number of folders you share on Soulseek (default: 0)
-    
+
     --on-complete <command>         Run a command when a download completes. See `--help
                                     on-complete`
 
@@ -105,7 +106,7 @@ public static partial class Help
     --unknown-error-retries <num>   Extra retries for unknown/transient errors (default: 2)
     --fails-to-downrank <num>       Number of fails to downrank a user's shares (default: 1)
     --fails-to-ignore <num>         Number of fails to ban/ignore a user's shares (default: 2)
-    
+
     --yt-dlp                        Use yt-dlp to download tracks that weren't found on
                                     Soulseek. yt-dlp must be available from the command line.
     --yt-dlp-argument <str>         The command line arguments when running yt-dlp. Default:
@@ -116,7 +117,7 @@ public static partial class Help
                                     to index the downloaded files.
                                     Note that -x causes yt-dlp to download webms in case ffmpeg
                                     is unavailable.
-    
+
     --search-timeout <ms>           Max search time in ms (default: 6000)
     --max-stale-time <ms>           Max download time without progress in ms (default: 30000)
     --searches-per-time <num>       Max searches per time interval. Higher values may cause
@@ -152,7 +153,7 @@ public static partial class Help
     --album-track-count-col <name>  Album track count column name (sets --album-track-count)
     --yt-desc-col <name>            YouTube description column (improves --yt-parse)
     --yt-id-col <name>              YouTube video id column (improves --yt-parse)
-    
+
     --time-format <format>          Time format in Length column of the CSV file (e.g h:m:s.ms
                                     for durations like 1:04:35.123). Default: s
     --yt-parse                      Enable if the CSV contains YouTube video titles and channel
@@ -176,7 +177,7 @@ public static partial class Help
     --banned-users <list>           Comma-separated list of users to ignore
     --allowed-users <list>          Comma-separated list of users to allow
     --cond <conditions>             Semicolon-delimited required conditions
-    
+
     --pref-format <formats>         Preferred format(s) for ranking. Use --format to require
                                     formats strictly. Comma-separated, unordered. (def.: mp3)
     --pref-length-tol <sec>         Preferred length tolerance in seconds (default: 3)
@@ -190,14 +191,16 @@ public static partial class Help
     --pref-banned-users <list>      Comma-separated list of users to downrank
     --pref-allowed-users <list>     Comma-separated list of users to prefer
     --pref <conditions>             Semicolon-delimited preferred conditions
-    
+
     --strict-conditions             Skip files with missing properties instead of accepting by
                                     default; if --min-bitrate is set, ignores any files with
                                     unknown bitrate. Warning: Available props depend on client
 
   Album Download Options
 
-    -a, --album                     Album download mode: Download a folder
+    -a, --album                     Album mode for string input and string lines in list files.
+    --upgrade-to-album              Upgrade song-shaped sources such as CSV song rows or Spotify
+                                    playlist tracks into album jobs when possible.
     -t, --interactive               Interactively select folders. See --help shortcuts.
     --album-track-count <num>       Specify the exact number of tracks in the album. Add a + or
                                     - for inequalities, e.g '5+' for five or more tracks.
@@ -217,7 +220,7 @@ public static partial class Help
                                     the folder
     --failed-album-path             Path to move all album files to when one of the items from
                                     the directory fails to download. Set to 'delete' to delete
-                                    the files instead. Set to 'disable' keep them where they 
+                                    the files instead. Set to 'disable' keep them where they
                                     are. Default: {configured output dir}/failed
 
   Aggregate Download Options
@@ -249,7 +252,7 @@ public static partial class Help
                                     'link': Print first result slsk:// link
                                     'index': Print Sockseek index as formatted json
                                     'index-failed': Print failed downloads from Sockseek index
-    
+
     --mock-files-dir <path>         Directory containing files to simulate download results
     --mock-files-no-read-tags       Only read filenames when simulating (much faster)
     --mock-files-slow               Simulate slow mock-file downloads and folder browses
@@ -271,8 +274,8 @@ Input types
     songs or albums. Only the title or album column is required, but extra info may improve search
     result ranking. If the columns have common names ('Artist', 'Title', 'Album', 'Length', etc)
     then it's not required to manually specify them, otherwise you must provide at least --title-col
-    or --album-col. Rows that do not have any text in the title column will be treated as album
-    downloads.
+    or --album-col. CSV rows determine their own shape: rows with a track title are song downloads,
+    and rows without a title are album downloads.
 
   YouTube
     A YouTube playlist URL. Download songs from a YouTube playlist. Note: The default method to
@@ -328,7 +331,8 @@ Input types
       within the collection.
 
   Soulseek Link
-    A direct path starting with slsk://. Paths ending in / will be treated as album downloads.
+    A direct path starting with slsk://. Paths ending in / are album/folder downloads; file paths
+    are direct single-file downloads unless --album is explicitly requested.
 
   Search string
     Name of the track, album, or artist to search for. The input can either be an arbitrary search
@@ -336,49 +340,65 @@ Input types
     properties of the form title=Song Name, artist=Artist Name, length=215.
     The following properties are accepted: title, artist, album, length (in seconds),
     artist-maybe-wrong, album-track-count.
-    String input accepts a shorthand for track and album downloads: The input ARTIST - TITLE will be
-    parsed as artist=ARTIST, title=TITLE when downloading songs, and artist=ARTIST, album=TITLE when
-    run with --album.
+    String input accepts a shorthand for track and album downloads: The input ARTIST - TITLE is
+    parsed as artist=ARTIST, album=TITLE by default, and as artist=ARTIST, title=TITLE when run with
+    --song. Keyed string input is more explicit: artist=ARTIST, title=TITLE is treated as a song
+    download by default. Use --album if you want title= to act as an album search hint, i.e. you
+    want to search for an album by the name of one of its tracks.
 
   List file
     List input must be manually activated with --input-type=list. The input must be a path to a text
     file containing lines of the following form:
 
     # Any input type                conditions (optional)           pref. conditions (optional)
-    ""Artist - Song""                 ""format=mp3; br>128""            ""br >= 320""
-    
-    # Album download shorthand:
-    a:""Artist - Album""              strict-album=true;album-track-count=13
-    
+    ""Artist - Album""                ""format=mp3; br>128""            ""br >= 320""
+
+    # String album input:
+    ""Artist - Album""                strict-album=true;album-track-count=13
+
+    # String song input:
+    s:""Artist - Song""               strict-title=true
+
+    # Album search using a song-title hint:
+    a:""artist=Artist, title=Song""
+
     # Any other input type is also accepted:
     path/to/tracks.csv
     https://www.youtube.com/playlist?list=blah
 
-    The inputs can be any of the above input types, including links. The conditions are added on top
-    of the configured conditions and can be omitted.";
+    The conditions are added on top of the configured conditions and can be omitted. For string
+    lines, unprefixed entries use the configured download mode: album by default, or song mode when
+    --song / song = true is set.";
 
     const string downloadModesHelp = @"
 Download modes
+  Structured sources such as CSV rows, Spotify, YouTube, Bandcamp, MusicBrainz, and Soulseek links
+  usually decide for themselves whether they contain songs or albums. String inputs are treated as
+  albums by default.
+  Use --upgrade-to-album when a structured source gives you song entries but you want album jobs
+  instead, such as downloading the albums represented by a Spotify song playlist or a CSV of tracks.
 
-  Normal
-    The default for playlists. Downloads a single file for every input entry.
+  Song
+    Downloads a single file for string input and string lines inside list files. Song mode is the
+    default for playlists from streaming platforms. Use -s/--song for string/list input that should
+    be treated as a song search. To restore the pre-3.0 default behavior globally, add song = true
+    to your config file.
 
   Album
     Sockseek will search for the album and download an entire folder including non-audio files.
-    Activated when the input is a link to a spotify or bandcamp album, when the input string or CSV
-    row has no track title, or when -a/--album is enabled. Use -t to pick interactively. See
-    Shortcuts & interactive mode.
+    Album mode is the default for string input and string lines inside list files. It is also used
+    by album-shaped sources such as Spotify/Bandcamp album links and CSV rows without a track title.
+    Use -t to pick interactively. See Shortcuts & interactive mode.
 
-  Aggregate
-    With -g/--aggregate, Sockseek performs an ordinary search for the input, then attempts to group
-    the results into distinct songs and download one of each, starting with the one shared by the
-    most users. Note that --min-shares-aggregate is 2 by default, meaning that songs shared by only
-    one user will be ignored. Aggregate mode can be used to download all songs by an artist. See
-    Print all songs by an artist which are not in your library.
+  Song Aggregate
+    With --song -g/--aggregate, Sockseek performs an ordinary search for the input, then attempts to
+    group the results. Note that --min-shares-aggregate is 2 by default, meaning that items shared
+    by only one user will be ignored. Aggregate song mode can be used to download all songs by an
+    artist. See Print all songs by an artist which are not in your library.
 
   Album Aggregate
-    Activated when both --album and --aggregate are enabled. Sockseek will group shares and download
-    one of each distinct album, starting with the one shared by the most users. Note that
+    Activated when --aggregate is enabled for album-shaped input. Sockseek will group shares and
+    download one of each distinct album, starting with the one shared by the most users. Note that
     --min-shares-aggregate is 2 by default, meaning that albums shared by only one user will be
     ignored. Album-aggregate mode can be used to download the most popular (or all) albums by an
     artist. It is recommended to pair it with --interactive. See Example for more details.";
@@ -524,7 +544,7 @@ Configuration
     [no-stale]
     profile-cond = interactive && download-mode == ""album""
     max-stale-time = 9999999
-    
+
     # download to another location for YouTube
     [youtube]
     profile-cond = input-type == ""youtube""
@@ -605,10 +625,10 @@ On-Complete Actions
 
     # Check if file is audio and not already MP3
     on-complete =   when=success hidden -- cmd /c if ""{is-audio}""==""true"" if /i not ""{ext}""=="".mp3"" if not exist ""{path-noext}.mp3"" echo true
-    
+
     # Convert to MP3 if check passed
     on-complete = + when=success hidden -- cmd /c if /i ""{stdout}""==""true"" (ffmpeg -i ""{path}"" -q:a 0 ""{path-noext}.mp3"" && echo success)
-    
+
     # Delete original and update index if conversion succeeded
     on-complete = + when=success hidden update-index -- cmd /c if /i ""{stdout}""==""success"" (del ""{path}"" & echo ""ignored;{path-noext}.mp3"")";
 
@@ -635,7 +655,7 @@ Shortcuts & interactive mode
     s               skip current album
     Esc/q           quit program
     h               print this help text
-    
+
     d:1,2,3         download specific files
     d:start-end     download a range of files
     f               filter folders containing files matching query
@@ -655,7 +675,7 @@ Tips
   Searching
     - It's always best to provide the least input necessary to uniquely identify an album or song.
     - You can download an entire album based on the name of one of its songs by searching for that
-      name with -a/--album.
+      name in album mode: ""artist=ARTIST, title=SONG TITLE"" --album.
     - When searching for a single song with a string input, you can provide the album name in
       addition. The album name will not be included in the query, but search results containing it
       will be preferred (due to pref-strict-album).
@@ -679,7 +699,7 @@ Tips
     pointing it to a local directory containing audio files. This directory will then be used
     instead of searching Soulseek. Example:
 
-    sockseek ""Artist - Album"" -at --mock-files-dir /path/to/dir
+    sockseek ""Artist - Album"" -t --mock-files-dir /path/to/dir
 
     If you plan to use a large music library, you may want to add --mock-files-no-read-tags to
     improve the initial loading performance. But note that reading tags is required when filtering

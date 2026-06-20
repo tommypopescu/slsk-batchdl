@@ -30,6 +30,7 @@ namespace Tests.Cancellation
             var eng = new EngineSettings { Username = "u", Password = "p" };
             var dl = new DownloadSettings();
             dl.Extraction.Input = input;
+            dl.Extraction.RequestedMode = ExtractionMode.Song;
             dl.Output.ParentDir = outputDir;
 
             extra ??= Array.Empty<string>();

@@ -48,6 +48,7 @@ namespace Tests.Eventing
                 var downloadSettings = new DownloadSettings();
                 downloadSettings.Extraction.Input = listFile;
                 downloadSettings.Extraction.InputType = InputType.List;
+                downloadSettings.Extraction.RequestedMode = ExtractionMode.Song;
                 downloadSettings.Output.ParentDir = outputDir;
 
                 var client = new ClientTests.MockSoulseekClient(new List<Soulseek.SearchResponse>());
@@ -1146,4 +1147,3 @@ namespace Tests.Eventing
         }
     }
 }
-

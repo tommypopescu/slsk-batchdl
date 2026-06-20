@@ -2024,6 +2024,9 @@
           }
         }
       },
+      "ExtractionMode": {
+        "type": "integer"
+      },
       "ExtractionSettingsPatchDto": {
         "type": "object",
         "properties": {
@@ -2073,7 +2076,17 @@
               "boolean"
             ]
           },
-          "isAlbum": {
+          "requestedMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExtractionMode"
+              }
+            ]
+          },
+          "upgradeToAlbum": {
             "type": [
               "null",
               "boolean"

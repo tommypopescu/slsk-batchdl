@@ -924,7 +924,8 @@ public class DownloadEngine
             {
                 job.UpdateActivity(JobActivityPhase.Extracting);
                 job.Cts.Token.ThrowIfCancellationRequested();
-                extracted = await extractor.GetTracks(job.Input, job.Config.Extraction, ExtractorContext.ForExtractJob(job, Events, ExtractorLogSource(inputType)));
+                var extraction = EffectiveExtractionSettings(job);
+                extracted = await extractor.GetTracks(job.Input, extraction, ExtractorContext.ForExtractJob(job, Events, ExtractorLogSource(inputType)));
                 job.Cts.Token.ThrowIfCancellationRequested();
             }
             finally
@@ -941,18 +942,29 @@ public class DownloadEngine
             return new(ExtractionFailedOutcome(e), null, extractor);
         }
 
-        extracted = ApplyExtractedResultTransforms(job, extracted);
+        var effectiveExtraction = EffectiveExtractionSettings(job);
+        extracted = ApplyExtractedResultTransforms(job, extracted, effectiveExtraction.UpgradeToAlbum);
         PublishExtractedResult(job, extracted, parentJob);
         return new(JobOutcome.Done(), extracted, extractor);
     }
 
-    Job ApplyExtractedResultTransforms(ExtractJob job, Job extracted)
+    static ExtractionSettings EffectiveExtractionSettings(ExtractJob job)
+    {
+        if (job.RequestedModeOverride == null)
+            return job.Config.Extraction;
+
+        var extraction = SettingsCloner.Clone(job.Config.Extraction);
+        extraction.RequestedMode = job.RequestedModeOverride;
+        return extraction;
+    }
+
+    Job ApplyExtractedResultTransforms(ExtractJob job, Job extracted, bool forceAlbumUpgrade)
     {
         job.Result = extracted;
 
         if (extracted is IUpgradeable upgradeable)
         {
-            var upgraded = upgradeable.Upgrade(job.Config.Extraction.IsAlbum, job.Config.Search.IsAggregate).ToList();
+            var upgraded = upgradeable.Upgrade(forceAlbumUpgrade, job.Config.Search.IsAggregate).ToList();
 
             if (upgraded.Count == 1)
             {

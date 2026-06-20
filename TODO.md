@@ -16,8 +16,6 @@
     - "ask" - Ask what to do: Can be delete, keep, move, or retry. If move is selected ask for the path in a second prompt. Retry will reattempt to download the incomplete files. 
     - Need to think how to implement this cleanly in API.
 
-- (breaking) Make album download mode the default, add -s/--song flag. Don't forget to update it for lists as well (add s: prefix). Also explain that the previous default behavior (default to song search, album with -a) can be restored by adding `song = true` to the config (ensure this works).
-
 - Skip retrieve full folder contents whenever it's already guaranteed to contain all files (e.g. when it was `cd`'d into).
 
 ### Later

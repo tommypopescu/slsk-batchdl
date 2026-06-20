@@ -21,6 +21,7 @@ namespace Tests.FastSearch
             var eng = new EngineSettings { Username = "test_user", Password = "test_pass" };
             var dl = new DownloadSettings();
             dl.Extraction.Input = input;
+            dl.Extraction.RequestedMode = ExtractionMode.Song;
             dl.Output.ParentDir = outputDir;
 
             extraArgs ??= Array.Empty<string>();

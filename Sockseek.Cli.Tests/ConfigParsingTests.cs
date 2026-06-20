@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Sockseek.Api;
 using Sockseek.Core.Models;
 using Sockseek.Core.Jobs;
 using Sockseek.Core;
@@ -54,10 +55,10 @@ namespace Tests.ConfigParsingTests
         }
 
         [TestMethod]
-        public void Defaults_AlbumFalse_AggregateFalse()
+        public void Defaults_NoRequestedMode_AggregateFalse()
         {
             var config = Cfg();
-            Assert.IsFalse(config.Extraction.IsAlbum);
+            Assert.IsNull(config.Extraction.RequestedMode);
             Assert.IsFalse(config.Search.IsAggregate);
         }
 
@@ -89,7 +90,93 @@ namespace Tests.ConfigParsingTests
         public void Album_Flag_SetsAlbumTrue()
         {
             var config = Cfg("--album", "some input");
-            Assert.IsTrue(config.Extraction.IsAlbum);
+            Assert.AreEqual(ExtractionMode.Album, config.Extraction.RequestedMode);
+            Assert.IsFalse(config.Extraction.UpgradeToAlbum);
+        }
+
+        [TestMethod]
+        public void Song_Flag_SetsRequestedModeSong()
+        {
+            var config = Cfg("--song", "some input");
+            Assert.AreEqual(ExtractionMode.Song, config.Extraction.RequestedMode);
+        }
+
+        [TestMethod]
+        public void Song_ConfigKey_SetsRequestedModeSong()
+        {
+            var path = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(path, "song = true\n");
+                var file = ConfigManager.Load(path);
+                var (_, config, _) = ConfigManager.Bind(file, ["some input"]);
+
+                Assert.AreEqual(ExtractionMode.Song, config.Extraction.RequestedMode);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [TestMethod]
+        public void UpgradeToAlbum_Flag_SetsUpgradeToAlbumTrue()
+        {
+            var config = Cfg("--upgrade-to-album", "some input");
+            Assert.IsTrue(config.Extraction.UpgradeToAlbum);
+            Assert.IsNull(config.Extraction.RequestedMode);
+        }
+
+        [TestMethod]
+        public void UpgradeToAlbum_ConfigKey_SetsUpgradeToAlbumTrue()
+        {
+            var path = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(path, "upgrade-to-album = true\n");
+                var file = ConfigManager.Load(path);
+                var (_, config, _) = ConfigManager.Bind(file, ["some input"]);
+
+                Assert.IsTrue(config.Extraction.UpgradeToAlbum);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [TestMethod]
+        public void Song_Flag_IsIncludedInRemoteDownloadSettingsPatch()
+        {
+            var patch = ConfigManager.CreateCliDownloadSettingsPatch(["--song"]);
+            var config = new DownloadSettings();
+
+            DownloadSettingsPatchDtoMapper.ApplyTo(config, patch);
+
+            Assert.AreEqual(ExtractionMode.Song, config.Extraction.RequestedMode);
+        }
+
+        [TestMethod]
+        public void Album_Flag_IsIncludedInRemoteDownloadSettingsPatch()
+        {
+            var patch = ConfigManager.CreateCliDownloadSettingsPatch(["--album"]);
+            var config = new DownloadSettings();
+
+            DownloadSettingsPatchDtoMapper.ApplyTo(config, patch);
+
+            Assert.AreEqual(ExtractionMode.Album, config.Extraction.RequestedMode);
+            Assert.IsFalse(config.Extraction.UpgradeToAlbum);
+        }
+
+        [TestMethod]
+        public void UpgradeToAlbum_Flag_IsIncludedInRemoteDownloadSettingsPatch()
+        {
+            var patch = ConfigManager.CreateCliDownloadSettingsPatch(["--upgrade-to-album"]);
+            var config = new DownloadSettings();
+
+            DownloadSettingsPatchDtoMapper.ApplyTo(config, patch);
+
+            Assert.IsTrue(config.Extraction.UpgradeToAlbum);
         }
 
         [TestMethod]

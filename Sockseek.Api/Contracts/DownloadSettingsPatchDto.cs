@@ -104,7 +104,11 @@ public sealed record ExtractionSettingsPatchDto(
     int? Offset = null,
     bool? Reverse = null,
     bool? RemoveTracksFromSource = null,
-    bool? IsAlbum = null,
+    // Nullable by design: null lets the input source decide. String input and string
+    // lines inside list files then use the 3.0 album default; explicit Song/Album
+    // only affects ambiguous string interpretation.
+    ExtractionMode? RequestedMode = null,
+    bool? UpgradeToAlbum = null,
     bool? SetAlbumMinTrackCount = null,
     bool? SetAlbumMaxTrackCount = null);
 
@@ -290,7 +294,8 @@ public static class DownloadSettingsPatchDtoMapper
         if (patch.Offset is { } offset) target.Offset = offset;
         if (patch.Reverse is { } reverse) target.Reverse = reverse;
         if (patch.RemoveTracksFromSource is { } removeTracksFromSource) target.RemoveTracksFromSource = removeTracksFromSource;
-        if (patch.IsAlbum is { } isAlbum) target.IsAlbum = isAlbum;
+        if (patch.RequestedMode is { } requestedMode) target.RequestedMode = requestedMode;
+        if (patch.UpgradeToAlbum is { } upgradeToAlbum) target.UpgradeToAlbum = upgradeToAlbum;
         if (patch.SetAlbumMinTrackCount is { } setAlbumMinTrackCount) target.SetAlbumMinTrackCount = setAlbumMinTrackCount;
         if (patch.SetAlbumMaxTrackCount is { } setAlbumMaxTrackCount) target.SetAlbumMaxTrackCount = setAlbumMaxTrackCount;
     }
@@ -481,7 +486,8 @@ public static class DownloadSettingsPatchDtoMapper
                 case "Extraction.Offset": Extraction.Offset = Int(op); break;
                 case "Extraction.Reverse": Extraction.Reverse = Bool(op); break;
                 case "Extraction.RemoveTracksFromSource": Extraction.RemoveTracksFromSource = Bool(op); break;
-                case "Extraction.IsAlbum": Extraction.IsAlbum = Bool(op); break;
+                case "Extraction.RequestedMode": Extraction.RequestedMode = op.ExtractionModeValue; break;
+                case "Extraction.UpgradeToAlbum": Extraction.UpgradeToAlbum = Bool(op); break;
                 case "Extraction.SetAlbumMinTrackCount": Extraction.SetAlbumMinTrackCount = Bool(op); break;
                 case "Extraction.SetAlbumMaxTrackCount": Extraction.SetAlbumMaxTrackCount = Bool(op); break;
 
@@ -612,8 +618,9 @@ public static class DownloadSettingsPatchDtoMapper
         public string? Input;
         public InputType? InputType;
         public int? MaxTracks, Offset;
-        public bool? Reverse, RemoveTracksFromSource, IsAlbum, SetAlbumMinTrackCount, SetAlbumMaxTrackCount;
-        public ExtractionSettingsPatchDto Build() => new(Input, InputType, MaxTracks, Offset, Reverse, RemoveTracksFromSource, IsAlbum, SetAlbumMinTrackCount, SetAlbumMaxTrackCount);
+        public ExtractionMode? RequestedMode;
+        public bool? Reverse, RemoveTracksFromSource, UpgradeToAlbum, SetAlbumMinTrackCount, SetAlbumMaxTrackCount;
+        public ExtractionSettingsPatchDto Build() => new(Input, InputType, MaxTracks, Offset, Reverse, RemoveTracksFromSource, RequestedMode, UpgradeToAlbum, SetAlbumMinTrackCount, SetAlbumMaxTrackCount);
     }
 
     private sealed class TransferBuilder

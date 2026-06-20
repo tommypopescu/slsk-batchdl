@@ -17,6 +17,8 @@ public sealed record DownloadSettingOperationDto(
     bool? BoolValue = null,
     PrintOption? PrintOptionValue = null,
     InputType? InputTypeValue = null,
+    // Used with Path = "Extraction.RequestedMode". Null means unset/source-decided mode.
+    ExtractionMode? ExtractionModeValue = null,
     SkipMode? SkipModeValue = null,
     AlbumArtOption? AlbumArtOptionValue = null,
     IReadOnlyList<string>? StringListValue = null,
@@ -177,7 +179,8 @@ public static class DownloadSettingsDeltaMapper
             case "Extraction.Offset": settings.Extraction.Offset = Int(op); break;
             case "Extraction.Reverse": settings.Extraction.Reverse = Bool(op); break;
             case "Extraction.RemoveTracksFromSource": settings.Extraction.RemoveTracksFromSource = Bool(op); break;
-            case "Extraction.IsAlbum": settings.Extraction.IsAlbum = Bool(op); break;
+            case "Extraction.RequestedMode": settings.Extraction.RequestedMode = op.ExtractionModeValue; break;
+            case "Extraction.UpgradeToAlbum": settings.Extraction.UpgradeToAlbum = Bool(op); break;
             case "Extraction.SetAlbumMinTrackCount": settings.Extraction.SetAlbumMinTrackCount = Bool(op); break;
             case "Extraction.SetAlbumMaxTrackCount": settings.Extraction.SetAlbumMaxTrackCount = Bool(op); break;
 
@@ -306,7 +309,8 @@ public static class DownloadSettingsDeltaMapper
         AddIntDiff(operations, "Extraction.Offset", before.Offset, after.Offset);
         AddBoolDiff(operations, "Extraction.Reverse", before.Reverse, after.Reverse);
         AddBoolDiff(operations, "Extraction.RemoveTracksFromSource", before.RemoveTracksFromSource, after.RemoveTracksFromSource);
-        AddBoolDiff(operations, "Extraction.IsAlbum", before.IsAlbum, after.IsAlbum);
+        if (before.RequestedMode != after.RequestedMode) operations.Add(Set("Extraction.RequestedMode", after.RequestedMode));
+        AddBoolDiff(operations, "Extraction.UpgradeToAlbum", before.UpgradeToAlbum, after.UpgradeToAlbum);
         AddBoolDiff(operations, "Extraction.SetAlbumMinTrackCount", before.SetAlbumMinTrackCount, after.SetAlbumMinTrackCount);
         AddBoolDiff(operations, "Extraction.SetAlbumMaxTrackCount", before.SetAlbumMaxTrackCount, after.SetAlbumMaxTrackCount);
     }
@@ -476,6 +480,9 @@ public static class DownloadSettingsDeltaMapper
 
     public static DownloadSettingOperationDto Set(string path, InputType value)
         => new(path, SettingOperationKind.Set, InputTypeValue: value);
+
+    public static DownloadSettingOperationDto Set(string path, ExtractionMode? value)
+        => new(path, SettingOperationKind.Set, ExtractionModeValue: value);
 
     public static DownloadSettingOperationDto Set(string path, SkipMode value)
         => new(path, SettingOperationKind.Set, SkipModeValue: value);

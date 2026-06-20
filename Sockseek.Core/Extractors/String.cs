@@ -12,13 +12,12 @@ namespace Sockseek.Core.Extractors;
 
         public Task<Job> GetTracks(string input, ExtractionSettings extraction, ExtractorContext? context = null)
         {
-            bool isAlbum = extraction.IsAlbum;
-
-            if (input.StartsWith("album://"))
+            bool isAlbum = extraction.RequestedMode switch
             {
-                isAlbum = true;
-                input = input[8..];
-            }
+                ExtractionMode.Album => true,
+                ExtractionMode.Song => false,
+                _ => !HasExplicitNonEmptyTitleKey(input),
+            };
 
             // Catch the common mistake of passing a local file path without --input-type.
             var expanded = Utils.ExpandVariables(input);
@@ -212,5 +211,40 @@ namespace Sockseek.Core.Extractors;
                 Length          = length,
                 ArtistMaybeWrong = artistMaybeWrong,
             };
+        }
+
+        private static bool HasExplicitNonEmptyTitleKey(string input)
+        {
+            var keys = new string[] { "title", "artist", "length", "album", "artist-maybe-wrong", "album-track-count" };
+            string? currentKey = null;
+            string? currentVal = null;
+
+            foreach (var part in input.Split(','))
+            {
+                bool keyval = false;
+
+                if (part.Contains('='))
+                {
+                    var lr = part.Split('=', 2);
+                    lr[0] = lr[0].Trim();
+                    if (lr.Length == 2 && keys.Contains(lr[0]))
+                    {
+                        if (IsNonEmptyTitle(currentKey, currentVal))
+                            return true;
+
+                        currentKey = lr[0];
+                        currentVal = lr[1];
+                        keyval = true;
+                    }
+                }
+
+                if (!keyval && currentVal != null)
+                    currentVal += ',' + part;
+            }
+
+            return IsNonEmptyTitle(currentKey, currentVal);
+
+            static bool IsNonEmptyTitle(string? key, string? value)
+                => key == "title" && !string.IsNullOrWhiteSpace(value);
         }
     }

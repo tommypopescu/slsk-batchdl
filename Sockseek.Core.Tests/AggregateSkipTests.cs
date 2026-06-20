@@ -39,6 +39,7 @@ namespace Tests.EndToEnd
                 var eng = new EngineSettings { Username = "test_user", Password = "test_pass" };
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = "Artist1 - Song1";
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
                 dl.Output.ParentDir = outputDir;
                 dl.Output.WriteIndex = false;
                 dl.Output.WritePlaylist = false;
@@ -98,6 +99,7 @@ namespace Tests.EndToEnd
                 var eng = new EngineSettings { Username = "u", Password = "p" };
                 var dl = new DownloadSettings();
                 dl.Extraction.Input = "artist=Artist";
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
                 dl.Output.ParentDir = outputDir;
                 dl.Output.WriteIndex = true;
                 dl.Output.HasConfiguredIndex = true;
@@ -394,6 +396,7 @@ namespace Tests.EndToEnd
                 // RUN 1: Download track with query length 180
                 var dl1 = new DownloadSettings();
                 dl1.Extraction.Input = "artist=Artist, title=Song, length=180";
+                dl1.Extraction.RequestedMode = ExtractionMode.Song;
                 dl1.Output.ParentDir = outputDir;
                 dl1.Output.WriteIndex = true;
                 dl1.Output.HasConfiguredIndex = true;
@@ -413,6 +416,7 @@ namespace Tests.EndToEnd
                 // RUN 2: Try to download with query length 182
                 var dl2 = new DownloadSettings();
                 dl2.Extraction.Input = "artist=Artist, title=Song, length=182";
+                dl2.Extraction.RequestedMode = ExtractionMode.Song;
                 dl2.Output.ParentDir = outputDir;
                 dl2.Output.WriteIndex = true;
                 dl2.Output.HasConfiguredIndex = true;

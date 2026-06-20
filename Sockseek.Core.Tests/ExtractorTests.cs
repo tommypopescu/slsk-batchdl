@@ -68,6 +68,57 @@ namespace Tests.Extractors
         }
 
         [TestMethod]
+        public async Task GetTracks_WithDefaultMode_ExtractsAlbum()
+        {
+            var result = await extractor.GetTracks("Artist - Album", config.Extraction);
+
+            Assert.IsInstanceOfType(result, typeof(AlbumJob));
+            var q = ((AlbumJob)result).Query;
+            Assert.AreEqual("Artist", q.Artist);
+            Assert.AreEqual("Album", q.Album);
+        }
+
+        [TestMethod]
+        public async Task GetTracks_WithDefaultMode_ExplicitTitleKeyExtractsSong()
+        {
+            var result = await extractor.GetTracks(
+                "artist=Some Artist, title=Some, Title, album=Some Album, length=42",
+                config.Extraction);
+
+            Assert.IsInstanceOfType(result, typeof(SongJob));
+            var q = ((SongJob)result).Query;
+            Assert.AreEqual("Some Artist", q.Artist);
+            Assert.AreEqual("Some, Title", q.Title);
+            Assert.AreEqual("Some Album", q.Album);
+            Assert.AreEqual(42, q.Length);
+        }
+
+        [TestMethod]
+        public async Task GetTracks_WithDefaultMode_ExplicitAlbumKeyWithoutTitleExtractsAlbum()
+        {
+            var result = await extractor.GetTracks("artist=Some Artist, album=Some Album", config.Extraction);
+
+            Assert.IsInstanceOfType(result, typeof(AlbumJob));
+            var q = ((AlbumJob)result).Query;
+            Assert.AreEqual("Some Artist", q.Artist);
+            Assert.AreEqual("Some Album", q.Album);
+        }
+
+        [TestMethod]
+        public async Task GetTracks_WithAlbumMode_ExplicitTitleKeyExtractsAlbumWithSearchHint()
+        {
+            config.Extraction.RequestedMode = ExtractionMode.Album;
+
+            var result = await extractor.GetTracks("artist=Some Artist, title=Some Title", config.Extraction);
+
+            Assert.IsInstanceOfType(result, typeof(AlbumJob));
+            var q = ((AlbumJob)result).Query;
+            Assert.AreEqual("Some Artist", q.Artist);
+            Assert.AreEqual("", q.Album);
+            Assert.AreEqual("Some Title", q.SearchHint);
+        }
+
+        [TestMethod]
         public async Task GetTracks_WithSongMode_ExtractsCorrectTrackInfo()
         {
             config.Extraction.IsAlbum = false;

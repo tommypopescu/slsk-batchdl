@@ -17,8 +17,22 @@ public class ExtractionSettings
 
     public bool RemoveTracksFromSource { get; set; }
 
-    // Result shape hints — tell extractors what job shape to produce
-    public bool IsAlbum { get; set; }
+    // Null means the input source decides. Ambiguous string/list inputs default to album mode,
+    // while concrete sources such as CSV, Spotify, YouTube, and Soulseek links keep their own shape.
+    public ExtractionMode? RequestedMode { get; set; }
+
+    // When true, song-shaped extractor results are converted into album jobs where possible.
+    // This is deliberately separate from RequestedMode: --album controls ambiguous string
+    // interpretation, while --upgrade-to-album opts into source-result conversion.
+    public bool UpgradeToAlbum { get; set; }
+
+    // Convenience bridge for older call sites. New mode decisions should use RequestedMode so
+    // the 3.0 default album behavior does not accidentally force concrete sources into albums.
+    public bool IsAlbum
+    {
+        get => RequestedMode == ExtractionMode.Album;
+        set => RequestedMode = value ? ExtractionMode.Album : ExtractionMode.Song;
+    }
 
     public bool SetAlbumMinTrackCount { get; set; } = true;
 

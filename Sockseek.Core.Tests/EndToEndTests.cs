@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Text;
+using Sockseek.Core;
 using Sockseek.Core.Jobs;
 using Sockseek.Core.Services;
 
@@ -90,6 +91,7 @@ namespace Tests.EndToEnd
                 var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
                 var rootSettings = new DownloadSettings();
                 rootSettings.Extraction.Input = "electric light orchestra twilight";
+                rootSettings.Extraction.RequestedMode = ExtractionMode.Song;
                 rootSettings.Output.ParentDir = outputDir;
                 rootSettings.Output.WritePlaylist = true;
 
@@ -142,6 +144,7 @@ namespace Tests.EndToEnd
                 var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
                 var rootSettings = new DownloadSettings();
                 rootSettings.Extraction.Input = "Test Artist - Test Title";
+                rootSettings.Extraction.RequestedMode = ExtractionMode.Song;
                 rootSettings.Output.ParentDir = outputDir;
                 rootSettings.Output.WriteIndex = true;
                 rootSettings.Output.HasConfiguredIndex = true;
@@ -271,6 +274,7 @@ namespace Tests.EndToEnd
                 var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
                 var settings = new DownloadSettings();
                 settings.Extraction.Input = "Test Artist - Test Title";
+                settings.Extraction.RequestedMode = ExtractionMode.Song;
                 settings.Output.ParentDir = outputDir;
                 settings.Output.NameFormat = "Renamed/{sartist} - {stitle}";
                 settings.Output.WriteIndex = true;
@@ -364,6 +368,7 @@ namespace Tests.EndToEnd
                 var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
                 var settings = new DownloadSettings();
                 settings.Extraction.Input = "Test Artist - Test Title";
+                settings.Extraction.RequestedMode = ExtractionMode.Song;
                 settings.Output.ParentDir = outputDir;
                 settings.Output.WriteIndex = true;
                 settings.Output.HasConfiguredIndex = true;

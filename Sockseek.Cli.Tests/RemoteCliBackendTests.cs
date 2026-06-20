@@ -870,7 +870,7 @@ public class RemoteCliBackendTests
                     "String",
                     Options: new SubmissionOptionsDto(
                         OutputParentDir: outputDir,
-                        DownloadSettings: ConfigManager.CreateCliDownloadSettingsPatch(["Artist - Track One", "--print-results"]))));
+                        DownloadSettings: ConfigManager.CreateCliDownloadSettingsPatch(["Artist - Track One", "--song", "--print-results"]))));
 
             await WaitForWorkflowStateAsync(backend, summary.WorkflowId, ServerWorkflowState.Completed);
 

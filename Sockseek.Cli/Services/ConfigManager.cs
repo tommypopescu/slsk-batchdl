@@ -572,7 +572,11 @@ public static partial class ConfigManager
             case "--alt": case "--aggregate-length-tol":
                 Download(d => d.Search.AggregateLengthTol = Int()); break;
             case "-a": case "--album":
-                Download(d => d.Extraction.IsAlbum = Bool()); break;
+                Download(d => d.Extraction.RequestedMode = Bool() ? ExtractionMode.Album : ExtractionMode.Song); break;
+            case "-s": case "--song":
+                Download(d => d.Extraction.RequestedMode = Bool() ? ExtractionMode.Song : ExtractionMode.Album); break;
+            case "--upgrade-to-album":
+                Download(d => d.Extraction.UpgradeToAlbum = Bool()); break;
             case "-g": case "--aggregate":
                 Download(d => d.Search.IsAggregate = Bool()); break;
             case "--aa": case "--album-art":
@@ -950,6 +954,7 @@ public static partial class ConfigManager
             && left.BoolValue == right.BoolValue
             && left.PrintOptionValue == right.PrintOptionValue
             && left.InputTypeValue == right.InputTypeValue
+            && left.ExtractionModeValue == right.ExtractionModeValue
             && left.SkipModeValue == right.SkipModeValue
             && left.AlbumArtOptionValue == right.AlbumArtOptionValue
             && ListEqual(left.StringListValue, right.StringListValue)
@@ -1032,7 +1037,8 @@ public static partial class ConfigManager
             settings.Extraction.Offset = intSeed;
             settings.Extraction.Reverse = boolSeed;
             settings.Extraction.RemoveTracksFromSource = boolSeed;
-            settings.Extraction.IsAlbum = boolSeed;
+            settings.Extraction.RequestedMode = boolSeed ? ExtractionMode.Album : ExtractionMode.Song;
+            settings.Extraction.UpgradeToAlbum = boolSeed;
             settings.Extraction.SetAlbumMinTrackCount = boolSeed;
             settings.Extraction.SetAlbumMaxTrackCount = boolSeed;
 
@@ -1194,6 +1200,8 @@ public static partial class ConfigManager
         or "--do" or "--deleted-only"
         or "--rfp" or "--rfs" or "--remove-from-source" or "--remove-from-playlist"
         or "-a" or "--album"
+        or "-s" or "--song"
+        or "--upgrade-to-album"
         or "-g" or "--aggregate"
         or "--aao" or "--aa-only" or "--album-art-only"
         or "--eMtc" or "--extract-max-track-count"

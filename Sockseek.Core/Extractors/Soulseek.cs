@@ -16,7 +16,7 @@ namespace Sockseek.Core.Extractors;
         {
             var uri = HttpUtility.UrlDecode(input);
 
-            if (input.EndsWith('/') || extraction.IsAlbum)
+            if (input.EndsWith('/') || extraction.RequestedMode == ExtractionMode.Album)
             {
                 var (username, path) = ParseSoulseekUri(uri);
                 var directory = path.TrimEnd('\\');

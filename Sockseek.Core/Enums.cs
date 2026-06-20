@@ -115,6 +115,20 @@ namespace Sockseek.Core;
         None = -1,
     }
 
+    /// <summary>
+    /// User-requested song/album interpretation for inputs whose shape is ambiguous or
+    /// intentionally overrideable. A null requested mode means "let the source decide":
+    /// string/list string input defaults to Album in 3.0, while concrete sources such as
+    /// CSV rows, Spotify/YouTube playlists, MusicBrainz releases, and Soulseek links keep
+    /// their source-defined song/album shape. Source-result upgrades are controlled separately
+    /// by ExtractionSettings.UpgradeToAlbum.
+    /// </summary>
+    public enum ExtractionMode
+    {
+        Song = 0,
+        Album = 1,
+    }
+
     // backward-compat, remove this
     public enum TrackTypeOld
     {

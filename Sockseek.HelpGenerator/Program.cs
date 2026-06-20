@@ -161,8 +161,8 @@ static string ToPlainText(string markdown)
                 var codeIndent = new string(' ', currentIndent + 2);
                 foreach (var line in codeBlock.Lines.Lines)
                 {
-                    var escapedLine = line.ToString().Replace("\"", "\"\"");
-                    sb.AppendLine($"{codeIndent}{escapedLine}");
+                    var escapedLine = line.ToString().TrimEnd().Replace("\"", "\"\"");
+                    sb.AppendLine(escapedLine.Length == 0 ? "" : $"{codeIndent}{escapedLine}");
                 }
                 sb.AppendLine();
                 break;
