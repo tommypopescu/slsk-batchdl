@@ -661,7 +661,8 @@ public sealed class EngineStateStore
                 retrieveFolderJob.TargetFolder.Username,
                 retrieveFolderJob.NewFilesFoundCount,
                 ToServerFolderRetrievalOutcome(retrieveFolderJob.RetrievalOutcome),
-                retrieveFolderJob.RetrievalCancelled),
+                retrieveFolderJob.RetrievalCancelled,
+                ToAlbumFolderDto(retrieveFolderJob.TargetFolder, includeFiles: true)),
             _ => new GenericJobPayloadDto(job.ToString(noInfo: true))
         };
 

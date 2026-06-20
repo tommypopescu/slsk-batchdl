@@ -175,7 +175,8 @@ public sealed record RetrieveFolderJobPayloadDto(
     string Username,
     int NewFilesFoundCount,
     ServerFolderRetrievalOutcome RetrievalOutcome,
-    bool RetrievalCancelled) : JobPayloadDto;
+    bool RetrievalCancelled,
+    AlbumFolderDto? Folder = null) : JobPayloadDto;
 
 /// <summary>
 /// Fallback payload for job kinds without a specialized DTO.

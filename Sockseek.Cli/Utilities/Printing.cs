@@ -617,7 +617,7 @@ public static class Printing
             var firstResponse = folder.Files[0].ResolvedTarget!.Response;
             string noSlot   = !firstResponse.HasFreeUploadSlot ? ", no upload slots" : "";
             string userInfo = $"{firstResponse.Username} ({((float)firstResponse.UploadSpeed / (1024 * 1024)):F3}MB/s{noSlot})";
-            var (parents, propsList) = FolderInfo(folder.Files.Select(f => f.ResolvedTarget!.File));
+            var (parents, propsList) = FolderInfo(folder.Files.Select(f => f.ResolvedTarget!.File), folder.FolderPath);
 
             string format     = propsList.FirstOrDefault() ?? "";
             string otherProps = propsList.Count > 1 ? " / " + string.Join(" / ", propsList.Skip(1)) : "";
@@ -635,7 +635,7 @@ public static class Printing
         Console.ResetColor();
         PrintAlbumHeader(folder, force);
 
-        string ancestor = Utils.GreatestCommonDirectorySlsk(folder.Files.Select(f => f.ResolvedTarget!.Filename));
+        string ancestor = folder.FolderPath.TrimEnd('\\');
         int i = 0;
         foreach (var af in folder.Files)
         {
@@ -643,7 +643,7 @@ public static class Printing
             {
                 Write($" [{i + 1:D2}]", ConsoleColor.DarkGray, force: force);
             }
-            string customPath = ancestor.Length > 0 ? af.ResolvedTarget!.File.Filename.Replace(ancestor, "").TrimStart('\\') : "";
+            string customPath = PathRelativeToFolder(af.ResolvedTarget!.File.Filename, ancestor);
             WriteLine("    " + DisplayString(af.Query, af.ResolvedTarget!.File, af.ResolvedTarget!.Response, customPath: customPath, showUser: false), ConsoleColor.Gray, force: force);
             i++;
         }
@@ -666,22 +666,33 @@ public static class Printing
         return result.ToString();
     }
 
-    static (string parents, List<string> props) FolderInfo(IEnumerable<SlFile> files)
+    private static string PathRelativeToFolder(string filename, string folderPath)
     {
-        int totalLengthInSeconds = files.Sum(f => f.Length ?? 0);
-        var sampleRates = files.Where(f => f.SampleRate.HasValue).Select(f => f.SampleRate.GetValueOrDefault()).OrderBy(r => r).ToList();
+        if (folderPath.Length == 0)
+            return "";
+
+        return filename.StartsWith(folderPath + "\\", StringComparison.OrdinalIgnoreCase)
+            ? filename[(folderPath.Length + 1)..]
+            : Utils.GetFileNameSlsk(filename);
+    }
+
+    static (string parents, List<string> props) FolderInfo(IEnumerable<SlFile> files, string? folderPath = null)
+    {
+        var fileList = files.ToList();
+        int totalLengthInSeconds = fileList.Sum(f => f.Length ?? 0);
+        var sampleRates = fileList.Where(f => f.SampleRate.HasValue).Select(f => f.SampleRate.GetValueOrDefault()).OrderBy(r => r).ToList();
         int? modeSampleRate = sampleRates.GroupBy(rate => rate).OrderByDescending(g => g.Count()).Select(g => (int?)g.Key).FirstOrDefault();
 
-        var bitRates = files.Where(f => f.BitRate.HasValue).Select(f => f.BitRate.GetValueOrDefault()).ToList();
+        var bitRates = fileList.Where(f => f.BitRate.HasValue).Select(f => f.BitRate.GetValueOrDefault()).ToList();
         double? meanBitrate = bitRates.Count > 0 ? (double?)bitRates.Average() : null;
-        double totalFileSizeInMB = files.Sum(f => f.Size) / (1024.0 * 1024.0);
+        double totalFileSizeInMB = fileList.Sum(f => f.Size) / (1024.0 * 1024.0);
 
         TimeSpan totalTimeSpan = TimeSpan.FromSeconds(totalLengthInSeconds);
         string totalLengthFormatted = totalTimeSpan.TotalHours >= 1
             ? string.Format("{0}:{1:D2}:{2:D2}", (int)totalTimeSpan.TotalHours, totalTimeSpan.Minutes, totalTimeSpan.Seconds)
             : string.Format("{0:D2}:{1:D2}", totalTimeSpan.Minutes, totalTimeSpan.Seconds);
 
-        var mostCommonExtension = files.GroupBy(f => Utils.GetExtensionSlsk(f.Filename))
+        var mostCommonExtension = fileList.GroupBy(f => Utils.GetExtensionSlsk(f.Filename))
             .OrderByDescending(g => Utils.IsMusicExtension(g.Key)).ThenByDescending(g => g.Count()).First().Key.TrimStart('.');
 
         List<string> propsList = new() { mostCommonExtension.ToUpper().Trim(), totalLengthFormatted };
@@ -691,7 +702,9 @@ public static class Printing
             propsList.Add($"{(int)meanBitrate.Value} kbps");
         propsList.Add($"{totalFileSizeInMB:F2} MB");
 
-        string gcp = Utils.GreatestCommonDirectorySlsk(files.Select(x => x.Filename)).TrimEnd('\\');
+        string gcp = string.IsNullOrWhiteSpace(folderPath)
+            ? Utils.GreatestCommonDirectorySlsk(fileList.Select(x => x.Filename)).TrimEnd('\\')
+            : folderPath.TrimEnd('\\');
         int lastIndex = gcp.LastIndexOf('\\');
         if (lastIndex != -1)
         {

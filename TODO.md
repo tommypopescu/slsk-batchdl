@@ -2,7 +2,7 @@
 
 ### 3.0
 
-- Add a way to skip this and all remaining album interactive prompts (`S`, capital case)
+- Add a way to skip this and all remaining album interactive prompts (`S`, capital case/shift)
     - For example: In `-agt` mode or for CSV files with many albums, allows to accept first k albums and then press `S` on the k+1 album, which will skip it and skip/ignore all remaining NEW album prompts.
     - Ensure that even after pressing `S`, if an accepted album fails, the prompt for it still appears with the failed one removed.
     - Also test `t` (try next candidate) in all modes
@@ -15,8 +15,6 @@
     - "keep" - do nothing, keep files where they are
     - "ask" - Ask what to do: Can be delete, keep, move, or retry. If move is selected ask for the path in a second prompt. Retry will reattempt to download the incomplete files. 
     - Need to think how to implement this cleanly in API.
-
-- Skip retrieve full folder contents whenever it's already guaranteed to contain all files (e.g. when it was `cd`'d into).
 
 ### Later
 

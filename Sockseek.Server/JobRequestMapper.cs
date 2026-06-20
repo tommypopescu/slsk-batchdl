@@ -98,6 +98,40 @@ public static class JobRequestMapper
         ArtistMaybeWrong = dto.ArtistMaybeWrong,
     };
 
+    public static AlbumFolder ToAlbumFolder(AlbumFolderDto dto)
+        => new(
+            dto.Username,
+            dto.FolderPath,
+            dto.Files?.Select(ToSongJob).ToList() ?? [])
+        {
+            IsFullyRetrieved = dto.IsFullyRetrieved,
+        };
+
+    private static SongJob ToSongJob(FileCandidateDto dto)
+    {
+        var candidate = ToFileCandidate(dto);
+        var query = Searcher.InferSongQuery(candidate.Filename, new SongQuery());
+        return new SongJob(query) { ResolvedTarget = candidate };
+    }
+
+    private static FileCandidate ToFileCandidate(FileCandidateDto dto)
+        => new(
+            new Soulseek.SearchResponse(
+                dto.Username,
+                token: -1,
+                dto.Peer.HasFreeUploadSlot ?? false,
+                dto.Peer.UploadSpeed ?? -1,
+                queueLength: -1,
+                fileList: null),
+            new Soulseek.File(
+                code: 0,
+                dto.Filename,
+                dto.Size,
+                dto.Extension ?? Path.GetExtension(dto.Filename),
+                dto.Attributes?.Select(attr => new Soulseek.FileAttribute(
+                    Enum.Parse<Soulseek.FileAttributeType>(attr.Type),
+                    attr.Value))));
+
     public static Job CreateJob(JobDraftDto item)
         => item switch
         {
@@ -203,6 +237,66 @@ public static class JobRequestMapper
         => ProjectAlbumJobFolders(albumJob, userSuccessCounts)
             .FirstOrDefault(folder => string.Equals(folder.Username, folderRef.Username, StringComparison.Ordinal)
                 && string.Equals(folder.FolderPath, folderRef.FolderPath, StringComparison.Ordinal));
+
+    public static AlbumFolder ApplySelectedFolderSnapshot(AlbumFolder resolvedFolder, StartFolderDownloadRequestDto request)
+    {
+        if (request.SelectedFolder == null)
+            return resolvedFolder;
+
+        if (!string.Equals(request.SelectedFolder.Username, request.Folder.Username, StringComparison.Ordinal)
+            || !string.Equals(request.SelectedFolder.FolderPath, request.Folder.FolderPath, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Selected folder snapshot does not match the requested folder reference.");
+        }
+
+        ValidateSelectedFolderSnapshot(request.SelectedFolder);
+
+        return ToAlbumFolder(request.SelectedFolder);
+    }
+
+    private static void ValidateSelectedFolderSnapshot(AlbumFolderDto folder)
+    {
+        if (folder.Files == null)
+            return;
+
+        foreach (var file in folder.Files)
+        {
+            if (!string.Equals(file.Username, folder.Username, StringComparison.Ordinal)
+                || !string.Equals(file.Ref.Username, folder.Username, StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Selected folder snapshot contains a file from a different user.");
+            }
+
+            if (!IsInFolderPath(file.Filename, folder.FolderPath)
+                || !IsInFolderPath(file.Ref.Filename, folder.FolderPath))
+            {
+                throw new ArgumentException("Selected folder snapshot contains a file outside the requested folder.");
+            }
+        }
+    }
+
+    public static AlbumFolder? BuildRelatedFolder(AlbumFolderRefDto folderRef, IEnumerable<AlbumFolder> knownFolders)
+    {
+        var seedFiles = knownFolders
+            .Where(folder => string.Equals(folder.Username, folderRef.Username, StringComparison.Ordinal)
+                && PathsAreRelated(folder.FolderPath, folderRef.FolderPath))
+            .SelectMany(folder => folder.Files)
+            .Where(song => song.ResolvedTarget?.Filename.StartsWith(folderRef.FolderPath + "\\", StringComparison.OrdinalIgnoreCase) == true)
+            .ToList();
+
+        return seedFiles.Count == 0
+            ? null
+            : new AlbumFolder(folderRef.Username, folderRef.FolderPath, seedFiles);
+    }
+
+    private static bool PathsAreRelated(string left, string right)
+        => left.Equals(right, StringComparison.OrdinalIgnoreCase)
+            || left.StartsWith(right.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
+            || right.StartsWith(left.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsInFolderPath(string filename, string folderPath)
+        => filename.StartsWith(folderPath.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
+            || filename.Equals(folderPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 
     public static AlbumFolder ApplyFolderDownloadSelection(AlbumFolder folder, AlbumFolderDownloadSelectionDto? selection)
     {

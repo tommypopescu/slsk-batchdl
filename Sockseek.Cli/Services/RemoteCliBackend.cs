@@ -199,7 +199,7 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
     public Task<JobSummaryDto?> StartRetrieveFolderAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
         => api.StartRetrieveFolderAsync(searchJobId, request, ct);
 
-    public Task<int> RetrieveFolderAndWaitAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
+    public Task<RetrieveFolderJobPayloadDto?> RetrieveFolderAndWaitAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
         => api.RetrieveFolderAndWaitAsync(searchJobId, request, ct);
 
     public Task<IReadOnlyList<JobSummaryDto>?> StartFileDownloadsAsync(Guid searchJobId, StartFileDownloadsRequestDto request, CancellationToken ct = default)

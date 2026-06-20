@@ -293,7 +293,8 @@ internal sealed class InteractiveCliCoordinator
                 new AlbumFolderRefDto(selectedFolder.Username, selectedFolder.FolderPath),
                 Options: session.Options,
                 AlbumQuery: session.Query,
-                Selection: selection),
+                Selection: selection,
+                SelectedFolder: selectedFolder.IsFullyRetrieved ? ToAlbumFolderDto(selectedFolder) : null),
             ct);
 
         if (summary == null)
@@ -303,20 +304,26 @@ internal sealed class InteractiveCliCoordinator
         interactiveAlbumSessions[summary.JobId] = session;
     }
 
-    private async Task<int> RunPromptRetrieveFolderAsync(InteractiveAlbumSession session, AlbumFolder folder, CancellationToken ct)
+    private async Task<InteractiveModeManager.RetrievedFolder> RunPromptRetrieveFolderAsync(InteractiveAlbumSession session, AlbumFolder folder, CancellationToken ct)
     {
         Printing.WriteLine($"RetrieveFolderJob: retrieving folder: {folder.FolderPath}", ConsoleColor.Gray, force: true);
 
-        int newFiles = await backend.RetrieveFolderAndWaitAsync(
+        var payload = await backend.RetrieveFolderAndWaitAsync(
             session.SourceSearchJobId,
             new RetrieveFolderRequestDto(
                 new AlbumFolderRefDto(folder.Username, folder.FolderPath),
                 session.Query),
             ct);
 
-        await RefreshRetrievedFolderAsync(session, folder, ct);
-        folder.IsFullyRetrieved = true;
-        return newFiles;
+        var retrievedFolder = payload?.Folder != null
+            ? ToAlbumFolder(payload.Folder)
+            : folder;
+
+        await RefreshRetrievedFolderAsync(session, retrievedFolder, ct);
+        retrievedFolder.IsFullyRetrieved = true;
+        return new InteractiveModeManager.RetrievedFolder(
+            retrievedFolder,
+            payload?.NewFilesFoundCount ?? 0);
     }
 
     private async Task RefreshRetrievedFolderAsync(InteractiveAlbumSession session, AlbumFolder folder, CancellationToken ct)
@@ -467,6 +474,24 @@ internal sealed class InteractiveCliCoordinator
             IsFullyRetrieved = folder.IsFullyRetrieved,
         };
 
+    private static AlbumFolderDto ToAlbumFolderDto(AlbumFolder folder)
+        => new(
+            new AlbumFolderRefDto(folder.Username, folder.FolderPath),
+            folder.Username,
+            folder.FolderPath,
+            new PeerInfoDto(
+                folder.Username,
+                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.HasFreeUploadSlot,
+                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.UploadSpeed),
+            folder.SearchFileCount,
+            folder.SearchAudioFileCount,
+            folder.Files
+                .Select(song => song.ResolvedTarget)
+                .OfType<FileCandidate>()
+                .Select(ToFileCandidateDto)
+                .ToList(),
+            folder.IsFullyRetrieved);
+
     private static SongJob ToSongJob(FileCandidateDto file)
     {
         var candidate = new FileCandidate(
@@ -476,6 +501,19 @@ internal sealed class InteractiveCliCoordinator
         var query = Searcher.InferSongQuery(candidate.Filename, new SongQuery());
         return new SongJob(query) { ResolvedTarget = candidate };
     }
+
+    private static FileCandidateDto ToFileCandidateDto(FileCandidate candidate)
+        => new(
+            new FileCandidateRefDto(candidate.Username, candidate.Filename),
+            candidate.Username,
+            candidate.Filename,
+            new PeerInfoDto(candidate.Username, candidate.Response.HasFreeUploadSlot, candidate.Response.UploadSpeed),
+            candidate.File.Size,
+            candidate.File.BitRate,
+            candidate.File.SampleRate,
+            candidate.File.Length,
+            candidate.File.Extension,
+            candidate.File.Attributes?.Select(x => new FileAttributeDto(x.Type.ToString(), x.Value)).ToList());
 
     private static DownloadBehaviorPolicyDto InteractiveDownloadBehavior(DownloadBehaviorPolicyDto? existing)
         => existing == null

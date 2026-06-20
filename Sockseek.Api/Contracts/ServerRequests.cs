@@ -210,7 +210,8 @@ public sealed record StartFolderDownloadRequestDto(
     AlbumFolderRefDto Folder,
     SubmissionOptionsDto? Options = null,
     AlbumQueryDto? AlbumQuery = null,
-    AlbumFolderDownloadSelectionDto? Selection = null);
+    AlbumFolderDownloadSelectionDto? Selection = null,
+    AlbumFolderDto? SelectedFolder = null);
 
 /// <summary>
 /// Describes how a selected album/folder should be downloaded.

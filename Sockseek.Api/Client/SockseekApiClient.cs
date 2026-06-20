@@ -201,11 +201,11 @@ public sealed class SockseekApiClient
     public async Task<JobSummaryDto?> StartRetrieveFolderAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
         => await PostOptionalSummaryAsync($"api/jobs/{searchJobId}/retrieve-folder", request, ct);
 
-    public async Task<int> RetrieveFolderAndWaitAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
+    public async Task<RetrieveFolderJobPayloadDto?> RetrieveFolderAndWaitAsync(Guid searchJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
     {
         var summary = await StartRetrieveFolderAsync(searchJobId, request, ct);
         if (summary == null)
-            return 0;
+            return null;
 
         while (true)
         {
@@ -217,9 +217,7 @@ public sealed class SockseekApiClient
                 continue;
             }
 
-            return detail.Payload is RetrieveFolderJobPayloadDto payload
-                ? payload.NewFilesFoundCount
-                : 0;
+            return detail.Payload as RetrieveFolderJobPayloadDto;
         }
     }
 

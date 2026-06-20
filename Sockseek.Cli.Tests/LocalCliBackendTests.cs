@@ -225,12 +225,15 @@ public class LocalCliBackendTests
             Assert.AreEqual(1, initialProjection.Items.Count);
             Assert.AreEqual(1, initialProjection.Items[0].Files?.Count);
 
-            var foundCount = await backend.RetrieveFolderAndWaitAsync(
+            var retrieved = await backend.RetrieveFolderAndWaitAsync(
                 searchJob.Id,
                 new RetrieveFolderRequestDto(initialProjection.Items[0].Ref),
                 cts.Token);
 
-            Assert.AreEqual(1, foundCount);
+            Assert.IsNotNull(retrieved);
+            Assert.AreEqual(1, retrieved.NewFilesFoundCount);
+            Assert.IsNotNull(retrieved.Folder);
+            Assert.AreEqual(2, retrieved.Folder.Files?.Count);
 
             var expandedProjection = await backend.GetFolderResultsAsync(searchJob.Id, includeFiles: true, cts.Token);
             Assert.IsNotNull(expandedProjection);
@@ -302,12 +305,15 @@ public class LocalCliBackendTests
             Assert.AreEqual(1, initialProjection.Items[0].Files?.Count);
             Assert.AreEqual(1, albumJob.Results[0].Files.Count);
 
-            var foundCount = await backend.RetrieveFolderAndWaitAsync(
+            var retrieved = await backend.RetrieveFolderAndWaitAsync(
                 albumJob.Id,
                 new RetrieveFolderRequestDto(initialProjection.Items[0].Ref),
                 cts.Token);
 
-            Assert.AreEqual(1, foundCount);
+            Assert.IsNotNull(retrieved);
+            Assert.AreEqual(1, retrieved.NewFilesFoundCount);
+            Assert.IsNotNull(retrieved.Folder);
+            Assert.AreEqual(2, retrieved.Folder.Files?.Count);
             Assert.AreEqual(2, albumJob.Results[0].Files.Count, "Folder retrieval must update the canonical AlbumJob results, not only a projected copy.");
 
             var expandedProjection = await backend.GetFolderResultsAsync(albumJob.Id, includeFiles: true, cts.Token);
@@ -322,6 +328,107 @@ public class LocalCliBackendTests
             cts.Cancel();
             if (Directory.Exists(musicRoot))
                 Directory.Delete(musicRoot, true);
+        }
+    }
+
+    [TestMethod]
+    public async Task LocalCliBackend_StartFolderDownloadAsync_UsesRetrievedFolderSnapshotWithoutRebrowse()
+    {
+        string musicRoot = Path.Combine(Path.GetTempPath(), "Sockseek-cli-backend-parent-retrieve-" + Guid.NewGuid());
+        string outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-cli-backend-parent-retrieve-out-" + Guid.NewGuid());
+        string disc1 = Path.Combine(musicRoot, "Artist", "Album", "Disc 1");
+        string disc2 = Path.Combine(musicRoot, "Artist", "Album", "Disc 2");
+        Directory.CreateDirectory(disc1);
+        Directory.CreateDirectory(disc2);
+        Directory.CreateDirectory(outputDir);
+        File.WriteAllText(Path.Combine(disc1, "01. Artist - Track One.mp3"), "a");
+        File.WriteAllText(Path.Combine(disc2, "02. Artist - Track Two.mp3"), "b");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        try
+        {
+            var engineSettings = new EngineSettings
+            {
+                MockFilesDir = musicRoot,
+                MockFilesReadTags = false,
+            };
+            var downloadSettings = new DownloadSettings
+            {
+                Output =
+                {
+                    ParentDir = outputDir,
+                    FailedAlbumPath = Path.Combine(outputDir, "failed"),
+                },
+            };
+            downloadSettings.Search.NecessaryCond.StrictTitle = true;
+
+            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings));
+            var backend = new LocalCliBackend(engine);
+
+            var searchJob = new SearchJob(new AlbumQuery
+            {
+                Artist = "Artist",
+                Album = "Album",
+                SearchHint = "Track One",
+            });
+
+            engine.Enqueue(searchJob, downloadSettings);
+            var runTask = engine.RunAsync(cts.Token);
+
+            await WaitForConditionAsync(
+                () => searchJob.TerminalOutcome == JobTerminalOutcome.Succeeded,
+                "Timed out waiting for the album search to complete.");
+
+            var retrieved = await backend.RetrieveFolderAndWaitAsync(
+                searchJob.Id,
+                new RetrieveFolderRequestDto(new AlbumFolderRefDto("local", @"Artist\Album")),
+                cts.Token);
+
+            Assert.IsNotNull(retrieved?.Folder);
+            Assert.IsTrue(retrieved.Folder.IsFullyRetrieved);
+            Assert.AreEqual(2, retrieved.Folder.Files?.Count);
+
+            var downloadSummary = await backend.StartFolderDownloadAsync(
+                searchJob.Id,
+                new StartFolderDownloadRequestDto(
+                    retrieved.Folder.Ref,
+                    AlbumQuery: new AlbumQueryDto("Artist", "Album", "Track One", null, false),
+                    SelectedFolder: retrieved.Folder),
+                cts.Token);
+
+            Assert.IsNotNull(downloadSummary);
+            AlbumJob? albumJob = null;
+            await WaitForConditionAsync(
+                () =>
+                {
+                    albumJob = (AlbumJob?)engine.GetJob(downloadSummary.JobId);
+                    return albumJob != null;
+                },
+                "Timed out waiting for selected album job to be registered.");
+
+            Assert.IsNotNull(albumJob);
+            Assert.IsNotNull(albumJob.ResolvedTarget);
+            Assert.IsTrue(albumJob.ResolvedTarget.IsFullyRetrieved, "The selected retrieved folder must remain fully retrieved after handoff to album download.");
+            Assert.AreEqual(2, albumJob.ResolvedTarget.Files.Count, "The download should use the retrieved folder snapshot, not reconstruct a partial folder from old search results.");
+
+            await WaitForConditionAsync(
+                () => albumJob.IsTerminal,
+                "Timed out waiting for selected album download to complete.");
+
+            var retrieveJobs = await backend.GetJobsAsync(
+                new JobQuery(null, null, ServerJobKind.RetrieveFolder, null, IncludeAll: true),
+                cts.Token);
+            Assert.AreEqual(1, retrieveJobs.Count, "A fully retrieved interactive selection should not be browsed again before or after album download.");
+
+            engine.CompleteEnqueue();
+            await runTask;
+        }
+        finally
+        {
+            cts.Cancel();
+            await DeleteDirectoryIfExistsWithRetryAsync(musicRoot);
+            await DeleteDirectoryIfExistsWithRetryAsync(outputDir);
         }
     }
 
@@ -507,5 +614,28 @@ public class LocalCliBackendTests
         }
 
         Assert.Fail(failureMessage);
+    }
+
+    private static async Task DeleteDirectoryIfExistsWithRetryAsync(string path)
+    {
+        for (int attempt = 0; attempt < 10; attempt++)
+        {
+            if (!Directory.Exists(path))
+                return;
+
+            try
+            {
+                Directory.Delete(path, true);
+                return;
+            }
+            catch (IOException) when (attempt < 9)
+            {
+                await Task.Delay(50);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 9)
+            {
+                await Task.Delay(50);
+            }
+        }
     }
 }

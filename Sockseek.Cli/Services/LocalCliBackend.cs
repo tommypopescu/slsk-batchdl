@@ -320,20 +320,26 @@ internal sealed class LocalCliBackend
         return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(retrieveJob.Id) ?? BuildSubmittedJobSummary(retrieveJob, sourceJobId));
     }
 
-    public async Task<int> RetrieveFolderAndWaitAsync(Guid sourceJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
+    public async Task<RetrieveFolderJobPayloadDto?> RetrieveFolderAndWaitAsync(Guid sourceJobId, RetrieveFolderRequestDto request, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
 
         var sourceJob = stateStore.GetJob<Job>(sourceJobId);
         if (sourceJob?.Config == null)
-            return 0;
+            return null;
 
         var folder = FindAlbumFolderForRetrieval(sourceJob, request.Folder, request.AlbumQuery);
         if (folder == null)
             throw new ArgumentException("Requested folder was not found in this job's album candidates.");
 
         var retrieveJob = await engine.ProcessFolderRetrieval(folder, sourceJob);
-        return retrieveJob.NewFilesFoundCount;
+        return new RetrieveFolderJobPayloadDto(
+            retrieveJob.TargetFolder.FolderPath,
+            retrieveJob.TargetFolder.Username,
+            retrieveJob.NewFilesFoundCount,
+            EngineStateStore.ToServerFolderRetrievalOutcome(retrieveJob.RetrievalOutcome),
+            retrieveJob.RetrievalCancelled,
+            ToAlbumFolderDto(retrieveJob.TargetFolder, includeFiles: true));
     }
 
     public Task<IReadOnlyList<JobSummaryDto>?> StartFileDownloadsAsync(Guid sourceJobId, StartFileDownloadsRequestDto request, CancellationToken ct = default)
@@ -416,6 +422,7 @@ internal sealed class LocalCliBackend
         if (folder == null)
             throw new ArgumentException("Requested folder was not found in this job's album candidates.");
 
+        folder = JobRequestMapper.ApplySelectedFolderSnapshot(folder, request);
         folder = JobRequestMapper.ApplyFolderDownloadSelection(folder, request.Selection);
 
         var settings = BuildFollowUpSettings(sourceJob, request.Options);
@@ -681,18 +688,25 @@ internal sealed class LocalCliBackend
             if (projection == null)
                 return null;
 
-            return searchJob.GetAlbumFolders(projection, searchJob.Config.Search).Items.FirstOrDefault(folder => Matches(folder, folderRef));
+            var folders = searchJob.GetAlbumFolders(projection, searchJob.Config.Search).Items;
+            return folders.FirstOrDefault(folder => Matches(folder, folderRef))
+                ?? JobRequestMapper.BuildRelatedFolder(folderRef, folders);
         }
 
         if (sourceJob is AlbumJob albumJob)
             return JobRequestMapper.FindProjectedAlbumFolder(albumJob, folderRef, engine.UserSuccessCounts)
-                ?? albumJob.Results.FirstOrDefault(folder => Matches(folder, folderRef));
+                ?? albumJob.Results.FirstOrDefault(folder => Matches(folder, folderRef))
+                ?? JobRequestMapper.BuildRelatedFolder(folderRef, albumJob.Results);
 
         if (sourceJob is AlbumAggregateJob aggregateJob)
-            return aggregateJob.Albums
+        {
+            var folders = aggregateJob.Albums
                 .Where(album => albumQuery == null || AlbumQueriesEqual(album.Query, JobRequestMapper.ToAlbumQuery(albumQuery)))
                 .SelectMany(album => album.Results)
-                .FirstOrDefault(folder => Matches(folder, folderRef));
+                .ToList();
+            return folders.FirstOrDefault(folder => Matches(folder, folderRef))
+                ?? JobRequestMapper.BuildRelatedFolder(folderRef, folders);
+        }
 
         return null;
     }

@@ -94,33 +94,34 @@ For more examples, see [Examples](#examples).
 
 ## When downloads are wrong or missing
 
-**A wrong song gets downloaded.**  
-Soulseek search treats queries as bags of words, so unrelated files can appear in results. By default, Sockseek is tuned to avoid missing correct files rather than avoiding wrong ones: if the right file exists in the results it will almost always be ranked first, but if it's absent and something else passes the loose default filters, that something else gets downloaded.
+Sockseek searches the Soulseek peer-to-peer network -- Spotify, YouTube, and similar inputs are used only as metadata sources to drive the search, not as audio sources. Most of the time, if the file you want exists on Soulseek, Sockseek will find and download it correctly.
 
+The default settings favor recall over precision: when the correct file is available in results, it will almost always be ranked first. The tradeoff is that if it's absent and something else loosely passes the filters, that something else gets downloaded. The options below let you control where you fall on that spectrum.
+
+**A wrong song or album gets downloaded.**
 To tighten song matching, add one or more strict filters:
 
 ```bash
-sockseek <input> --strict-title --strict-artist
+sockseek "https://open.spotify.com/playlist/blah" --strict-title --strict-artist
 ```
 
-These require that the file path contains the song title and artist name (case-insensitive). 
+These require that the file path contains the song title and artist name (case-insensitive).
 
-**A wrong album folder gets downloaded.**  
-For album downloads, the best first filter is usually the expected track count:
+For album downloads, the cleanest guard is usually the expected track count:
 
 ```bash
 sockseek "Artist - Album" --album-track-count 10
 ```
 
-You can also use inequalities like `10+` or `12-` when expanded or incomplete editions are acceptable. If the album name itself is the problem, `--strict-album` requires the album name to appear in the folder path, but track count is usually the cleaner guard against unrelated folders.
+Use inequalities like `10+` or `12-` when expanded or incomplete editions are acceptable. `--strict-album` requires the album name in the folder path, but track count tends to be cleaner.
 
 **A song or album isn't found at all.**  
 Two common causes:
 
-- **Length mismatch.** If the input comes from Spotify or YouTube, the reported length sometimes differs from the actual CD rip by more than the default 3-second tolerance. Try loosening it: `--length-tol 10` or even `--length-tol 0` to disable length filtering entirely.
-- **Naming differences.** Soulseek itself didn't return any results. You can sometimes use options like `--remove-ft` or `--regex` to clean the query.
+- **Length mismatch.** When using Spotify or YouTube as input, the reported length can differ from the actual file on Soulseek (like from a CD rip) by more than the default 3-second tolerance. Try `--length-tol 10`, or `--length-tol 0` to disable length filtering entirely.
+- **Naming differences.** The Soulseek network returned no results for the query. Options like `--remove-ft` or `--regex` can help clean it up.
 
-Use `--print results-full` to inspect the results returned by Soulseek without downloading.
+Use `--print results-full` to inspect what Soulseek returned without downloading anything.
 
 ## Index
  - [Input types](#input-types)

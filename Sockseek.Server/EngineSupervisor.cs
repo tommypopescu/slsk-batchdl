@@ -512,6 +512,7 @@ public sealed class EngineSupervisor
         if (folder == null)
             throw new ArgumentException("Requested folder was not found in this job's album candidates.");
 
+        folder = JobRequestMapper.ApplySelectedFolderSnapshot(folder, request);
         folder = JobRequestMapper.ApplyFolderDownloadSelection(folder, request.Selection);
 
         var albumQuery = request.AlbumQuery != null
@@ -704,18 +705,25 @@ public sealed class EngineSupervisor
             if (projection == null)
                 return null;
 
-            return searchJob.GetAlbumFolders(projection, searchJob.Config.Search).Items.FirstOrDefault(folder => Matches(folder, folderRef));
+            var folders = searchJob.GetAlbumFolders(projection, searchJob.Config.Search).Items;
+            return folders.FirstOrDefault(folder => Matches(folder, folderRef))
+                ?? JobRequestMapper.BuildRelatedFolder(folderRef, folders);
         }
 
         if (sourceJob is AlbumJob albumJob)
             return JobRequestMapper.FindProjectedAlbumFolder(albumJob, folderRef, GetCurrentEngineUserSuccessCounts())
-                ?? albumJob.Results.FirstOrDefault(folder => Matches(folder, folderRef));
+                ?? albumJob.Results.FirstOrDefault(folder => Matches(folder, folderRef))
+                ?? JobRequestMapper.BuildRelatedFolder(folderRef, albumJob.Results);
 
         if (sourceJob is AlbumAggregateJob aggregateJob)
-            return aggregateJob.Albums
+        {
+            var folders = aggregateJob.Albums
                 .Where(album => albumQuery == null || AlbumQueriesEqual(album.Query, JobRequestMapper.ToAlbumQuery(albumQuery)))
                 .SelectMany(album => album.Results)
-                .FirstOrDefault(folder => Matches(folder, folderRef));
+                .ToList();
+            return folders.FirstOrDefault(folder => Matches(folder, folderRef))
+                ?? JobRequestMapper.BuildRelatedFolder(folderRef, folders);
+        }
 
         return null;
     }

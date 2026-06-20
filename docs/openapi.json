@@ -3251,6 +3251,16 @@
           },
           "retrievalCancelled": {
             "type": "boolean"
+          },
+          "folder": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AlbumFolderDto"
+              }
+            ]
           }
         }
       },
@@ -4960,6 +4970,16 @@
               },
               {
                 "$ref": "#/components/schemas/AlbumFolderDownloadSelectionDto"
+              }
+            ]
+          },
+          "selectedFolder": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AlbumFolderDto"
               }
             ]
           }
