@@ -804,7 +804,8 @@ public class DownloadEngine
     {
         if (job.TerminalOutcome is JobTerminalOutcome.Failed
             or JobTerminalOutcome.PartialSuccess
-            || (job.TerminalOutcome == JobTerminalOutcome.Skipped && job.SkipReason != JobSkipReason.AlreadyExists))
+            || (job.TerminalOutcome == JobTerminalOutcome.Skipped
+                && job.SkipReason is not JobSkipReason.AlreadyExists and not JobSkipReason.Manual))
             return true;
 
         return job switch
@@ -1110,6 +1111,12 @@ public class DownloadEngine
         => JobOutcome.Failed(
             reason,
             SockseekLog.ExceptionSummary(exception),
+            SockseekLog.ExceptionDetail(exception));
+
+    static JobOutcome OrganizationFailureOutcome(FileOrganizationException exception)
+        => JobOutcome.Failed(
+            JobFailureReason.Other,
+            exception.Message,
             SockseekLog.ExceptionDetail(exception));
 
     static JobOutcome NoMatchingDiscoveryOutcome(
@@ -1677,7 +1684,17 @@ public class DownloadEngine
             : completion.Outcome;
         if (!string.IsNullOrEmpty(job.DownloadPath))
             job.UpdateActivity(JobActivityPhase.Organizing);
-        OrganizeAlbumIfNeeded(job, organizer, images.ChosenFiles, images.AdditionalImages);
+        try
+        {
+            OrganizeAlbumIfNeeded(job, organizer, images.ChosenFiles, images.AdditionalImages);
+        }
+        catch (FileOrganizationException ex)
+        {
+            SockseekLog.Jobs.Error($"[{job.DisplayId}] AlbumJob: {ex.Message} {SockseekLog.ExceptionSummary(ex.InnerException ?? ex)}");
+            outcome = OrganizationFailureOutcome(ex);
+            if (job.ResolvedTarget != null)
+                HandleIncompleteAlbumIfNeeded(job, job.ResolvedTarget, outcome, config);
+        }
         RefreshDownloadedFileCache(images.ChosenFiles);
         RefreshDownloadedFileCache(images.AdditionalImages);
 
@@ -2191,7 +2208,7 @@ public class DownloadEngine
     {
         ApplyPreCommitOutcomeMetadata(song, outcome);
         if (outcome.FailureReason != JobFailureReason.Cancelled)
-            await CompleteSongBeforeCommit(song, parentJob, outcome, jobCtx, organizer, organize);
+            outcome = await CompleteSongBeforeCommit(song, parentJob, outcome, jobCtx, organizer, organize);
 
         outcome = OutcomeWithCurrentMetadata(song, outcome);
         CommitOutcome(song, outcome);
@@ -2204,15 +2221,24 @@ public class DownloadEngine
         }
     }
 
-    async Task CompleteSongBeforeCommit(SongJob song, Job parentJob, JobOutcome outcome, JobContext jobCtx, FileManager organizer, bool organize)
+    async Task<JobOutcome> CompleteSongBeforeCommit(SongJob song, Job parentJob, JobOutcome outcome, JobContext jobCtx, FileManager organizer, bool organize)
     {
         if (outcome.TerminalOutcome == JobTerminalOutcome.Succeeded && organize)
         {
             lock (_registry.DownloadedFiles)
             {
                 song.UpdateActivity(JobActivityPhase.Organizing);
-                organizer.OrganizeSong(song);
-                RefreshDownloadedFileCache(song, outcome);
+                try
+                {
+                    organizer.OrganizeSong(song);
+                    RefreshDownloadedFileCache(song, outcome);
+                }
+                catch (FileOrganizationException ex)
+                {
+                    SockseekLog.Jobs.Error($"[{song.DisplayId}] SongJob: {ex.Message} {SockseekLog.ExceptionSummary(ex.InnerException ?? ex)}");
+                    CleanupStagedDownloadAfterOrganizationFailure(song, parentJob.Config.Output);
+                    return OrganizationFailureOutcome(ex);
+                }
             }
         }
 
@@ -2220,6 +2246,30 @@ public class DownloadEngine
         await RunOnCompleteIfApplicable(parentJob, song, jobCtx, postProcessOutcome);
 
         RefreshDownloadedFileCache(song, postProcessOutcome);
+        return postProcessOutcome;
+    }
+
+    static void CleanupStagedDownloadAfterOrganizationFailure(SongJob song, OutputSettings output)
+    {
+        if (string.IsNullOrWhiteSpace(song.DownloadPath))
+            return;
+
+        var parentDir = string.IsNullOrWhiteSpace(output.ParentDir)
+            ? Directory.GetCurrentDirectory()
+            : output.ParentDir;
+        var stagingRoot = Path.Join(parentDir, ".sockseek-staging");
+        if (!Utils.IsInDirectory(song.DownloadPath, stagingRoot, strict: true))
+            return;
+
+        try
+        {
+            Utils.DeleteFileAndParentsIfEmpty(song.DownloadPath, parentDir);
+            song.DownloadPath = null;
+        }
+        catch (Exception ex)
+        {
+            SockseekLog.Jobs.Warn($"[{song.DisplayId}] SongJob: failed to clean staged file '{song.DownloadPath}' after organization failure: {SockseekLog.ExceptionSummary(ex)}");
+        }
     }
 
     async Task RunOnCompleteIfApplicable(Job job, SongJob? song, JobContext ctx, JobOutcome outcome)

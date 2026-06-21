@@ -1672,6 +1672,27 @@ public class CliProgressReporterTests
     }
 
     [TestMethod]
+    public void Printing_PrintComplete_CountsManualSkipsSeparately()
+    {
+        SockseekLog.RemoveNonFileOutputs();
+        var messages = new List<string>();
+        SockseekLog.AddConsole(writer: (message, _) => messages.Add(message));
+
+        var skipped = new AlbumJob(new AlbumQuery { Artist = "Artist One", Album = "Album One" });
+        skipped.SetSkipped(JobSkipReason.Manual);
+        var failed = new AlbumJob(new AlbumQuery { Artist = "Artist Two", Album = "Album Two" });
+        failed.Fail(JobFailureReason.NoMatchingResults);
+
+        var queue = new JobList("root", [skipped, failed]);
+
+        Printing.PrintComplete(queue);
+
+        Assert.IsTrue(
+            messages.Any(message => message.Contains("Completed: 0 succeeded, 1 skipped, 1 failed.", StringComparison.Ordinal)),
+            string.Join(Environment.NewLine, messages));
+    }
+
+    [TestMethod]
     public void Printing_PrintPlannedOutput_DoesNotPrintFailedExtractAsDownload()
     {
         SockseekLog.RemoveNonFileOutputs();

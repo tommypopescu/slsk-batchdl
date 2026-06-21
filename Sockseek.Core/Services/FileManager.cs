@@ -7,6 +7,19 @@ using Sockseek.Core.Settings;
 
 namespace Sockseek.Core.Services;
 
+public sealed class FileOrganizationException : IOException
+{
+    public FileOrganizationException(string message, string sourcePath, string targetPath, Exception innerException)
+        : base(message, innerException)
+    {
+        SourcePath = sourcePath;
+        TargetPath = targetPath;
+    }
+
+    public string SourcePath { get; }
+    public string TargetPath { get; }
+}
+
 
 // Context object passed to VarExtractors lambdas and name-format helpers.
 // Constructed from a SongJob so name format works uniformly across single songs and album files.
@@ -180,8 +193,18 @@ public partial class FileManager
 
             if (Utils.NormalizedPath(newFilePath) != Utils.NormalizedPath(song.DownloadPath))
             {
-                try { Utils.MoveAndDeleteParent(song.DownloadPath, newFilePath, output.ParentDir); }
-                catch (Exception ex) { SockseekLog.Jobs.Error($"[{song.DisplayId}] SongJob: failed to move organized file from '{song.DownloadPath}' to '{newFilePath}': {ex}"); return; }
+                try
+                {
+                    Utils.MoveAndDeleteParent(song.DownloadPath, newFilePath, output.ParentDir);
+                }
+                catch (Exception ex)
+                {
+                    throw new FileOrganizationException(
+                        $"Failed to move organized file from '{song.DownloadPath}' to '{newFilePath}'.",
+                        song.DownloadPath,
+                        newFilePath,
+                        ex);
+                }
             }
 
             song.DownloadPath = newFilePath;

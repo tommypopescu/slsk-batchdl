@@ -459,6 +459,12 @@ public static partial class ConfigManager
                 return 1;
             return ParseInt(value, flag);
         }
+        int Port()
+        {
+            if (probe != null)
+                return 5030;
+            return ParsePort(value, flag);
+        }
         double Double()
         {
             if (probe != null)
@@ -540,7 +546,7 @@ public static partial class ConfigManager
             case "--server-ip": case "--daemon-ip": case "--api-ip":
                 Daemon(d => d.ListenIp = value); break;
             case "--server-port": case "--daemon-port": case "--api-port":
-                Daemon(d => d.ListenPort = Int()); break;
+                Daemon(d => d.ListenPort = Port()); break;
             case "--remote": case "--server-url":
                 Remote(r => r.ServerUrl = value); break;
 
@@ -1405,6 +1411,14 @@ public static partial class ConfigManager
         var value = ParseInt(s, flag);
         if (value < min)
             throw new Exception($"Input error: Option '{flag}' must be at least {min}, got '{s}'");
+        return value;
+    }
+
+    private static int ParsePort(string s, string flag)
+    {
+        var value = ParseInt(s, flag);
+        if (value is < 1 or > 65535)
+            throw new Exception($"Input error: Option '{flag}' must be a TCP port between 1 and 65535, got '{s}'");
         return value;
     }
 

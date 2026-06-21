@@ -1,6 +1,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sockseek.Cli;
 using Sockseek.Core;
+using Sockseek.Core.Jobs;
+using Sockseek.Core.Models;
 using System.Text.Json;
 
 namespace Tests.Cli;
@@ -22,6 +24,50 @@ public class CliExitCodeTests
         var exitCode = await Sockseek.Cli.Program.MainCore(["daemon", "--no-config", "--server-ip", "999.1.1.1"]);
 
         Assert.AreEqual(Sockseek.Cli.Program.CliExitCode.UsageError, exitCode);
+    }
+
+    [TestMethod]
+    public async Task MainCore_InvalidDaemonPort_ReturnsUsageError()
+    {
+        var exitCode = await Sockseek.Cli.Program.MainCore(["daemon", "--no-config", "--server-port", "70000"]);
+
+        Assert.AreEqual(Sockseek.Cli.Program.CliExitCode.UsageError, exitCode);
+    }
+
+    [TestMethod]
+    public void EnsureDaemonEndpointAvailable_PortCollision_ThrowsConciseException()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            var ex = Assert.ThrowsException<Sockseek.Cli.Program.DaemonEndpointUnavailableException>(() =>
+                Sockseek.Cli.Program.EnsureDaemonEndpointAvailable(new DaemonSettings
+                {
+                    ListenIp = "127.0.0.1",
+                    ListenPort = port,
+                }));
+
+            StringAssert.Contains(ex.Message, "Cannot start Sockseek daemon on");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [TestMethod]
+    public void DetermineLocalExitCode_ManualSkipsOnly_ReturnsSuccess()
+    {
+        var skipped = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+        skipped.SetSkipped(JobSkipReason.Manual);
+        var queue = new JobList("root", [skipped]);
+        queue.SetDone();
+
+        var exitCode = Sockseek.Cli.Program.DetermineLocalExitCode(queue);
+
+        Assert.AreEqual(Sockseek.Cli.Program.CliExitCode.Success, exitCode);
     }
 
     [TestMethod]

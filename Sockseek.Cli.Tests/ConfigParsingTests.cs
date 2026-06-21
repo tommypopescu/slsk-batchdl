@@ -778,6 +778,14 @@ namespace Tests.ConfigParsingTests
         }
 
         [TestMethod]
+        public void ServerPort_RejectsOutOfRangeValue()
+        {
+            var ex = Assert.ThrowsException<Exception>(() => BindAll("--server-port", "70000"));
+
+            StringAssert.Contains(ex.Message, "must be a TCP port between 1 and 65535");
+        }
+
+        [TestMethod]
         public void Remote_SetsRemoteUrl()
         {
             var (_, _, _, _, remote) = BindAll("--remote", "http://127.0.0.1:5030");

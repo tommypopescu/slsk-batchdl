@@ -463,19 +463,26 @@ public static class Printing
 
     public static void PrintComplete(JobList queue)
     {
-        var (successes, fails) = CountUserFacingCompletions(queue);
-        PrintComplete(successes, fails);
+        var (successes, fails, skipped) = CountUserFacingCompletionsDetailed(queue);
+        PrintComplete(successes, fails, skipped);
     }
 
     internal static (int Successes, int Fails) CountUserFacingCompletions(JobList queue)
     {
+        var (successes, fails, _) = CountUserFacingCompletionsDetailed(queue);
+        return (successes, fails);
+    }
+
+    internal static (int Successes, int Fails, int Skipped) CountUserFacingCompletionsDetailed(JobList queue)
+    {
         int successes = 0, fails = 0;
+        int skipped = 0;
         var visited = new HashSet<Guid>();
 
         foreach (var job in queue.Jobs)
-            CountUserFacingCompletion(job, parent: null, visited, ref successes, ref fails);
+            CountUserFacingCompletion(job, parent: null, visited, ref successes, ref fails, ref skipped);
 
-        return (successes, fails);
+        return (successes, fails, skipped);
     }
 
     private static void CountUserFacingCompletion(
@@ -483,7 +490,8 @@ public static class Printing
         Job? parent,
         ISet<Guid> visited,
         ref int successes,
-        ref int fails)
+        ref int fails,
+        ref int skipped)
     {
         if (!visited.Add(job.Id))
             return;
@@ -492,22 +500,22 @@ public static class Printing
         {
             case ExtractJob extractJob:
                 if (extractJob.Result != null)
-                    CountUserFacingCompletion(extractJob.Result, parent: null, visited, ref successes, ref fails);
+                    CountUserFacingCompletion(extractJob.Result, parent: null, visited, ref successes, ref fails, ref skipped);
                 return;
 
             case JobList jobList:
                 foreach (var child in jobList.Jobs)
-                    CountUserFacingCompletion(child, jobList, visited, ref successes, ref fails);
+                    CountUserFacingCompletion(child, jobList, visited, ref successes, ref fails, ref skipped);
                 return;
 
             case AggregateJob aggregateJob:
                 foreach (var song in aggregateJob.Songs)
-                    CountUserFacingCompletion(song, aggregateJob, visited, ref successes, ref fails);
+                    CountUserFacingCompletion(song, aggregateJob, visited, ref successes, ref fails, ref skipped);
                 return;
 
             case AlbumAggregateJob albumAggregateJob:
                 foreach (var album in albumAggregateJob.Albums)
-                    CountUserFacingCompletion(album, albumAggregateJob, visited, ref successes, ref fails);
+                    CountUserFacingCompletion(album, albumAggregateJob, visited, ref successes, ref fails, ref skipped);
                 return;
 
             case RetrieveFolderJob:
@@ -518,20 +526,29 @@ public static class Printing
             return;
 
         if (IsSuccessfulCompletion(job)) successes++;
+        else if (IsManualSkipCompletion(job)) skipped++;
         else if (job.IsUnsuccessfulTerminal) fails++;
     }
 
     public static void PrintComplete(int successes, int fails)
+        => PrintComplete(successes, fails, skipped: 0);
+
+    public static void PrintComplete(int successes, int fails, int skipped)
     {
-        if (successes + fails > 1 || fails > 0)
+        if (successes + fails + skipped > 1 || fails > 0 || skipped > 0)
         {
             WriteLine();
-            SockseekLog.Info($"Completed: {successes} succeeded, {fails} failed.");
+            var skippedPart = skipped > 0 ? $", {skipped} skipped" : "";
+            SockseekLog.Info($"Completed: {successes} succeeded{skippedPart}, {fails} failed.");
         }
     }
 
     public static bool IsSuccessfulCompletion(Job job)
         => job.IsSuccessfulTerminal;
+
+    public static bool IsManualSkipCompletion(Job job)
+        => job.TerminalOutcome == JobTerminalOutcome.Skipped
+            && job.SkipReason == JobSkipReason.Manual;
 
 
     public static void PrintTracksTbd(List<SongJob> toBeDownloaded, List<SongJob> existing, List<SongJob> notFound,

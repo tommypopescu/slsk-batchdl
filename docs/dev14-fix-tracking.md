@@ -28,6 +28,11 @@
 - SS3-020: daemon startup now warns when binding the unauthenticated API to all interfaces (`0.0.0.0` or `::`); loopback bindings remain quiet.
 - SS3-021: oversized search submissions are rejected before job/workflow state is created; raw `queryText` and structured search text fields now have bounded lengths.
 - SS3-002: redirected/headless daemon startup has been rechecked on the current branch with stdout/stderr redirected; the daemon opened `/api/server/info` successfully and daemon mode does not start the console-input loop.
+- SS3-022: automatic album profiles with required formats were rechecked against the current album-quality pipeline; no separate auto-profile production bug was found. Added a focused runtime regression proving an auto profile that sets `format = ogg` and `path = ...` rejects MP3-only album folders.
+- SS3-023: name-format organization failures now fail the song/album before terminal commit instead of reporting success; Sockseek-owned staging residue is cleaned after failed organization. Added a regression for a blocked name-formatted final path.
+- SS3-024: manual interactive skips are counted as skipped instead of failed in final CLI summaries, and manual-skip-only workflows do not force exit code 1.
+- SS3-025: out-of-range daemon ports are rejected during config binding with an actionable usage diagnostic.
+- SS3-026: daemon startup now preflights the requested listen endpoint and reports port collisions before Kestrel starts, avoiding normal-verbosity framework stacks for the common collision path.
 
 ## Still Pending
 

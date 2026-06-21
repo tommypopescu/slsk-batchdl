@@ -565,6 +565,46 @@ namespace Tests.Core
         }
 
         [TestMethod]
+        public async Task SongJob_FailsWhenNameFormatOrganizationCannotReplaceBlockedPath()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-name-format-blocked-song-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var file = TestHelpers.CreateSlFile(@"Music\Mock Artist - Standalone Song.mp3", size: 10_000, length: 180);
+            var response = new SearchResponse("user1", 1, true, 100, 0, [file]);
+            var testClient = new ClientTests.MockSoulseekClient([response]);
+            var finalPath = Path.Combine(outputDir, "Standalone Song.mp3");
+            Directory.CreateDirectory(finalPath);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var dl = new DownloadSettings();
+                dl.Output.ParentDir = outputDir;
+                dl.Output.NameFormat = "{stitle}";
+                dl.Skip.SkipExisting = false;
+                dl.Transfer.MaxDownloadRetries = 1;
+
+                var song = new SongJob(new SongQuery { Artist = "Mock Artist", Title = "Standalone Song" });
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app.Enqueue(song, dl);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                Assert.IsTrue(song.IsUnsuccessfulTerminal, "A song whose name-formatted final placement fails must not be reported as successful.");
+                Assert.AreEqual(JobFailureReason.Other, song.FailureReason);
+                StringAssert.Contains(song.FailureMessage ?? "", "Failed to move organized file");
+                Assert.IsTrue(Directory.Exists(finalPath), "The blocked destination directory should be left untouched.");
+                Assert.IsFalse(Directory.Exists(Path.Combine(outputDir, ".sockseek-staging")), "Failed organization should clean Sockseek-owned staging residue.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task AlbumJob_FailsWhenTrackFinalRenameCannotReplaceBlockedPath()
         {
             var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-final-rename-blocked-album-" + Guid.NewGuid());

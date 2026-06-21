@@ -130,6 +130,11 @@ internal static partial class Program
                 SockseekLog.Error(ex.Message);
                 return CliExitCode.UsageError;
             }
+            catch (DaemonEndpointUnavailableException ex)
+            {
+                SockseekLog.Error(ex.Message);
+                return CliExitCode.WorkFailed;
+            }
             catch (Exception ex)
             {
                 SockseekLog.Fatal($"Unhandled daemon error: {SockseekLog.ExceptionSummary(ex)}");
@@ -708,7 +713,7 @@ internal static partial class Program
         if (allJobs.Any(job => job.TerminalOutcome == JobTerminalOutcome.Cancelled))
             return CliExitCode.Cancelled;
 
-        var (_, fails) = Printing.CountUserFacingCompletions(queue);
+        var (_, fails, _) = Printing.CountUserFacingCompletionsDetailed(queue);
         if (fails > 0)
             return CliExitCode.WorkFailed;
 
@@ -747,8 +752,9 @@ internal static partial class Program
 
         int successes = 0;
         int fails = 0;
+        int skipped = 0;
         foreach (var summary in summaries)
-            CountRemoteUserFacingCompletion(summary, jobsById, supersededSourceJobIds, ref successes, ref fails);
+            CountRemoteUserFacingCompletion(summary, jobsById, supersededSourceJobIds, ref successes, ref fails, ref skipped);
 
         if (fails > 0 || workflow.Summary.State == ServerWorkflowState.Failed)
             return CliExitCode.WorkFailed;
@@ -842,10 +848,11 @@ internal static partial class Program
 
         int successes = 0;
         int fails = 0;
+        int skipped = 0;
         foreach (var summary in summaries)
-            CountRemoteUserFacingCompletion(summary, jobsById, supersededSourceJobIds, ref successes, ref fails);
+            CountRemoteUserFacingCompletion(summary, jobsById, supersededSourceJobIds, ref successes, ref fails, ref skipped);
 
-        Printing.PrintComplete(successes, fails);
+        Printing.PrintComplete(successes, fails, skipped);
     }
 
     private static void CountRemoteUserFacingCompletion(
@@ -853,7 +860,8 @@ internal static partial class Program
         IReadOnlyDictionary<Guid, JobSummaryDto> jobsById,
         IReadOnlySet<Guid> supersededSourceJobIds,
         ref int successes,
-        ref int fails)
+        ref int fails,
+        ref int skipped)
     {
         if (supersededSourceJobIds.Contains(summary.JobId))
             return;
@@ -869,28 +877,19 @@ internal static partial class Program
             return;
         }
 
-        CountSummary(summary, ref successes, ref fails);
+        CountSummary(summary, ref successes, ref fails, ref skipped);
     }
 
     private static bool IsRemoteInfrastructureJobKind(ServerJobKind kind)
         => kind is ServerJobKind.Extract or ServerJobKind.JobList or ServerJobKind.RetrieveFolder
             or ServerJobKind.Aggregate or ServerJobKind.AlbumAggregate;
 
-    private static void CountSong(SongJobPayloadDto song, JobSummaryDto? summary, ref int successes, ref int fails)
-    {
-        var outcome = song.TerminalOutcome ?? summary?.TerminalOutcome ?? ServerJobTerminalOutcome.None;
-        var skipReason = song.SkipReason ?? summary?.SkipReason ?? ServerJobSkipReason.None;
-
-        if (IsSuccessfulRemoteOutcome(outcome, skipReason))
-            successes++;
-        else if (IsFailedRemoteOutcome(outcome, skipReason))
-            fails++;
-    }
-
-    private static void CountSummary(JobSummaryDto summary, ref int successes, ref int fails)
+    private static void CountSummary(JobSummaryDto summary, ref int successes, ref int fails, ref int skipped)
     {
         if (IsSuccessfulRemoteOutcome(summary.TerminalOutcome, summary.SkipReason))
             successes++;
+        else if (IsManualSkipRemoteOutcome(summary.TerminalOutcome, summary.SkipReason))
+            skipped++;
         else if (IsFailedRemoteOutcome(summary.TerminalOutcome, summary.SkipReason))
             fails++;
     }
@@ -899,11 +898,15 @@ internal static partial class Program
         => outcome == ServerJobTerminalOutcome.Succeeded
             || (outcome == ServerJobTerminalOutcome.Skipped && skipReason == ServerJobSkipReason.AlreadyExists);
 
+    private static bool IsManualSkipRemoteOutcome(ServerJobTerminalOutcome outcome, ServerJobSkipReason skipReason)
+        => outcome == ServerJobTerminalOutcome.Skipped && skipReason == ServerJobSkipReason.Manual;
+
     private static bool IsFailedRemoteOutcome(ServerJobTerminalOutcome outcome, ServerJobSkipReason skipReason)
         => (outcome is ServerJobTerminalOutcome.Failed
                 or ServerJobTerminalOutcome.Cancelled
                 or ServerJobTerminalOutcome.PartialSuccess)
-            || (outcome == ServerJobTerminalOutcome.Skipped && skipReason != ServerJobSkipReason.AlreadyExists);
+            || (outcome == ServerJobTerminalOutcome.Skipped
+                && skipReason is not ServerJobSkipReason.AlreadyExists and not ServerJobSkipReason.Manual);
 
     private static IEnumerable<SongJobPayloadDto> ResolvedAlbumSongs(AlbumJobPayloadDto album)
         => album.Tracks?.Where(song => Utils.IsMusicFile(song.ResolvedFilename ?? "")) ?? [];
@@ -1176,6 +1179,7 @@ internal static partial class Program
         DaemonSettings daemonSettings)
     {
         var url = BuildDaemonListenUrl(daemonSettings);
+        EnsureDaemonEndpointAvailable(daemonSettings);
         var options = new ServerOptions
         {
             Engine = SettingsCloner.Clone(engineSettings),
@@ -1197,6 +1201,25 @@ internal static partial class Program
         await app.RunAsync();
     }
 
+    internal static void EnsureDaemonEndpointAvailable(DaemonSettings daemonSettings)
+    {
+        if (!System.Net.IPAddress.TryParse(daemonSettings.ListenIp, out var ipAddress))
+            throw new ArgumentException($"Invalid daemon listen IP '{daemonSettings.ListenIp}'. Use a valid IP address such as 127.0.0.1, 0.0.0.0, ::1, or ::.");
+
+        try
+        {
+            var listener = new System.Net.Sockets.TcpListener(ipAddress, daemonSettings.ListenPort);
+            listener.Start();
+            listener.Stop();
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or InvalidOperationException)
+        {
+            throw new DaemonEndpointUnavailableException(
+                $"Cannot start Sockseek daemon on {BuildDaemonListenUrl(daemonSettings)}: {SockseekLog.ExceptionSummary(ex)}",
+                ex);
+        }
+    }
+
     internal static string BuildDaemonListenUrl(DaemonSettings daemonSettings)
     {
         if (!System.Net.IPAddress.TryParse(daemonSettings.ListenIp, out var ipAddress))
@@ -1216,6 +1239,14 @@ internal static partial class Program
 
         return ipAddress.Equals(System.Net.IPAddress.Any)
             || ipAddress.Equals(System.Net.IPAddress.IPv6Any);
+    }
+
+    internal sealed class DaemonEndpointUnavailableException : Exception
+    {
+        public DaemonEndpointUnavailableException(string message, Exception innerException)
+            : base(message, innerException)
+        {
+        }
     }
 
     private static SongJob ToSongJob(SongJobPayloadDto song)

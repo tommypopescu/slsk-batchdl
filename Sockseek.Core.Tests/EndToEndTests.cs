@@ -301,6 +301,61 @@ namespace Tests.EndToEnd
         }
 
         [TestMethod]
+        public async Task AutoProfile_AlbumRequiredFormat_IsAppliedDuringRuntimeSearch()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-auto-profile-format-out-" + Guid.NewGuid());
+            var autoOutDir = Path.Combine(outputDir, "auto-out");
+            Directory.CreateDirectory(outputDir);
+
+            var mp3 = TestHelpers.CreateSlFile(@"Music\Artist\Album\01. Artist - Song.mp3", length: 180);
+            var response = new Soulseek.SearchResponse("user1", 1, true, 100, 0, [mp3]);
+            var testClient = new ClientTests.MockSoulseekClient([response]);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var rootSettings = new DownloadSettings();
+                rootSettings.Output.ParentDir = outputDir;
+                rootSettings.Search.NoBrowseFolder = true;
+
+                var autoProfile = new SettingsProfile
+                {
+                    Name = "album-ogg",
+                    Condition = "album",
+                    Download = new DownloadSettingsPatch(),
+                };
+                autoProfile.Download.Add(dl => dl.Output.ParentDir = autoOutDir);
+                autoProfile.Download.Add(dl => dl.Search.NecessaryCond.Formats = ["ogg"]);
+
+                var resolver = new ProfileJobSettingsResolver(
+                    rootSettings,
+                    defaultProfile: null,
+                    autoProfiles: [autoProfile],
+                    namedProfiles: [],
+                    cliProfile: null,
+                    normalize: SettingsNormalizer.Normalize);
+
+                var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng), resolver);
+                app.Enqueue(album, rootSettings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                CollectionAssert.Contains(album.Config.AppliedAutoProfiles.ToList(), "album-ogg");
+                CollectionAssert.AreEqual(new[] { "ogg" }, album.Config.Search.NecessaryCond.Formats);
+                Assert.AreEqual(autoOutDir, album.Config.Output.ParentDir);
+                Assert.IsTrue(album.IsUnsuccessfulTerminal, "The MP3-only folder must not download when an auto profile requires OGG.");
+                Assert.AreEqual(JobFailureReason.NoMatchingResults, album.FailureReason);
+                Assert.AreEqual(0, Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Count(Utils.IsMusicFile));
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task AlbumDownload_WriteIndex_UsesNameFormattedAlbumPath()
         {
             var outputDir = Path.Combine(Path.GetTempPath(), "slsk-index-album-format-out-" + Guid.NewGuid());
