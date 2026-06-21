@@ -179,7 +179,7 @@ public class InteractiveModeManager
                     if (options == "..")
                     {
                         if (!canRetrieve) goto Loop;
-                        var parentFolder = Utils.GetDirectoryNameSlsk(currentFolder);
+                        var parentFolder = NormalizeRemoteFolderPath(Utils.GetDirectoryNameSlsk(currentFolder));
                         if (string.IsNullOrEmpty(parentFolder))
                         {
                             Console.WriteLine("This is the top directory");
@@ -191,7 +191,7 @@ public class InteractiveModeManager
                     }
                     else
                     {
-                        var subdir     = currentFolder + '\\' + options;
+                        var subdir     = CombineRemoteFolderPath(currentFolder, options);
                         var childFiles = folder.Files
                             .Where(af => IsInFolderPath(af.ResolvedTarget!.Filename, subdir))
                             .ToList();
@@ -208,7 +208,7 @@ public class InteractiveModeManager
                             {
                                 IsFullyRetrieved = folder.IsFullyRetrieved,
                             };
-                        SetCurrentFolder(index, childFolder);
+                        childFolder = SetCurrentFolder(index, childFolder);
 
                         statusLine = $"Changed folder: {childFolder.FolderPath}";
                         ClearOutput(savedPos);
@@ -229,10 +229,10 @@ public class InteractiveModeManager
                         if (!targetFolder.IsFullyRetrieved)
                         {
                             var retrieved = await retrieveFolderCallback(targetFolder);
-                            SetCurrentFolder(index, retrieved.Folder);
+                            var retrievedFolder = SetCurrentFolder(index, retrieved.Folder);
                             retrievedFolders.Add(folderKey);
                             statusLine = navigatingFolder
-                                ? $"Changed folder: {retrieved.Folder.FolderPath}"
+                                ? $"Changed folder: {retrievedFolder.FolderPath}"
                                 : retrieved.NewFilesFoundCount == 0
                                 ? "Retrieved folder: no new files found."
                                 : $"Retrieved folder: found {retrieved.NewFilesFoundCount} more {(retrieved.NewFilesFoundCount == 1 ? "file" : "files")}.";
@@ -242,7 +242,7 @@ public class InteractiveModeManager
                         }
                         else
                         {
-                            SetCurrentFolder(index, targetFolder);
+                            targetFolder = SetCurrentFolder(index, targetFolder);
                             retrievedFolders.Add(folderKey);
                             statusLine = navigatingFolder
                                 ? $"Changed folder: {targetFolder.FolderPath}"
@@ -346,20 +346,25 @@ public class InteractiveModeManager
             ? folder
             : null;
 
-    private void SetCurrentFolder(int originalIndex, AlbumFolder folder)
+    private AlbumFolder SetCurrentFolder(int originalIndex, AlbumFolder folder)
     {
+        folder = NormalizeFolderSnapshot(folder);
         StoreFolderSnapshot(folder);
         currentFolderKeys[originalIndex] = FolderKey(folder);
+        return folder;
     }
 
     private void StoreFolderSnapshot(AlbumFolder folder)
-        => folderSnapshots[FolderKey(folder)] = folder;
+    {
+        folder = NormalizeFolderSnapshot(folder);
+        folderSnapshots[FolderKey(folder)] = folder;
+    }
 
     private static string FolderKey(AlbumFolder folder)
         => FolderKey(folder.Username, folder.FolderPath);
 
     private static string FolderKey(string username, string folderPath)
-        => username + "\\" + folderPath;
+        => username + "\\" + NormalizeRemoteFolderPath(folderPath);
 
     private static bool FolderMatchesFilter(AlbumFolder folder, string filter)
     {
@@ -367,8 +372,38 @@ public class InteractiveModeManager
     }
 
     private static bool IsInFolderPath(string filename, string folderPath)
-        => filename.StartsWith(folderPath.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
-            || filename.Equals(folderPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+    {
+        filename = NormalizeRemoteFolderPath(filename);
+        folderPath = NormalizeRemoteFolderPath(folderPath).TrimEnd('\\');
+        return filename.StartsWith(folderPath + "\\", StringComparison.OrdinalIgnoreCase)
+            || filename.Equals(folderPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string CombineRemoteFolderPath(string parent, string child)
+        => NormalizeRemoteFolderPath(parent.TrimEnd('\\') + "\\" + child.Trim('\\', '/'));
+
+    private static string NormalizeRemoteFolderPath(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return path;
+
+        path = path.Replace('/', '\\').TrimEnd('\\').Trim();
+        while (path.Contains(@"\\", StringComparison.Ordinal))
+            path = path.Replace(@"\\", @"\", StringComparison.Ordinal);
+        return path;
+    }
+
+    private static AlbumFolder NormalizeFolderSnapshot(AlbumFolder folder)
+    {
+        var folderPath = NormalizeRemoteFolderPath(folder.FolderPath);
+        if (string.Equals(folderPath, folder.FolderPath, StringComparison.Ordinal))
+            return folder;
+
+        return new AlbumFolder(folder.Username, folderPath, folder.Files)
+        {
+            IsFullyRetrieved = folder.IsFullyRetrieved,
+        };
+    }
 
     private async Task<string> InteractiveModeInput()
     {
