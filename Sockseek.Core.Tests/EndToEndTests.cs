@@ -440,7 +440,8 @@ namespace Tests.EndToEnd
                 settings.Extraction.IsAlbum = true;
                 settings.Search.NoBrowseFolder = true;
                 settings.Output.ParentDir = outputDir;
-                settings.Output.FailedAlbumPath = failedDir;
+                settings.Output.IncompleteAlbumAction.Kind = IncompleteAlbumActionKind.Move;
+                settings.Output.IncompleteAlbumAction.Path = failedDir;
                 settings.Output.WriteIndex = true;
                 settings.Output.HasConfiguredIndex = true;
                 settings.Output.IndexFilePath = Path.Combine(outputDir, "_index.csv");
@@ -454,18 +455,225 @@ namespace Tests.EndToEnd
 
                 Assert.IsTrue(Directory.GetFiles(failedDir, "*", SearchOption.AllDirectories)
                         .Any(path => Path.GetFileName(path) == "01. Test Artist - First.mp3"),
-                    "The already-downloaded album file should have been moved to failed-album-path.");
+                    "The already-downloaded album file should have been moved by the incomplete album action.");
 
                 var lines = File.ReadAllLines(settings.Output.IndexFilePath);
                 Assert.IsTrue(lines.Any(line => line == ",Test Artist,Test Album,,-1,1,2,4"),
                     string.Join("\n", lines));
                 Assert.IsFalse(lines.Any(line => line.Contains(failedDir) || line.Contains("First.mp3")),
-                    "Failed album index entry should record only album failure, not failed-album-path or child files.");
+                    "Failed album index entry should record only album failure, not incomplete-album-action path or child files.");
             }
             finally
             {
                 if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
                 if (Directory.Exists(failedDir)) Directory.Delete(failedDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AlbumDownload_IncompleteAlbumActionDelete_DeletesCompletedAlbumFiles()
+        {
+            await RunIncompleteAlbumActionScenario(IncompleteAlbumActionKind.Delete, actionPath: null,
+                async (completedPath, _, _) =>
+                {
+                    await Task.CompletedTask;
+                    Assert.IsFalse(File.Exists(completedPath),
+                        "Delete action should remove completed files from a failed album folder.");
+                });
+        }
+
+        [TestMethod]
+        public async Task AlbumDownload_IncompleteAlbumActionMovePath_MovesCompletedAlbumFilesToConfiguredPath()
+        {
+            var failedDir = Path.Combine(Path.GetTempPath(), "slsk-incomplete-album-action-configured-" + Guid.NewGuid());
+
+            await RunIncompleteAlbumActionScenario(IncompleteAlbumActionKind.Move, failedDir,
+                async (completedPath, actionDir, _) =>
+                {
+                    await Task.CompletedTask;
+                    Assert.IsFalse(File.Exists(completedPath),
+                        "Move action should remove completed files from their original failed album location.");
+                    Assert.IsTrue(Directory.GetFiles(actionDir, "*", SearchOption.AllDirectories)
+                            .Any(path => Path.GetFileName(path) == "01. Test Artist - First.mp3"),
+                        "Move action should move completed files to the configured incomplete album action path.");
+                });
+        }
+
+        [TestMethod]
+        public async Task AlbumDownload_IncompleteAlbumActionMoveWithoutPath_MovesCompletedAlbumFilesToDefaultFailedPath()
+        {
+            await RunIncompleteAlbumActionScenario(IncompleteAlbumActionKind.Move, actionPath: null,
+                async (completedPath, _, settings) =>
+                {
+                    await Task.CompletedTask;
+                    var defaultFailedDir = Path.Combine(settings.Output.ParentDir!, "failed");
+
+                    Assert.IsFalse(File.Exists(completedPath),
+                        "Move action should remove completed files from their original failed album location.");
+                    Assert.IsTrue(Directory.GetFiles(defaultFailedDir, "*", SearchOption.AllDirectories)
+                            .Any(path => Path.GetFileName(path) == "01. Test Artist - First.mp3"),
+                        "Bare move action should move completed files to the default failed directory.");
+                });
+        }
+
+        [TestMethod]
+        public async Task AlbumDownload_CancelledAfterCompletedFile_RunsIncompleteAlbumAction()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-incomplete-album-cancel-out-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var completedAlbumDir = Path.Combine(outputDir, "Test Album");
+            Directory.CreateDirectory(completedAlbumDir);
+            var completedPath = Path.Combine(completedAlbumDir, "01. Test Artist - First.mp3");
+            File.WriteAllBytes(completedPath, TestHelpers.EmptyMp3Bytes);
+
+            var completedRemoteFile = TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\01. Test Artist - First.mp3", length: 180);
+            var cancellableRemoteFile = TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\02. Test Artist - Second.mp3", length: 181);
+            var response = new Soulseek.SearchResponse(
+                "canceluser", 1, true, 100_000, 0,
+                [completedRemoteFile, cancellableRemoteFile]);
+
+            var completedSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "First" })
+            {
+                ResolvedTarget = new FileCandidate(response, completedRemoteFile),
+            };
+            completedSong.SetDone(completedPath);
+            var cancellableSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "Second" })
+            {
+                ResolvedTarget = new FileCandidate(response, cancellableRemoteFile),
+            };
+            var folder = new AlbumFolder(
+                response.Username,
+                Utils.GetDirectoryNameSlsk(cancellableRemoteFile.Filename),
+                [completedSong, cancellableSong])
+                {
+                    IsFullyRetrieved = true,
+                };
+            var album = new AlbumJob(new AlbumQuery { Artist = "Test Artist", Album = "Test Album" })
+            {
+                Results = [folder],
+            };
+
+            var testClient = new ClientTests.MockSoulseekClient([response])
+            {
+                BeforeDownloadCompletesAsync = (_, remoteFilename, ct) =>
+                {
+                    if (remoteFilename.Equals(cancellableRemoteFile.Filename, StringComparison.OrdinalIgnoreCase))
+                        album.Cancel(JobCancellationSource.UserRequestedJob);
+
+                    ct.ThrowIfCancellationRequested();
+                    return Task.CompletedTask;
+                },
+            };
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var settings = new DownloadSettings();
+                settings.Extraction.Input = "artist=Test Artist, album=Test Album";
+                settings.Extraction.IsAlbum = true;
+                settings.Search.NoBrowseFolder = true;
+                settings.Output.ParentDir = outputDir;
+                settings.Output.IncompleteAlbumAction.Kind = IncompleteAlbumActionKind.Move;
+                settings.Transfer.MaxDownloadRetries = 1;
+
+                var app = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(testClient, engineSettings));
+                app.Enqueue(album, settings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var defaultFailedDir = Path.Combine(outputDir, "failed");
+                Assert.AreEqual(JobFailureReason.Cancelled, album.FailureReason);
+                Assert.IsFalse(File.Exists(completedPath),
+                    "Cancelling an incomplete album should move already-completed files out of the normal output location.");
+                Assert.IsTrue(Directory.GetFiles(defaultFailedDir, "*", SearchOption.AllDirectories)
+                        .Any(path => Path.GetFileName(path) == "01. Test Artist - First.mp3"),
+                    "Cancelling an incomplete album should run the configured incomplete album action.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AlbumDownload_IncompleteAlbumActionKeep_LeavesCompletedAlbumFilesInPlace()
+        {
+            await RunIncompleteAlbumActionScenario(IncompleteAlbumActionKind.Keep, actionPath: null,
+                async (completedPath, _, _) =>
+                {
+                    await Task.CompletedTask;
+                    Assert.IsTrue(File.Exists(completedPath),
+                        "Keep action should leave completed files from a failed album folder in place.");
+                });
+        }
+
+        private static async Task RunIncompleteAlbumActionScenario(
+            IncompleteAlbumActionKind kind,
+            string? actionPath,
+            Func<string, string, DownloadSettings, Task> assert)
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "slsk-incomplete-album-action-out-" + Guid.NewGuid());
+            var actionDir = actionPath ?? Path.Combine(Path.GetTempPath(), "slsk-incomplete-album-action-target-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var completedAlbumDir = Path.Combine(outputDir, "Test Album");
+            Directory.CreateDirectory(completedAlbumDir);
+            var completedPath = Path.Combine(completedAlbumDir, "01. Test Artist - First.mp3");
+            File.WriteAllBytes(completedPath, TestHelpers.EmptyMp3Bytes);
+
+            var completedRemoteFile = TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\01. Test Artist - First.mp3", length: 180);
+            var failingRemoteFile = TestHelpers.CreateSlFile(@"Music\Test Artist\Test Album\02. Test Artist - Second.mp3", length: 181);
+            var response = new Soulseek.SearchResponse(
+                "failuser", 1, true, 100_000, 0,
+                [completedRemoteFile, failingRemoteFile]);
+            var testClient = new ClientTests.MockSoulseekClient([response], failingUsers: ["failuser"]);
+
+            var completedSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "First" })
+            {
+                ResolvedTarget = new FileCandidate(response, completedRemoteFile),
+            };
+            completedSong.SetDone(completedPath);
+            var failingSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "Second" })
+            {
+                ResolvedTarget = new FileCandidate(response, failingRemoteFile),
+            };
+            var folder = new AlbumFolder(
+                response.Username,
+                Utils.GetDirectoryNameSlsk(failingRemoteFile.Filename),
+                [completedSong, failingSong])
+                {
+                    IsFullyRetrieved = true,
+                };
+            var album = new AlbumJob(new AlbumQuery { Artist = "Test Artist", Album = "Test Album" })
+            {
+                Results = [folder],
+            };
+
+            try
+            {
+                var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+                var settings = new DownloadSettings();
+                settings.Extraction.Input = "artist=Test Artist, album=Test Album";
+                settings.Extraction.IsAlbum = true;
+                settings.Search.NoBrowseFolder = true;
+                settings.Output.ParentDir = outputDir;
+                settings.Output.IncompleteAlbumAction.Kind = kind;
+                settings.Output.IncompleteAlbumAction.Path = actionPath;
+                settings.Transfer.MaxDownloadRetries = 1;
+
+                var app = new DownloadEngine(engineSettings, TestHelpers.CreateMockClientManager(testClient, engineSettings));
+                app.Enqueue(album, settings);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+                await assert(completedPath, actionDir, settings);
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+                if (Directory.Exists(actionDir)) Directory.Delete(actionDir, true);
             }
         }
 

@@ -36,7 +36,7 @@ public class LocalCliBackendTests
                 Output =
                 {
                     ParentDir = musicRoot,
-                    FailedAlbumPath = Path.Combine(musicRoot, "failed"),
+                    IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(musicRoot, "failed") },
                 },
             };
             downloadSettings.Extraction.Input = "test";
@@ -197,7 +197,7 @@ public class LocalCliBackendTests
                 Output =
                 {
                     ParentDir = musicRoot,
-                    FailedAlbumPath = Path.Combine(musicRoot, "failed"),
+                    IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(musicRoot, "failed") },
                 },
             };
             downloadSettings.Search.NecessaryCond.StrictTitle = true;
@@ -274,7 +274,7 @@ public class LocalCliBackendTests
                 Output =
                 {
                     ParentDir = musicRoot,
-                    FailedAlbumPath = Path.Combine(musicRoot, "failed"),
+                    IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(musicRoot, "failed") },
                 },
             };
             downloadSettings.Search.NecessaryCond.StrictTitle = true;
@@ -358,7 +358,7 @@ public class LocalCliBackendTests
                 Output =
                 {
                     ParentDir = outputDir,
-                    FailedAlbumPath = Path.Combine(outputDir, "failed"),
+                    IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(outputDir, "failed") },
                 },
             };
             downloadSettings.Search.NecessaryCond.StrictTitle = true;
@@ -457,7 +457,7 @@ public class LocalCliBackendTests
                 {
                     ParentDir = outputDir,
                     NameFormat = "{filename}",
-                    FailedAlbumPath = Path.Combine(outputDir, "failed"),
+                    IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(outputDir, "failed") },
                 },
             };
 
@@ -509,7 +509,7 @@ public class LocalCliBackendTests
             var engineSettings = new EngineSettings { MockFilesDir = musicRoot, MockFilesReadTags = false };
             var downloadSettings = new DownloadSettings
             {
-                Output = { ParentDir = musicRoot, FailedAlbumPath = Path.Combine(musicRoot, "failed") },
+                Output = { ParentDir = musicRoot, IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(musicRoot, "failed") } },
                 Search = { MinSharesAggregate = 1 },
             };
 
@@ -565,7 +565,7 @@ public class LocalCliBackendTests
             var engineSettings = new EngineSettings { MockFilesDir = musicRoot, MockFilesReadTags = false };
             var downloadSettings = new DownloadSettings
             {
-                Output = { ParentDir = musicRoot, FailedAlbumPath = Path.Combine(musicRoot, "failed") },
+                Output = { ParentDir = musicRoot, IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(musicRoot, "failed") } },
                 Search = { MinSharesAggregate = 1 },
             };
 

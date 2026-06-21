@@ -342,7 +342,7 @@ public class CliBackendParityTests
             {
                 ParentDir = outputDir,
                 NameFormat = "{foldername}/{filename}",
-                FailedAlbumPath = Path.Combine(outputDir, "failed"),
+                IncompleteAlbumAction = { Kind = IncompleteAlbumActionKind.Move, Path = Path.Combine(outputDir, "failed") },
             },
             Search =
             {

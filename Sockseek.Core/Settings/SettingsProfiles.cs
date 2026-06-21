@@ -213,10 +213,8 @@ public static class SettingsNormalizer
         if (dl.Skip.SkipMusicDir != null)
             dl.Skip.SkipMusicDir = Utils.GetFullPath(Utils.ExpandVariables(dl.Skip.SkipMusicDir, pathContext));
 
-        if (dl.Output.FailedAlbumPath == null)
-            dl.Output.FailedAlbumPath = Path.Join(dl.Output.ParentDir, "failed");
-        else if (dl.Output.FailedAlbumPath is not ("disable" or "delete"))
-            dl.Output.FailedAlbumPath = Utils.GetFullPath(Utils.ExpandVariables(dl.Output.FailedAlbumPath, pathContext));
+        if (dl.Output.IncompleteAlbumAction.Path != null)
+            dl.Output.IncompleteAlbumAction.Path = Utils.GetFullPath(Utils.ExpandVariables(dl.Output.IncompleteAlbumAction.Path, pathContext));
     }
 
     public static void NormalizeEnginePaths(EngineSettings engine)
@@ -397,7 +395,11 @@ public static class SettingsCloner
         HasConfiguredIndex = source.HasConfiguredIndex,
         M3uFilePath = source.M3uFilePath,
         IndexFilePath = source.IndexFilePath,
-        FailedAlbumPath = source.FailedAlbumPath,
+        IncompleteAlbumAction = new IncompleteAlbumActionSettings
+        {
+            Kind = source.IncompleteAlbumAction.Kind,
+            Path = source.IncompleteAlbumAction.Path,
+        },
         OnComplete = source.OnComplete?.ToList(),
         AlbumArtOnly = source.AlbumArtOnly,
         AlbumArtOption = source.AlbumArtOption,

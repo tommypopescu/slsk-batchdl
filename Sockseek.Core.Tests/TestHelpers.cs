@@ -176,7 +176,6 @@ namespace Tests
             var download = new DownloadSettings();
             download.Extraction.Input = "some input";
             download.Output.ParentDir = System.IO.Directory.GetCurrentDirectory();
-            download.Output.FailedAlbumPath = Path.Join(download.Output.ParentDir, "failed");
             return (engine, download);
         }
 

@@ -218,10 +218,11 @@ public static partial class Help
                                     album-art=largest when album-art is default
     --no-browse-folder              Do not automatically browse user shares to get all files in
                                     the folder
-    --failed-album-path             Path to move all album files to when one of the items from
-                                    the directory fails to download. Set to 'delete' to delete
-                                    the files instead. Set to 'disable' keep them where they
-                                    are. Default: {configured output dir}/failed
+    --incomplete-album-action <a>   What to do with completed album files when the album
+                                    does not complete. Values: 'move' to move to {configured
+                                    output dir}/failed, 'move:<path>' to move to a custom path,
+                                    'delete' to delete them, or 'keep' to leave them where
+                                    they are.
 
   Aggregate Download Options
 

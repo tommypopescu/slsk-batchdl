@@ -1844,7 +1844,10 @@ public class DownloadEngine
             {
                 await RunAlbumDownloads(chosenFolder, cts);
                 if (TryGetInterruptedAlbumOutcome(job, chosenFolder) is { } interruptedOutcome)
+                {
+                    HandleIncompleteAlbumIfNeeded(job, chosenFolder, interruptedOutcome, config);
                     return new(false, interruptedOutcome, null, lastChosenFolder);
+                }
 
                 if (!config.Search.NoBrowseFolder && retrieveCurrent && !chosenFolder.IsFullyRetrieved && !retrievedFolders.Contains(chosenFolder.FolderPath))
                 {
@@ -1855,7 +1858,10 @@ public class DownloadEngine
                     {
                         await RunAlbumDownloads(chosenFolder, cts);
                         if (TryGetInterruptedAlbumOutcome(job, chosenFolder) is { } interruptedOutcomeAfterRetrieval)
+                        {
+                            HandleIncompleteAlbumIfNeeded(job, chosenFolder, interruptedOutcomeAfterRetrieval, config);
                             return new(false, interruptedOutcomeAfterRetrieval, null, lastChosenFolder);
+                        }
                     }
                 }
 
@@ -1866,8 +1872,7 @@ public class DownloadEngine
             {
                 MarkUnfinishedAlbumFilesCancelled(chosenFolder);
 
-                if (!config.IgnoreAlbumFail)
-                    HandleAlbumFail(job, chosenFolder, config.DeleteAlbumOnFail, config);
+                HandleIncompleteAlbum(job, chosenFolder, config.ResolveIncompleteAlbumAction(), config);
 
                 if (job.Cts != null && job.Cts.IsCancellationRequested)
                     return new(false, JobOutcome.Cancelled(CancellationSourceForDerivedCancellation(job, chosenFolder.Files.Cast<Job>().ToArray())), null, lastChosenFolder);
@@ -1909,6 +1914,16 @@ public class DownloadEngine
             : JobOutcome.Failed(
                 failedSong.FailureReason == JobFailureReason.None ? JobFailureReason.AllDownloadsFailed : failedSong.FailureReason,
                 failedSong.FailureMessage);
+    }
+
+    void HandleIncompleteAlbumIfNeeded(
+        AlbumJob job,
+        AlbumFolder folder,
+        JobOutcome outcome,
+        DownloadSettings config)
+    {
+        if (outcome.TerminalOutcome is JobTerminalOutcome.Failed or JobTerminalOutcome.Cancelled)
+            HandleIncompleteAlbum(job, folder, config.ResolveIncompleteAlbumAction(), config);
     }
 
     void MarkUnfinishedAlbumFilesCancelled(AlbumFolder folder)
@@ -2625,12 +2640,15 @@ public class DownloadEngine
         }
     }
 
-    void HandleAlbumFail(AlbumJob job, AlbumFolder folder, bool deleteDownloaded, DownloadSettings config)
+    void HandleIncompleteAlbum(AlbumJob job, AlbumFolder folder, ResolvedIncompleteAlbumAction action, DownloadSettings config)
     {
-        var failedAlbumPath = config.Output.FailedAlbumPath;
+        if (action.Kind == IncompleteAlbumActionKind.Keep)
+            return;
+
+        var failedAlbumPath = action.Path;
         var outputParentDir = config.Output.ParentDir;
         var filesToHandle = folder.Files
-            .Where(IsAlbumFailActionFile)
+            .Where(IsIncompleteAlbumActionFile)
             .ToList();
 
         if (filesToHandle.Count == 0)
@@ -2639,15 +2657,17 @@ public class DownloadEngine
             return;
         }
 
-        if (deleteDownloaded)
+        if (action.Kind == IncompleteAlbumActionKind.Delete)
         {
             Events.RaiseJobStatus(job, "deleting files");
             SockseekLog.Jobs.Info($"[{job.DisplayId}] AlbumJob: Deleting album files");
         }
-        else if (!string.IsNullOrEmpty(failedAlbumPath))
+        else if (action.Kind == IncompleteAlbumActionKind.Move)
         {
             if (string.IsNullOrEmpty(outputParentDir))
-                throw new InvalidOperationException("Cannot move failed album files because Output.ParentDir is not set.");
+                throw new InvalidOperationException("Cannot move incomplete album files because Output.ParentDir is not set.");
+            if (string.IsNullOrEmpty(failedAlbumPath))
+                throw new InvalidOperationException("Cannot move incomplete album files because incomplete album action path is not set.");
 
             Events.RaiseJobStatus(job, $"moving to {failedAlbumPath}");
             SockseekLog.Jobs.Info($"[{job.DisplayId}] AlbumJob: Moving album files to {failedAlbumPath}");
@@ -2658,15 +2678,17 @@ public class DownloadEngine
             var downloadPath = af.DownloadPath!;
             try
             {
-                if (deleteDownloaded)
+                if (action.Kind == IncompleteAlbumActionKind.Delete)
                 {
                     File.Delete(downloadPath);
                 }
-                else if (!string.IsNullOrEmpty(failedAlbumPath))
+                else if (action.Kind == IncompleteAlbumActionKind.Move)
                 {
                     var relativeBase = outputParentDir
-                        ?? throw new InvalidOperationException("Cannot move failed album files because Output.ParentDir is not set.");
-                    var newPath = Path.Join(failedAlbumPath, Path.GetRelativePath(relativeBase, downloadPath));
+                        ?? throw new InvalidOperationException("Cannot move incomplete album files because Output.ParentDir is not set.");
+                    var targetBase = failedAlbumPath
+                        ?? throw new InvalidOperationException("Cannot move incomplete album files because incomplete album action path is not set.");
+                    var newPath = Path.Join(targetBase, Path.GetRelativePath(relativeBase, downloadPath));
                     Directory.CreateDirectory(Path.GetDirectoryName(newPath)!);
                     Utils.Move(downloadPath, newPath);
                 }
@@ -2681,13 +2703,13 @@ public class DownloadEngine
             }
         }
 
-        if (deleteDownloaded)
+        if (action.Kind == IncompleteAlbumActionKind.Delete)
             Events.RaiseJobStatus(job, "deleted files");
-        else if (!string.IsNullOrEmpty(failedAlbumPath))
+        else if (action.Kind == IncompleteAlbumActionKind.Move)
             Events.RaiseJobStatus(job, $"moved to {failedAlbumPath}");
     }
 
-    static bool IsAlbumFailActionFile(SongJob song)
+    static bool IsIncompleteAlbumActionFile(SongJob song)
         => song.TerminalOutcome == JobTerminalOutcome.Succeeded
             && !string.IsNullOrEmpty(song.DownloadPath)
             && !song.DownloadPath.EndsWith(".incomplete", StringComparison.OrdinalIgnoreCase)

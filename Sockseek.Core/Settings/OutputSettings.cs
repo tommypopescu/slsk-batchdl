@@ -24,8 +24,9 @@ public class OutputSettings
 
     public string? IndexFilePath { get; set; }
 
-    /// null = default (parentDir/failed). "delete" = delete on fail. "disable" = keep partial.
-    public string? FailedAlbumPath { get; set; }
+    /// Controls what happens to completed files from an album folder when another file
+    /// in that folder fails. Unset means move to {ParentDir}/failed.
+    public IncompleteAlbumActionSettings IncompleteAlbumAction { get; set; } = new();
 
     /// null = no on-complete command. Populated by --on-complete (with optional "+ " append mode).
     /// The binder sets the whole list; ConfigManager handles the "+ " append prefix as a special case.
@@ -35,3 +36,13 @@ public class OutputSettings
 
     public AlbumArtOption AlbumArtOption { get; set; } = AlbumArtOption.Default;
 }
+
+public class IncompleteAlbumActionSettings
+{
+    public IncompleteAlbumActionKind? Kind { get; set; }
+
+    /// Used when Kind is Move. Null means {configured output dir}/failed.
+    public string? Path { get; set; }
+}
+
+public sealed record ResolvedIncompleteAlbumAction(IncompleteAlbumActionKind Kind, string? Path);

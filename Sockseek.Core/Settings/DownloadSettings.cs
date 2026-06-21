@@ -50,8 +50,15 @@ public class DownloadSettings
 
     public bool NeedLogin      => !PrintTracks && (PrintOption & PrintOption.Index) == 0;
 
-    public bool DeleteAlbumOnFail => Output.FailedAlbumPath == "delete";
-    public bool IgnoreAlbumFail   => Output.FailedAlbumPath == "disable";
+    public ResolvedIncompleteAlbumAction ResolveIncompleteAlbumAction()
+    {
+        var kind = Output.IncompleteAlbumAction.Kind ?? IncompleteAlbumActionKind.Move;
+        var path = kind == IncompleteAlbumActionKind.Move
+            ? Output.IncompleteAlbumAction.Path ?? Path.Join(Output.ParentDir ?? Directory.GetCurrentDirectory(), "failed")
+            : null;
+
+        return new ResolvedIncompleteAlbumAction(kind, path);
+    }
 
     public bool HasOnComplete => Output.OnComplete?.Any(x => !string.IsNullOrWhiteSpace(x)) == true;
 

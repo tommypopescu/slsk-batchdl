@@ -3,18 +3,9 @@
 ### 3.0
 
 - Add a way to skip this and all remaining album interactive prompts (`S`, capital case/shift)
-    - For example: In `-agt` mode or for CSV files with many albums, allows to accept first k albums and then press `S` on the k+1 album, which will skip it and skip/ignore all remaining NEW album prompts.
-    - Ensure that even after pressing `S`, if an accepted album fails, the prompt for it still appears with the failed one removed.
+    - For example: In `-agt` mode or for CSV files with many albums, can press `S` on the k+1 album after accepting the first k albums, which will skip it and skip/ignore all remaining NEW album prompts.
+    - Ensure that even after pressing `S`, if an already accepted album fails, the prompt for it still appears with the failed one removed.
     - Also test `t` (try next candidate) in all modes
-
-
-- (breaking) Replace the --failed-album-path option by a new option called --album-fail-action. Can be
-    - "" or "default" - move all album files to {configured output dir}/failed when not in interactive mode. In interactive mode, ask what to do, with the same default action.
-    - "move:{path, with possible {} variables}" - move to specified path. 
-    - "delete" - delete the downloaded files
-    - "keep" - do nothing, keep files where they are
-    - "ask" - Ask what to do: Can be delete, keep, move, or retry. If move is selected ask for the path in a second prompt. Retry will reattempt to download the incomplete files. 
-    - Need to think how to implement this cleanly in API.
 
 ### Later
 

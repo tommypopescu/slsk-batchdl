@@ -21,6 +21,7 @@ public sealed record DownloadSettingOperationDto(
     ExtractionMode? ExtractionModeValue = null,
     SkipMode? SkipModeValue = null,
     AlbumArtOption? AlbumArtOptionValue = null,
+    IncompleteAlbumActionKind? IncompleteAlbumActionKindValue = null,
     IReadOnlyList<string>? StringListValue = null,
     IReadOnlyList<RegexRuleDto>? RegexListValue = null);
 
@@ -93,7 +94,8 @@ public static class DownloadSettingsDeltaMapper
             case "Output.HasConfiguredIndex": settings.Output.HasConfiguredIndex = Bool(op); break;
             case "Output.M3uFilePath": settings.Output.M3uFilePath = op.StringValue; break;
             case "Output.IndexFilePath": settings.Output.IndexFilePath = op.StringValue; break;
-            case "Output.FailedAlbumPath": settings.Output.FailedAlbumPath = op.StringValue; break;
+            case "Output.IncompleteAlbumAction.Kind": settings.Output.IncompleteAlbumAction.Kind = op.IncompleteAlbumActionKindValue; break;
+            case "Output.IncompleteAlbumAction.Path": settings.Output.IncompleteAlbumAction.Path = op.StringValue; break;
             case "Output.OnComplete":
                 ValidateOnCompleteOperation(op);
                 var onComplete = settings.Output.OnComplete;
@@ -224,7 +226,9 @@ public static class DownloadSettingsDeltaMapper
         AddBoolDiff(operations, "Output.HasConfiguredIndex", before.HasConfiguredIndex, after.HasConfiguredIndex);
         AddStringDiff(operations, "Output.M3uFilePath", before.M3uFilePath, after.M3uFilePath);
         AddStringDiff(operations, "Output.IndexFilePath", before.IndexFilePath, after.IndexFilePath);
-        AddStringDiff(operations, "Output.FailedAlbumPath", before.FailedAlbumPath, after.FailedAlbumPath);
+        if (before.IncompleteAlbumAction.Kind != after.IncompleteAlbumAction.Kind)
+            operations.Add(Set("Output.IncompleteAlbumAction.Kind", after.IncompleteAlbumAction.Kind));
+        AddStringDiff(operations, "Output.IncompleteAlbumAction.Path", before.IncompleteAlbumAction.Path, after.IncompleteAlbumAction.Path);
         AddStringListDiff(operations, "Output.OnComplete", before.OnComplete, after.OnComplete);
         AddBoolDiff(operations, "Output.AlbumArtOnly", before.AlbumArtOnly, after.AlbumArtOnly);
         if (before.AlbumArtOption != after.AlbumArtOption) operations.Add(Set("Output.AlbumArtOption", after.AlbumArtOption));
@@ -489,6 +493,9 @@ public static class DownloadSettingsDeltaMapper
 
     public static DownloadSettingOperationDto Set(string path, AlbumArtOption value)
         => new(path, SettingOperationKind.Set, AlbumArtOptionValue: value);
+
+    public static DownloadSettingOperationDto Set(string path, IncompleteAlbumActionKind? value)
+        => new(path, SettingOperationKind.Set, IncompleteAlbumActionKindValue: value);
 
     public static DownloadSettingOperationDto Replace(string path, IReadOnlyList<string> values)
         => new(path, SettingOperationKind.Replace, StringListValue: values);

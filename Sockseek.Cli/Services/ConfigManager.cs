@@ -504,8 +504,14 @@ public static partial class ConfigManager
                 Download(d => { d.Output.WriteIndex = false; d.Output.HasConfiguredIndex = true; }); break;
             case "--ip": case "--index-path":
                 Download(d => { d.Output.IndexFilePath = value; d.Output.HasConfiguredIndex = true; }); break;
-            case "--failed-album-path":
-                Download(d => d.Output.FailedAlbumPath = value); break;
+            case "--incomplete-album-action":
+                var incompleteAlbumAction = ParseIncompleteAlbumAction(value, flag);
+                Download(d =>
+                {
+                    d.Output.IncompleteAlbumAction.Kind = incompleteAlbumAction.Kind;
+                    d.Output.IncompleteAlbumAction.Path = incompleteAlbumAction.Path;
+                });
+                break;
             case "--oc": case "--on-complete":
                 var onComplete = ParseOnCompleteConfigValue(value);
                 Download(d =>
@@ -957,6 +963,7 @@ public static partial class ConfigManager
             && left.ExtractionModeValue == right.ExtractionModeValue
             && left.SkipModeValue == right.SkipModeValue
             && left.AlbumArtOptionValue == right.AlbumArtOptionValue
+            && left.IncompleteAlbumActionKindValue == right.IncompleteAlbumActionKindValue
             && ListEqual(left.StringListValue, right.StringListValue)
             && RegexListEqual(left.RegexListValue, right.RegexListValue);
 
@@ -991,7 +998,8 @@ public static partial class ConfigManager
             settings.Output.HasConfiguredIndex = boolSeed;
             settings.Output.M3uFilePath = stringSeed;
             settings.Output.IndexFilePath = stringSeed;
-            settings.Output.FailedAlbumPath = stringSeed;
+            settings.Output.IncompleteAlbumAction.Kind = null;
+            settings.Output.IncompleteAlbumAction.Path = stringSeed;
             settings.Output.OnComplete = [stringSeed];
             settings.Output.AlbumArtOnly = boolSeed;
             settings.Output.AlbumArtOption = albumArtSeed;
@@ -1306,6 +1314,28 @@ public static partial class ConfigManager
             "index" when allowIndex => SkipMode.Index,
             _ => throw new Exception($"Input error: Invalid skip mode '{s}' for '{flag}'"),
         };
+    }
+
+    private static IncompleteAlbumActionSettings ParseIncompleteAlbumAction(string s, string flag)
+    {
+        var value = s.Trim();
+        var lower = value.ToLowerInvariant();
+
+        if (lower == "move")
+            return new IncompleteAlbumActionSettings { Kind = IncompleteAlbumActionKind.Move };
+        if (lower.StartsWith("move:", StringComparison.Ordinal))
+        {
+            var path = value["move:".Length..].Trim();
+            if (string.IsNullOrWhiteSpace(path))
+                throw new Exception($"Input error: Option '{flag}' requires a path for move:<path>");
+            return new IncompleteAlbumActionSettings { Kind = IncompleteAlbumActionKind.Move, Path = path };
+        }
+        if (lower == "delete")
+            return new IncompleteAlbumActionSettings { Kind = IncompleteAlbumActionKind.Delete };
+        if (lower == "keep")
+            return new IncompleteAlbumActionSettings { Kind = IncompleteAlbumActionKind.Keep };
+
+        throw new Exception($"Input error: Invalid incomplete album action '{s}' for '{flag}'");
     }
 
     private static int ParseInt(string s, string flag)

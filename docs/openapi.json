@@ -2413,6 +2413,35 @@
           }
         }
       },
+      "IncompleteAlbumActionKind": {
+        "enum": [
+          "Move",
+          "Delete",
+          "Keep",
+          null
+        ]
+      },
+      "IncompleteAlbumActionSettingsPatchDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IncompleteAlbumActionKind"
+              }
+            ]
+          },
+          "path": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "InputType": {
         "type": "integer"
       },
@@ -3765,10 +3794,14 @@
               "string"
             ]
           },
-          "failedAlbumPath": {
-            "type": [
-              "null",
-              "string"
+          "incompleteAlbumAction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IncompleteAlbumActionSettingsPatchDto"
+              }
             ]
           },
           "onComplete": {

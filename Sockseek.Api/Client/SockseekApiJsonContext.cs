@@ -92,6 +92,8 @@ namespace Sockseek.Api;
 
 [JsonSerializable(typeof(DownloadSettingsPatchDto))]
 [JsonSerializable(typeof(OutputSettingsPatchDto))]
+[JsonSerializable(typeof(IncompleteAlbumActionSettingsPatchDto))]
+[JsonSerializable(typeof(Sockseek.Core.IncompleteAlbumActionKind))]
 [JsonSerializable(typeof(SearchSettingsPatchDto))]
 [JsonSerializable(typeof(FileConditionsPatchDto))]
 [JsonSerializable(typeof(FolderConditionsPatchDto))]

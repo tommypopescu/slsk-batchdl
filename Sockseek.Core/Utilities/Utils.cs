@@ -81,6 +81,11 @@ public static partial class Utils
         return Path.GetFullPath(path);
     }
 
+    // TODO [ARCHITECTURE]: Introduce explicit path value types for local filesystem paths
+    // and Soulseek remote paths. Several cross-platform bugs have come from treating those
+    // as interchangeable strings and relying on ad hoc separator normalization at call sites.
+    // Keep raw config paths, normalized local paths, and Soulseek paths distinct enough that
+    // the compiler helps prevent accidental mixing.
     public static string GetAsPathSlsk(string fname)
     {
         return fname.Replace('\\', Path.DirectorySeparatorChar);

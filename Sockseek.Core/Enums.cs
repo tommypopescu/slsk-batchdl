@@ -177,11 +177,12 @@ namespace Sockseek.Core;
         Verbose
     }
 
-    public enum AlbumFailOption
+    [JsonConverter(typeof(JsonStringEnumConverter<IncompleteAlbumActionKind>))]
+    public enum IncompleteAlbumActionKind
     {
-        Ignore,
-        Keep,
+        Move,
         Delete,
+        Keep,
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter<DownloadBehavior>))]

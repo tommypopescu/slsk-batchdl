@@ -252,7 +252,8 @@ namespace Tests.FileManagerTests
             Directory.CreateDirectory(testRoot);
             config = TestHelpers.CreateDefaultSettings().Download;
             config.Output.ParentDir = testRoot;
-            config.Output.FailedAlbumPath = Path.Join(testRoot, "failed");
+            config.Output.IncompleteAlbumAction.Kind = IncompleteAlbumActionKind.Move;
+            config.Output.IncompleteAlbumAction.Path = Path.Join(testRoot, "failed");
         }
 
         [TestCleanup]

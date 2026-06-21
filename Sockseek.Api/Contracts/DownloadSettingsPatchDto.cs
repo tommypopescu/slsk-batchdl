@@ -32,10 +32,14 @@ public sealed record OutputSettingsPatchDto(
     bool? HasConfiguredIndex = null,
     string? M3uFilePath = null,
     string? IndexFilePath = null,
-    string? FailedAlbumPath = null,
+    IncompleteAlbumActionSettingsPatchDto? IncompleteAlbumAction = null,
     CollectionPatchDto<string>? OnComplete = null,
     bool? AlbumArtOnly = null,
     AlbumArtOption? AlbumArtOption = null);
+
+public sealed record IncompleteAlbumActionSettingsPatchDto(
+    IncompleteAlbumActionKind? Kind = null,
+    string? Path = null);
 
 public sealed record SearchSettingsPatchDto(
     FileConditionsPatchDto? NecessaryCond = null,
@@ -194,7 +198,11 @@ public static class DownloadSettingsPatchDtoMapper
         if (patch.HasConfiguredIndex is { } hasConfiguredIndex) target.HasConfiguredIndex = hasConfiguredIndex;
         if (patch.M3uFilePath is { } m3uFilePath) target.M3uFilePath = m3uFilePath;
         if (patch.IndexFilePath is { } indexFilePath) target.IndexFilePath = indexFilePath;
-        if (patch.FailedAlbumPath is { } failedAlbumPath) target.FailedAlbumPath = failedAlbumPath;
+        if (patch.IncompleteAlbumAction is { } incompleteAlbumAction)
+        {
+            target.IncompleteAlbumAction.Kind = incompleteAlbumAction.Kind;
+            target.IncompleteAlbumAction.Path = incompleteAlbumAction.Path;
+        }
         if (patch.OnComplete is { } onComplete)
         {
             ValidateOnCompletePatch(onComplete);
@@ -405,7 +413,8 @@ public static class DownloadSettingsPatchDtoMapper
                 case "Output.HasConfiguredIndex": Output.HasConfiguredIndex = Bool(op); break;
                 case "Output.M3uFilePath": Output.M3uFilePath = op.StringValue; break;
                 case "Output.IndexFilePath": Output.IndexFilePath = op.StringValue; break;
-                case "Output.FailedAlbumPath": Output.FailedAlbumPath = op.StringValue; break;
+                case "Output.IncompleteAlbumAction.Kind": Output.IncompleteAlbumAction.SetKind(op.IncompleteAlbumActionKindValue); break;
+                case "Output.IncompleteAlbumAction.Path": Output.IncompleteAlbumAction.SetPath(op.StringValue); break;
                 case "Output.OnComplete": Output.OnComplete = Collection(Output.OnComplete, op); break;
                 case "Output.AlbumArtOnly": Output.AlbumArtOnly = Bool(op); break;
                 case "Output.AlbumArtOption": Output.AlbumArtOption = op.AlbumArtOptionValue; break;
@@ -555,11 +564,34 @@ public static class DownloadSettingsPatchDtoMapper
 
     private sealed class OutputBuilder
     {
-        public string? ParentDir, NameFormat, InvalidReplaceStr, M3uFilePath, IndexFilePath, FailedAlbumPath;
+        public string? ParentDir, NameFormat, InvalidReplaceStr, M3uFilePath, IndexFilePath;
+        public IncompleteAlbumActionBuilder IncompleteAlbumAction { get; } = new();
         public bool? WritePlaylist, WriteIndex, HasConfiguredIndex, AlbumArtOnly;
         public AlbumArtOption? AlbumArtOption;
         public CollectionPatchDto<string>? OnComplete;
-        public OutputSettingsPatchDto Build() => new(ParentDir, NameFormat, InvalidReplaceStr, WritePlaylist, WriteIndex, HasConfiguredIndex, M3uFilePath, IndexFilePath, FailedAlbumPath, OnComplete, AlbumArtOnly, AlbumArtOption);
+        public OutputSettingsPatchDto Build() => new(ParentDir, NameFormat, InvalidReplaceStr, WritePlaylist, WriteIndex, HasConfiguredIndex, M3uFilePath, IndexFilePath, IncompleteAlbumAction.Build(), OnComplete, AlbumArtOnly, AlbumArtOption);
+    }
+
+    private sealed class IncompleteAlbumActionBuilder
+    {
+        private bool touched;
+        private IncompleteAlbumActionKind? kind;
+        private string? path;
+
+        public void SetKind(IncompleteAlbumActionKind? value)
+        {
+            kind = value;
+            touched = true;
+        }
+
+        public void SetPath(string? value)
+        {
+            path = value;
+            touched = true;
+        }
+
+        public IncompleteAlbumActionSettingsPatchDto? Build()
+            => touched ? new IncompleteAlbumActionSettingsPatchDto(kind, path) : null;
     }
 
     private sealed class SearchBuilder
