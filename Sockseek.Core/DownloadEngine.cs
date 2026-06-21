@@ -2191,11 +2191,18 @@ public class DownloadEngine
                         if (fastDownloadTask == null)
                         {
                             SockseekLog.Jobs.Debug($"[{song.DisplayId}] SongJob: fast-search starting provisional download from {fc.Username}\\{fc.Filename}: {song}");
-                            string outputPath = organizer.GetSavePath(fc.Filename);
+                            var target = GetInitialDownloadTarget(config, song, organizer, fc);
 
                             // Use the main job CTS for the download so cancelling the search doesn't kill the download.
                             fastDownloadTask = downloader!
-                                .DownloadFile(fc, outputPath, song, config.Transfer, config.Output.ParentDir, cts.Token)
+                                .DownloadFile(
+                                    fc,
+                                    target.Path,
+                                    song,
+                                    config.Transfer,
+                                    config.Output.ParentDir,
+                                    cts.Token,
+                                    target.PublishToDuplicateCache)
                                 .ContinueWith(t =>
                                 {
                                     if (t.IsCompletedSuccessfully)
@@ -2260,14 +2267,21 @@ public class DownloadEngine
         foreach (var candidate in candidates)
         {
             tried++;
-            string outputPath = organizer.GetSavePath(candidate.Filename);
+            var target = GetInitialDownloadTarget(config, song, organizer, candidate);
 
             FileDownloadOutcome download;
             try
             {
                 song.UpdateActivity(JobActivityPhase.Downloading);
                 // ReportDownloadStart is called inside DownloadFile (via Downloader).
-                download = await downloader!.DownloadFile(candidate, outputPath, song, config.Transfer, config.Output.ParentDir, cts.Token);
+                download = await downloader!.DownloadFile(
+                    candidate,
+                    target.Path,
+                    song,
+                    config.Transfer,
+                    config.Output.ParentDir,
+                    cts.Token,
+                    target.PublishToDuplicateCache);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -2278,7 +2292,7 @@ public class DownloadEngine
                 lastDownloadFailureMessage = DownloadFailureMessage(ex);
                 SockseekLog.Jobs.Debug(
                     $"Download attempt {tried} failed for '{candidate.Username}\\{candidate.Filename}' " +
-                    $"to '{outputPath}': {SockseekLog.ExceptionSummary(ex)}");
+                    $"to '{target.Path}': {SockseekLog.ExceptionSummary(ex)}");
                 if (tried >= candidates.Count || tried >= config.Transfer.MaxDownloadRetries)
                 {
                     return JobOutcome.Failed(
@@ -2310,6 +2324,26 @@ public class DownloadEngine
 
         return JobOutcome.Failed(JobFailureReason.NoSuitableFileFound);
     }
+
+    static InitialDownloadTarget GetInitialDownloadTarget(
+        DownloadSettings config,
+        SongJob song,
+        FileManager organizer,
+        FileCandidate candidate)
+    {
+        if (string.IsNullOrWhiteSpace(config.Output.NameFormat))
+            return new(organizer.GetSavePath(candidate.Filename), PublishToDuplicateCache: true);
+
+        var parentDir = string.IsNullOrWhiteSpace(config.Output.ParentDir)
+            ? Directory.GetCurrentDirectory()
+            : config.Output.ParentDir;
+        var sourceFileName = Utils.GetFileNameSlsk(candidate.Filename).CleanPath(config.Output.InvalidReplaceStr);
+        var stagingPath = Path.Join(parentDir, ".sockseek-staging", song.Id.ToString("N"), sourceFileName);
+
+        return new(stagingPath, PublishToDuplicateCache: false);
+    }
+
+    sealed record InitialDownloadTarget(string Path, bool PublishToDuplicateCache);
 
     static void CommitOutcome(Job job, JobOutcome outcome)
     {

@@ -115,6 +115,10 @@ internal static partial class Program
             {
                 await RunDaemonAsync(bindArgs, configFile, engineSettings, rootSettings, daemonSettings);
             }
+            catch (ArgumentException ex)
+            {
+                SockseekLog.Error(ex.Message);
+            }
             catch (Exception ex)
             {
                 SockseekLog.Fatal(ex, "Unhandled daemon error");
@@ -1050,7 +1054,7 @@ internal static partial class Program
         DownloadSettings rootSettings,
         DaemonSettings daemonSettings)
     {
-        var url = $"http://{daemonSettings.ListenIp}:{daemonSettings.ListenPort}";
+        var url = BuildDaemonListenUrl(daemonSettings);
         var options = new ServerOptions
         {
             Engine = SettingsCloner.Clone(engineSettings),
@@ -1064,6 +1068,18 @@ internal static partial class Program
         SockseekLog.Info($"Starting Sockseek daemon on {url}", categoryName: SockseekLog.Categories.Daemon);
         SockseekLog.Info("Press Ctrl+C to stop.", categoryName: SockseekLog.Categories.Daemon);
         await app.RunAsync();
+    }
+
+    internal static string BuildDaemonListenUrl(DaemonSettings daemonSettings)
+    {
+        if (!System.Net.IPAddress.TryParse(daemonSettings.ListenIp, out var ipAddress))
+            throw new ArgumentException($"Invalid daemon listen IP '{daemonSettings.ListenIp}'. Use a valid IP address such as 127.0.0.1, 0.0.0.0, ::1, or ::.");
+
+        var host = ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+            ? $"[{ipAddress}]"
+            : ipAddress.ToString();
+
+        return $"http://{host}:{daemonSettings.ListenPort}";
     }
 
     private static SongJob ToSongJob(SongJobPayloadDto song)

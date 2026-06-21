@@ -166,6 +166,59 @@ namespace Tests.Core
         }
 
         [TestMethod]
+        public async Task DuplicateDownloads_WithConcurrentUniqueNameFormat_ProduceEveryOutput()
+        {
+            var listPath = Path.GetTempFileName();
+            var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-duplicate-concurrent-unique-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+            System.IO.File.WriteAllLines(listPath, Enumerable.Repeat("\"artist=Artist, title=Song\"", 8));
+
+            var file = TestHelpers.CreateSlFile(@"Music\Artist - Song.mp3", size: 10_000, length: 180);
+            var response = new SearchResponse("user1", 1, true, 100, 0, [file]);
+            var testClient = new ClientTests.MockSoulseekClient([response])
+            {
+                BeforeDownloadCompletesAsync = async (_, _, ct) => await Task.Delay(25, ct),
+            };
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p", ConcurrentJobs = 4 };
+                var dl = new DownloadSettings();
+                dl.Extraction.Input = listPath;
+                dl.Extraction.InputType = InputType.List;
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
+                dl.Output.ParentDir = outputDir;
+                dl.Output.NameFormat = "{snum} - {stitle}";
+                dl.Skip.SkipExisting = false;
+
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app.Enqueue(new ExtractJob(listPath, InputType.List), dl);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var songs = app.Queue.AllSongs().OrderBy(song => song.ItemNumber).ToList();
+                Assert.AreEqual(8, songs.Count);
+                var outcomeSummary = string.Join(", ", songs.Select(song => $"{song.ItemNumber}:{song.TerminalOutcome}/{song.FailureReason}:{song.FailureMessage}"));
+                Assert.IsTrue(
+                    songs.All(song => song.TerminalOutcome == JobTerminalOutcome.Succeeded),
+                    $"Every duplicate row should either download or reuse successfully. Outcomes: {outcomeSummary}");
+
+                for (var i = 1; i <= 8; i++)
+                {
+                    var path = Path.Combine(outputDir, $"{i} - Song.mp3");
+                    Assert.IsTrue(System.IO.File.Exists(path), $"Expected output file missing: {path}");
+                    Assert.AreEqual(file.Size, new FileInfo(path).Length, $"Output file size mismatch: {path}");
+                }
+            }
+            finally
+            {
+                if (System.IO.File.Exists(listPath)) System.IO.File.Delete(listPath);
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task DuplicateDownloadCache_UsesAlbumOrganizedPathForNonAudioFiles()
         {
             var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-duplicate-cache-album-art-" + Guid.NewGuid());
@@ -336,6 +389,47 @@ namespace Tests.Core
         }
 
         [TestMethod]
+        public async Task SongJob_FailsWhenFinalRenameCannotReplaceBlockedPath()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-final-rename-blocked-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var file = TestHelpers.CreateSlFile(@"Music\Artist - Song.mp3", size: 10_000, length: 180);
+            var response = new SearchResponse("user1", 1, true, 100, 0, [file]);
+            var testClient = new ClientTests.MockSoulseekClient([response]);
+            var finalPath = Path.Combine(outputDir, "Artist - Song.mp3");
+            var incompletePath = finalPath + ".incomplete";
+            Directory.CreateDirectory(finalPath);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var dl = new DownloadSettings();
+                dl.Extraction.Input = "Artist - Song";
+                dl.Extraction.RequestedMode = ExtractionMode.Song;
+                dl.Output.ParentDir = outputDir;
+                dl.Transfer.MaxDownloadRetries = 1;
+
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                app.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var songJob = app.Queue.AllSongs().FirstOrDefault();
+                Assert.IsNotNull(songJob);
+                Assert.IsTrue(songJob.IsUnsuccessfulTerminal, "A failed final rename must not be reported as a successful download.");
+                Assert.AreEqual(JobFailureReason.AllDownloadsFailed, songJob.FailureReason);
+                Assert.IsTrue(Directory.Exists(finalPath), "The blocked destination directory should be left untouched.");
+                Assert.IsFalse(System.IO.File.Exists(incompletePath), "The incomplete file should be cleaned up after a failed final rename.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
         public async Task AlbumJob_RespectsMaxDownloadRetries()
         {
             var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-fallback-album-max-" + Guid.NewGuid());
@@ -379,6 +473,62 @@ namespace Tests.Core
                         || status.StartsWith("moved to ", StringComparison.Ordinal)
                         || status is "deleting files" or "deleted files"),
                     "Failed-album move/delete actions should not run when every file in the failed folder is incomplete or absent.");
+            }
+            finally
+            {
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task AlbumJob_FailsWhenTrackFinalRenameCannotReplaceBlockedPath()
+        {
+            var outputDir = Path.Combine(Path.GetTempPath(), "Sockseek-final-rename-blocked-album-" + Guid.NewGuid());
+            Directory.CreateDirectory(outputDir);
+
+            var file = TestHelpers.CreateSlFile(@"Music\Album\01. Artist - Song.mp3", size: 10_000, length: 180);
+            var response = new SearchResponse("user1", 1, true, 100, 0, [file]);
+            var testClient = new ClientTests.MockSoulseekClient([response]);
+            var finalPath = Path.Combine(outputDir, "Album", "01. Artist - Song.mp3");
+            var incompletePath = finalPath + ".incomplete";
+            Directory.CreateDirectory(finalPath);
+
+            try
+            {
+                var eng = new EngineSettings { Username = "u", Password = "p" };
+                var dl = new DownloadSettings();
+                dl.Extraction.Input = "artist=Artist, album=Album";
+                dl.Extraction.IsAlbum = true;
+                dl.Search.NoBrowseFolder = true;
+                dl.Output.ParentDir = outputDir;
+                dl.Transfer.MaxDownloadRetries = 1;
+
+                var app = new DownloadEngine(eng, TestHelpers.CreateMockClientManager(testClient, eng));
+                var albumStatuses = new List<string>();
+                app.Events.JobStatus += (job, status) =>
+                {
+                    if (job is AlbumJob)
+                        albumStatuses.Add(status);
+                };
+                app.Enqueue(new ExtractJob(dl.Extraction.Input, dl.Extraction.InputType), dl);
+                app.CompleteEnqueue();
+
+                await app.RunAsync(CancellationToken.None);
+
+                var albumJob = app.Queue.AllJobs().OfType<AlbumJob>().FirstOrDefault();
+                Assert.IsNotNull(albumJob);
+                Assert.IsTrue(albumJob.IsUnsuccessfulTerminal, "An album with a track that cannot be finalized must not be reported as successful.");
+                Assert.AreEqual(JobFailureReason.AllDownloadsFailed, albumJob.FailureReason);
+                var failedTrack = albumJob.ResolvedTarget?.Files.FirstOrDefault();
+                Assert.IsNotNull(failedTrack);
+                Assert.IsTrue(failedTrack.IsUnsuccessfulTerminal, "The track whose final placement failed should be terminal unsuccessful.");
+                Assert.IsTrue(Directory.Exists(finalPath), "The blocked destination directory should be left untouched.");
+                Assert.IsFalse(System.IO.File.Exists(incompletePath), "The incomplete file should be cleaned up after a failed final rename.");
+                Assert.IsFalse(
+                    albumStatuses.Any(status => status.StartsWith("moving to ", StringComparison.Ordinal)
+                        || status.StartsWith("moved to ", StringComparison.Ordinal)
+                        || status is "deleting files" or "deleted files"),
+                    "Failed-album actions should not run when no file reached a completed path.");
             }
             finally
             {

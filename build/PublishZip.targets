@@ -13,9 +13,22 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
     <PackageDir>$(ArtifactsDir)/packages</PackageDir>
 
     <CliProject>$(RepoRoot)/Sockseek.Cli/Sockseek.Cli.csproj</CliProject>
+    <PackagerProject>$(RepoRoot)/Sockseek.Packager/Sockseek.Packager.csproj</PackagerProject>
+    <PackagerTargetFramework>net10.0</PackagerTargetFramework>
+    <PackagerDll>$(RepoRoot)/Sockseek.Packager/bin/$(Configuration)/$(PackagerTargetFramework)/Sockseek.Packager.dll</PackagerDll>
   </PropertyGroup>
 
-  <Target Name="PublishPackage">
+  <Target Name="BuildPackager"
+          Condition="'$(IsWindowsRid)' != 'True'"
+          Inputs="$(RepoRoot)/Sockseek.Packager/Program.cs;$(PackagerProject)"
+          Outputs="$(PackagerDll)">
+    <MSBuild Projects="$(PackagerProject)"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=$(PackagerTargetFramework)"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishSelfContained;PublishSingleFile;PublishTrimmed;PublishReadyToRun;PublishAot" />
+  </Target>
+
+  <Target Name="PublishPackage" DependsOnTargets="BuildPackager">
     <Error Condition="'$(RID)' == ''" Text="Set RID, e.g. -p:RID=linux-x64" />
 
     <PropertyGroup>
@@ -53,8 +66,7 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
                   Overwrite="true" />
 
     <Exec Condition="'$(IsWindowsRid)' != 'True'"
-          WorkingDirectory="$(PublishDir)"
-          Command="tar -czf &quot;$(PackagePath)&quot; ." />
+          Command="dotnet &quot;$(PackagerDll)&quot; tar-gz &quot;$(PublishDir)&quot; &quot;$(PackagePath)&quot; sockseek" />
   </Target>
 
   <Target Name="PublishZip" DependsOnTargets="PublishPackage" />

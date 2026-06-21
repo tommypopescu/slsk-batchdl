@@ -696,6 +696,23 @@ namespace Tests.ConfigParsingTests
         }
 
         [TestMethod]
+        public void DaemonListenUrl_RejectsInvalidServerIp()
+        {
+            var ex = Assert.ThrowsException<ArgumentException>(() =>
+                Sockseek.Cli.Program.BuildDaemonListenUrl(new DaemonSettings { ListenIp = "999.1.1.1", ListenPort = 15082 }));
+
+            StringAssert.Contains(ex.Message, "Invalid daemon listen IP");
+        }
+
+        [TestMethod]
+        public void DaemonListenUrl_FormatsIpv6Address()
+        {
+            var url = Sockseek.Cli.Program.BuildDaemonListenUrl(new DaemonSettings { ListenIp = "::1", ListenPort = 15082 });
+
+            Assert.AreEqual("http://[::1]:15082", url);
+        }
+
+        [TestMethod]
         public void ServerPort_SetsCli()
         {
             var (_, _, _, daemon, _) = BindAll("--server-port", "5055");

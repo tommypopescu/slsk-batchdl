@@ -45,8 +45,14 @@ public class Downloader
         this.events = events;
     }
 
-    public async Task<FileDownloadOutcome> DownloadFile(FileCandidate candidate, string outputPath, SongJob song,
-        TransferSettings transfer, string? parentDir, CancellationToken? ct = null)
+    public async Task<FileDownloadOutcome> DownloadFile(
+        FileCandidate candidate,
+        string outputPath,
+        SongJob song,
+        TransferSettings transfer,
+        string? parentDir,
+        CancellationToken? ct = null,
+        bool publishToDuplicateCache = true)
     {
         string fileKey = candidate.Username + '\\' + candidate.Filename;
 
@@ -174,13 +180,35 @@ public class Downloader
 
         if (!transfer.NoIncompleteExt)
         {
-            try { Utils.Move(incompleteOutputPath, outputPath); }
-            catch (IOException e) { SockseekLog.Jobs.Error($"[{song.DisplayId}] SongJob: failed to rename incomplete file from '{incompleteOutputPath}' to '{outputPath}'. Error: {e}"); }
+            try
+            {
+                Utils.Move(incompleteOutputPath, outputPath);
+            }
+            catch (Exception ex)
+            {
+                downloadRegistry.Downloads.TryRemove(candidate.Filename, out _);
+                try
+                {
+                    if (File.Exists(incompleteOutputPath))
+                        File.Delete(incompleteOutputPath);
+                }
+                catch (Exception cleanupEx)
+                {
+                    SockseekLog.Jobs.Debug($"[{song.DisplayId}] SongJob: failed to delete incomplete download '{incompleteOutputPath}' after final rename failure: {cleanupEx.Message}");
+                }
+
+                throw new IOException(
+                    $"Failed to rename incomplete file from '{incompleteOutputPath}' to '{outputPath}'.",
+                    ex);
+            }
         }
 
         var result = new FileDownloadResult(outputPath, candidate);
-        lock (downloadRegistry.DownloadedFiles)
-            downloadRegistry.DownloadedFiles[fileKey] = result;
+        if (publishToDuplicateCache)
+        {
+            lock (downloadRegistry.DownloadedFiles)
+                downloadRegistry.DownloadedFiles[fileKey] = result;
+        }
         downloadRegistry.Downloads.TryRemove(candidate.Filename, out _);
 
         if (candidate.File.Size > 0)
