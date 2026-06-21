@@ -585,6 +585,7 @@ Enter/d         download selected folder
 y               download folder and disable interactive mode
 r               retrieve all files in the folder
 s               skip current album
+S               skip current and all remaining new album prompts
 Esc/q           quit program
 h               print this help text
 
@@ -594,6 +595,8 @@ f               filter folders containing files matching query
 cd ..           load parent folder
 cd subdir       go to subfolder
 ```
+`S` only suppresses future prompts for new albums. If an album you already accepted fails and
+Sockseek can retry with another candidate, that retry prompt is still shown.
 <!-- sockseek-help:end -->
 
 ## Examples

@@ -7,6 +7,7 @@ using Sockseek.Server;
 using System.Net;
 using System.Net.Sockets;
 using Sockseek.Api;
+using Tests.ClientTests;
 
 namespace Tests.Cli;
 
@@ -186,6 +187,43 @@ public class CliBackendParityTests
             });
     }
 
+    [TestMethod]
+    public async Task CliBackendParity_TryNextCandidateByDisplayId_SkipsActiveSongCandidate()
+    {
+        await RunForEachInjectedClientBackendAsync(
+            createClient: () =>
+            {
+                var gate = new DownloadGate();
+                var client = new MockSoulseekClient(
+                [
+                    SearchResponse("slowuser", @"Music\Artist\Album\01. Artist - Track.mp3"),
+                    SearchResponse("fastuser", @"Music\Artist\Album\01. Artist - Track.mp3"),
+                ])
+                {
+                    BeforeDownloadCompletesAsync = gate.BlockMatchingUserAsync,
+                };
+                return (client, gate);
+            },
+            scenario: async ctx =>
+            {
+                var summary = await ctx.Backend.SubmitSongJobAsync(
+                    new SubmitSongJobRequestDto(new SongQueryDto("Artist", "Track", "", "", -1, false)),
+                    ctx.Token);
+
+                await ctx.Gate!.WaitForStartedAsync();
+                Assert.IsTrue(
+                    await ctx.Backend.TryNextCandidateByDisplayIdAsync(summary.DisplayId, summary.WorkflowId, ctx.Token),
+                    ctx.Name);
+
+                await WaitForJobStateAsync(ctx.Backend, summary.JobId, ExpectedJobStatus.Succeeded);
+                await WaitForWorkflowStateAsync(ctx.Backend, summary.WorkflowId, ServerWorkflowState.Completed);
+
+                var detail = await ctx.Backend.GetJobDetailAsync(summary.JobId, ctx.Token);
+                Assert.IsInstanceOfType<SongJobPayloadDto>(detail?.Payload, out var payload);
+                Assert.AreNotEqual(ctx.Gate.BlockedUsername, payload.ResolvedUsername, ctx.Name);
+            });
+    }
+
     private static async Task RunForEachBackendAsync(Action<string> seedMusic, Func<ParityBackendContext, Task> scenario)
     {
         await using (var local = await ParityBackendContext.CreateLocalAsync(seedMusic))
@@ -193,6 +231,41 @@ public class CliBackendParityTests
 
         await using (var remote = await ParityBackendContext.CreateRemoteAsync(seedMusic))
             await scenario(remote);
+    }
+
+    private static async Task RunForEachInjectedClientBackendAsync(
+        Func<(MockSoulseekClient Client, DownloadGate Gate)> createClient,
+        Func<ParityBackendContext, Task> scenario)
+    {
+        var localClient = createClient();
+        await using (var local = await ParityBackendContext.CreateLocalAsync(localClient.Client, localClient.Gate))
+            await scenario(local);
+
+        var remoteClient = createClient();
+        await using (var remote = await ParityBackendContext.CreateRemoteAsync(remoteClient.Client, remoteClient.Gate))
+            await scenario(remote);
+    }
+
+    private sealed class DownloadGate
+    {
+        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int blocked;
+
+        public string? BlockedUsername { get; private set; }
+
+        public async Task BlockMatchingUserAsync(string candidateUsername, string _, CancellationToken ct)
+        {
+            if (Interlocked.CompareExchange(ref blocked, 1, 0) != 0)
+                return;
+
+            BlockedUsername = candidateUsername;
+            started.TrySetResult();
+            await release.Task.WaitAsync(ct);
+        }
+
+        public Task WaitForStartedAsync()
+            => started.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     private sealed class ParityBackendContext : IAsyncDisposable
@@ -215,6 +288,7 @@ public class CliBackendParityTests
             Func<Task>? stopAppAsync = null,
             IAsyncDisposable? appDisposable = null,
             RemoteCliBackend? remoteBackend = null,
+            DownloadGate? gate = null,
             CancellationTokenSource? cts = null)
         {
             this.cts = cts ?? new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -227,12 +301,14 @@ public class CliBackendParityTests
             this.stopAppAsync = stopAppAsync;
             this.appDisposable = appDisposable;
             this.remoteBackend = remoteBackend;
+            Gate = gate;
         }
 
         public string Name { get; }
         public string MusicRoot { get; }
         public string OutputDir { get; }
         public ICliBackend Backend { get; }
+        public DownloadGate? Gate { get; }
         public CancellationToken Token => cts.Token;
 
         public static Task<ParityBackendContext> CreateLocalAsync(Action<string> seedMusic)
@@ -249,6 +325,22 @@ public class CliBackendParityTests
             var engineTask = engine.RunAsync(cts.Token);
 
             return Task.FromResult(new ParityBackendContext("local", musicRoot, outputDir, backend, engine, engineTask, cts: cts));
+        }
+
+        public static Task<ParityBackendContext> CreateLocalAsync(MockSoulseekClient client, DownloadGate gate)
+        {
+            string musicRoot = CreateTempDir("Sockseek-cli-parity-local-music-");
+            string outputDir = CreateTempDir("Sockseek-cli-parity-local-out-");
+
+            var engineSettings = new EngineSettings { Username = "test_user", Password = "test_pass" };
+            var downloadSettings = CreateDownloadSettings(outputDir);
+            downloadSettings.Output.NameFormat = "{filename}";
+            var engine = new DownloadEngine(engineSettings, new SoulseekClientManager(engineSettings, client));
+            var backend = new LocalCliBackend(engine, downloadSettings);
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var engineTask = engine.RunAsync(cts.Token);
+
+            return Task.FromResult(new ParityBackendContext("local", musicRoot, outputDir, backend, engine, engineTask, gate: gate, cts: cts));
         }
 
         public static async Task<ParityBackendContext> CreateRemoteAsync(Action<string> seedMusic)
@@ -278,6 +370,38 @@ public class CliBackendParityTests
                 stopAppAsync: () => app.StopAsync(),
                 appDisposable: app,
                 remoteBackend: backend);
+        }
+
+        public static async Task<ParityBackendContext> CreateRemoteAsync(MockSoulseekClient client, DownloadGate gate)
+        {
+            string musicRoot = CreateTempDir("Sockseek-cli-parity-remote-music-");
+            string outputDir = CreateTempDir("Sockseek-cli-parity-remote-out-");
+
+            int port = GetFreeTcpPort();
+            string url = $"http://127.0.0.1:{port}";
+            var downloadSettings = CreateDownloadSettings(outputDir);
+            downloadSettings.Output.NameFormat = "{filename}";
+            var app = ServerHost.Build([], new ServerOptions
+            {
+                Engine = new EngineSettings { Username = "test_user", Password = "test_pass" },
+                DefaultDownload = downloadSettings,
+                Profiles = ProfileCatalog.Empty,
+                ClientFactory = _ => client,
+            }, url);
+
+            await app.StartAsync();
+            var backend = new RemoteCliBackend(url);
+            await backend.StartAsync();
+
+            return new ParityBackendContext(
+                "remote",
+                musicRoot,
+                outputDir,
+                backend,
+                stopAppAsync: () => app.StopAsync(),
+                appDisposable: app,
+                remoteBackend: backend,
+                gate: gate);
         }
 
         public string[] DownloadedRelativePaths()
@@ -350,6 +474,26 @@ public class CliBackendParityTests
                 MinSharesAggregate = 1,
             },
         };
+
+    private static Soulseek.SearchResponse SearchResponse(string username, string filename)
+        => new(
+            username,
+            token: 1,
+            hasFreeUploadSlot: true,
+            uploadSpeed: 100,
+            queueLength: 0,
+            fileList:
+            [
+                new Soulseek.File(
+                    1,
+                    filename,
+                    100,
+                    Path.GetExtension(filename),
+                    attributeList:
+                    [
+                        new Soulseek.FileAttribute(Soulseek.FileAttributeType.Length, 60),
+                    ]),
+            ]);
 
     private static async Task WaitForJobStateAsync(ICliBackend backend, Guid jobId, ExpectedJobStatus expectedState, int timeoutMs = 5000)
     {

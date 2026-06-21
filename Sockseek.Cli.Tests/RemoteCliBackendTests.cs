@@ -392,10 +392,10 @@ public class RemoteCliBackendTests
                         Interlocked.Increment(ref pickerCalls);
                         var folder = request.Folders.First();
                         return new InteractiveModeManager.RunResult(
+                            InteractiveModeManager.RunAction.Accept,
                             0,
                             folder,
                             RetrieveCurrentFolder: true,
-                            ExitInteractiveMode: false,
                             request.FilterStr);
                     }
                     finally
@@ -493,10 +493,12 @@ public class RemoteCliBackendTests
                     Interlocked.Increment(ref pickerCalls);
                     var folder = request.Folders.FirstOrDefault();
                     return Task.FromResult(new InteractiveModeManager.RunResult(
+                        folder == null
+                            ? InteractiveModeManager.RunAction.SkipCurrent
+                            : InteractiveModeManager.RunAction.Accept,
                         folder == null ? -1 : 0,
                         folder,
                         RetrieveCurrentFolder: true,
-                        ExitInteractiveMode: false,
                         request.FilterStr));
                 },
                 pollInterval: TimeSpan.FromMilliseconds(10));
@@ -587,10 +589,10 @@ public class RemoteCliBackendTests
                     promptedBuckets.Add(request.PromptJob.ToString(noInfo: true));
                     var folder = request.Folders.First();
                     return Task.FromResult(new InteractiveModeManager.RunResult(
+                        InteractiveModeManager.RunAction.Accept,
                         0,
                         folder,
                         RetrieveCurrentFolder: true,
-                        ExitInteractiveMode: false,
                         request.FilterStr));
                 },
                 pollInterval: TimeSpan.FromMilliseconds(10));

@@ -138,10 +138,12 @@ public class LocalCliBackendTests
                     Interlocked.Increment(ref pickerCalls);
                     var folder = request.Folders.FirstOrDefault();
                     return Task.FromResult(new InteractiveModeManager.RunResult(
+                        folder == null
+                            ? InteractiveModeManager.RunAction.SkipCurrent
+                            : InteractiveModeManager.RunAction.Accept,
                         folder == null ? -1 : 0,
                         folder,
                         RetrieveCurrentFolder: true,
-                        ExitInteractiveMode: false,
                         request.FilterStr));
                 },
                 pollInterval: TimeSpan.FromMilliseconds(10));

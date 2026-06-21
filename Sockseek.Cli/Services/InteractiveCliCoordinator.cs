@@ -22,6 +22,7 @@ internal sealed class InteractiveCliCoordinator
     private readonly Dictionary<Guid, InteractiveAlbumSession> interactiveAlbumSessions = [];
     private SubmissionOptionsDto? rootOptions;
     private bool interactiveEnabled;
+    private bool skipRemainingNewAlbumPrompts;
 
     public InteractiveCliCoordinator(
         ICliBackend backend,
@@ -146,7 +147,7 @@ internal sealed class InteractiveCliCoordinator
             folders,
             OptionsForWorkflow(detail.Summary.WorkflowId),
             InteractiveAlbumResultKind.Folder);
-        var selected = await PromptForAlbumSelectionAsync(session);
+        var selected = await PromptForAlbumSelectionAsync(session, InteractiveAlbumPromptPurpose.NewAlbumPrompt);
         if (selected == null)
             return;
 
@@ -169,16 +170,30 @@ internal sealed class InteractiveCliCoordinator
             return;
         }
 
-        var session = new InteractiveAlbumSession(
-            albumJobId,
-            new AlbumJob(ToAlbumQuery(album.Query)) { ItemName = detail.Summary.ItemName, Results = folders },
-            album.Query,
-            folders,
-            OptionsForWorkflow(detail.Summary.WorkflowId),
-            InteractiveAlbumResultKind.Folder);
+        var purpose = interactiveAlbumSessions.TryGetValue(albumJobId, out var session)
+            ? InteractiveAlbumPromptPurpose.RetryAcceptedAlbumPrompt
+            : InteractiveAlbumPromptPurpose.NewAlbumPrompt;
+
+        if (session == null)
+        {
+            session = new InteractiveAlbumSession(
+                albumJobId,
+                new AlbumJob(ToAlbumQuery(album.Query)) { ItemName = detail.Summary.ItemName, Results = folders },
+                album.Query,
+                folders,
+                OptionsForWorkflow(detail.Summary.WorkflowId),
+                InteractiveAlbumResultKind.Folder);
+        }
+        else
+        {
+            session.Folders.Clear();
+            session.Folders.AddRange(folders);
+            if (session.PromptJob is AlbumJob promptAlbum)
+                promptAlbum.Results = folders;
+        }
 
         var selected = interactiveEnabled
-            ? await PromptForAlbumSelectionAsync(session)
+            ? await PromptForAlbumSelectionAsync(session, purpose)
             : new InteractiveAlbumSelection(folders[0], RetrieveCurrentFolder: true, SkipTrackCountVerification: false);
 
         if (selected == null)
@@ -225,7 +240,7 @@ internal sealed class InteractiveCliCoordinator
                 InteractiveAlbumResultKind.AggregateAlbum);
 
             var selected = interactiveEnabled
-                ? await PromptForAlbumSelectionAsync(session)
+                ? await PromptForAlbumSelectionAsync(session, InteractiveAlbumPromptPurpose.NewAlbumPrompt)
                 : new InteractiveAlbumSelection(folders[0], RetrieveCurrentFolder: true, SkipTrackCountVerification: false);
 
             if (selected == null)
@@ -259,7 +274,7 @@ internal sealed class InteractiveCliCoordinator
             session.ExcludedFolderKeys.Add(album.ResolvedFolderUsername + "\\" + album.ResolvedFolderPath);
         }
 
-        var selected = await PromptForAlbumSelectionAsync(session);
+        var selected = await PromptForAlbumSelectionAsync(session, InteractiveAlbumPromptPurpose.RetryAcceptedAlbumPrompt);
         if (selected == null)
             return;
 
@@ -374,8 +389,13 @@ internal sealed class InteractiveCliCoordinator
         target.IsFullyRetrieved = refreshed.IsFullyRetrieved;
     }
 
-    private async Task<InteractiveAlbumSelection?> PromptForAlbumSelectionAsync(InteractiveAlbumSession session)
+    private async Task<InteractiveAlbumSelection?> PromptForAlbumSelectionAsync(
+        InteractiveAlbumSession session,
+        InteractiveAlbumPromptPurpose purpose)
     {
+        if (skipRemainingNewAlbumPrompts && purpose == InteractiveAlbumPromptPurpose.NewAlbumPrompt)
+            return null;
+
         var availableFolders = session.Folders
             .Where(folder => !session.ExcludedFolderKeys.Contains(FolderKey(folder)))
             .ToList();
@@ -393,7 +413,8 @@ internal sealed class InteractiveCliCoordinator
                     session.PromptJob,
                     availableFolders,
                     session.RetrievedFolders,
-                    session.FilterStr));
+                    session.FilterStr,
+                    purpose));
             }
             else
             {
@@ -412,13 +433,20 @@ internal sealed class InteractiveCliCoordinator
             }
 
             session.FilterStr = result.FilterStr;
-            if (result.ExitInteractiveMode)
+            if (result.Action == InteractiveModeManager.RunAction.ExitInteractiveMode)
             {
                 interactiveEnabled = false;
                 cliSettings.InteractiveMode = false;
             }
 
-            if (result.Index < 0 || result.Folder == null)
+            if (result.Action == InteractiveModeManager.RunAction.SkipRemainingNewPrompts)
+                skipRemainingNewAlbumPrompts = true;
+
+            if (result.Action != InteractiveModeManager.RunAction.Accept
+                && result.Action != InteractiveModeManager.RunAction.ExitInteractiveMode)
+                return null;
+
+            if (result.Folder == null)
                 return null;
 
             return new InteractiveAlbumSelection(result.Folder, result.RetrieveCurrentFolder, SkipTrackCountVerification: true);
@@ -570,7 +598,14 @@ internal sealed record InteractiveAlbumPromptRequest(
     Job PromptJob,
     List<AlbumFolder> Folders,
     HashSet<string> RetrievedFolders,
-    string? FilterStr);
+    string? FilterStr,
+    InteractiveAlbumPromptPurpose Purpose);
+
+internal enum InteractiveAlbumPromptPurpose
+{
+    NewAlbumPrompt,
+    RetryAcceptedAlbumPrompt,
+}
 
 internal sealed record InteractiveAlbumSelection(
     AlbumFolder Folder,

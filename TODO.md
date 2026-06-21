@@ -1,14 +1,5 @@
 ## TODO
 
-### 3.0
-
-- Add a way to skip this and all remaining album interactive prompts (`S`, capital case/shift)
-    - For example: In `-agt` mode or for CSV files with many albums, can press `S` on the k+1 album after accepting the first k albums, which will skip it and skip/ignore all remaining NEW album prompts.
-    - Ensure that even after pressing `S`, if an already accepted album fails, the prompt for it still appears with the failed one removed.
-    - Also test `t` (try next candidate) in all modes
-
-### Later
-
 - Add `q` to quit. When any jobs are running or pending, prompt if should cancel [Y/n/Esc]. In local mode, n=Esc="do not cancel, keep running". In remote mode, n="exit without cancelling workflow remotely" and Esc="cancel prompt, keep running" (the prompt should be different depending on if local or remote mode for clarity).
 
 - Add a `--idle-when-done` (or similar) option that will make it idle instead of exiting at the end. 

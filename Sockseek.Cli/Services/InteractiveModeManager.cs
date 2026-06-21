@@ -25,18 +25,20 @@ public class InteractiveModeManager
     private string?  filterStr;
     private int      savedPos;
 
-    // ── return codes from Run() ───────────────────────────────────────────────
-    // index == -1  → user pressed 's' (skip this album)
-    // index == -2  → user pressed 'q' (quit program)
-    // index >= 0   → accepted folder; folder is the (possibly trimmed) chosen AlbumFolder
-    // exitInteractiveMode == true → engine should disable config.interactiveMode
-    // TODO: Make explicit rather than -1, -2.
+    public enum RunAction
+    {
+        Accept,
+        SkipCurrent,
+        SkipRemainingNewPrompts,
+        Quit,
+        ExitInteractiveMode,
+    }
 
     public record RunResult(
+        RunAction   Action,
         int         Index,
         AlbumFolder? Folder,
         bool         RetrieveCurrentFolder,
-        bool         ExitInteractiveMode,
         string?      FilterStr);
 
     public record RetrievedFolder(AlbumFolder Folder, int NewFilesFoundCount);
@@ -87,8 +89,8 @@ public class InteractiveModeManager
             string retrieveAll2 = canRetrieve ? "| Load All Files" : "";
             string? statusLine = null;
             Console.WriteLine();
-        Printing.WriteLine($" [Up/p] | [Down/n] | [Enter] {retrieveAll1} | [s]  | [Esc/q] | [h]", ConsoleColor.Cyan, force: true);
-        Printing.WriteLine($" Prev   | Next     | Accept  {retrieveAll2} | Skip | Quit    | More Help", ConsoleColor.Cyan, force: true);
+        Printing.WriteLine($" [Up/p] | [Down/n] | [Enter] {retrieveAll1} | [s/S]     | [Esc/q] | [h]", ConsoleColor.Cyan, force: true);
+        Printing.WriteLine($" Prev   | Next     | Accept  {retrieveAll2} | Skip/Rest | Quit    | More Help", ConsoleColor.Cyan, force: true);
 
         Console.WriteLine();
         savedPos = GetCursorTopOrDefault();
@@ -157,17 +159,21 @@ public class InteractiveModeManager
                     }
                     goto Loop;
 
+                case "s" when commandInput == "S":
+                    Printing.WriteLine($"Skipped all remaining new album prompts.", ConsoleColor.Yellow, force: true);
+                    return new RunResult(RunAction.SkipRemainingNewPrompts, -1, null, false, filterStr);
+
                 case "s":
                     Printing.WriteLine($"Skipped: {job.ToString(noInfo: true)}", ConsoleColor.Yellow, force: true);
-                    return new RunResult(-1, null, false, false, null);
+                    return new RunResult(RunAction.SkipCurrent, -1, null, false, filterStr);
 
                 case "q":
-                    return new RunResult(-2, null, false, false, null);
+                    return new RunResult(RunAction.Quit, -2, null, false, filterStr);
 
                 case "y":
                     Printing.WriteLine($"Downloading: {folder.FolderPath}", ConsoleColor.Green, force: true);
                     Printing.WriteLine("Exiting interactive mode", ConsoleColor.Gray, force: true);
-                    return new RunResult(index, folder, true, ExitInteractiveMode: true, filterStr);
+                    return new RunResult(RunAction.ExitInteractiveMode, index, folder, true, filterStr);
 
                 case "r":
                     if (!canRetrieve) goto Loop;
@@ -257,12 +263,12 @@ public class InteractiveModeManager
                     if (options.Length == 0)
                     {
                         Printing.WriteLine($"Downloading: {folder.FolderPath}", ConsoleColor.Green, force: true);
-                        return new RunResult(index, folder, true, false, filterStr);
+                        return new RunResult(RunAction.Accept, index, folder, true, filterStr);
                     }
                     if (TryBuildSelectedFolder(folder, options, out var trimmedFolder, out var error))
                     {
                         Printing.WriteLine($"Downloading: {folder.FolderPath} ({trimmedFolder.Files.Count} selected files)", ConsoleColor.Green, force: true);
-                        return new RunResult(index, trimmedFolder, false, false, filterStr);
+                        return new RunResult(RunAction.Accept, index, trimmedFolder, false, filterStr);
                     }
                     Console.WriteLine($"Error: {error}");
                     goto Loop;
@@ -314,7 +320,7 @@ public class InteractiveModeManager
 
                 case "":
                     Printing.WriteLine($"Downloading: {folder.FolderPath}", ConsoleColor.Green, force: true);
-                    return new RunResult(index, folder, true, false, filterStr);
+                    return new RunResult(RunAction.Accept, index, folder, true, filterStr);
 
                 default:
                     Console.WriteLine($"Error: Invalid input {userInputStr}");

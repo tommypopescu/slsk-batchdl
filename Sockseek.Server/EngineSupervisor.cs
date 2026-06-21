@@ -572,7 +572,7 @@ public sealed class EngineSupervisor
 
     private DownloadEngine CreateEngine()
     {
-        var clientManager = new SoulseekClientManager(engineSettings);
+        var clientManager = new SoulseekClientManager(engineSettings, options.ClientFactory?.Invoke(engineSettings));
         var engine = new DownloadEngine(engineSettings, clientManager, jobSettingsResolver);
         StateStore.AttachEngine(engine);
         lock (engineGate)

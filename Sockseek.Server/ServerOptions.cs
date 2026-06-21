@@ -1,5 +1,6 @@
 using Sockseek.Core.Settings;
 using Sockseek.Api;
+using Soulseek;
 
 namespace Sockseek.Server;
 
@@ -11,4 +12,5 @@ public sealed class ServerOptions
     public DownloadSettingsPatchDto? LaunchDownloadSettings { get; set; }
     public ProfileCatalog Profiles { get; set; } = ProfileCatalog.Empty;
     public string? ConfigDir { get; set; }
+    public Func<EngineSettings, ISoulseekClient>? ClientFactory { get; set; }
 }
