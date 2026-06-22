@@ -42,7 +42,7 @@ public sealed class EngineEventDtoAdapter
                         EngineStateStore.ToServerFailureReason(song.FailureReason),
                         song.DownloadPath,
                         song.ChosenCandidate != null ? ToFileCandidateDto(song.ChosenCandidate) : null,
-                        song.Discovery?.ResultCount,
+                        song.Discovery?.RawResultCount,
                         song.Discovery?.LockedFileCount,
                         song.FailureMessage,
                         EngineStateStore.ToServerJobCancellationSource(song.CancellationSource)));

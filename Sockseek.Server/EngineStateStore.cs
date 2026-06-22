@@ -31,6 +31,7 @@ public sealed class EngineStateStore
         engine.Events.JobRegistered += OnJobRegistered;
         engine.Events.JobResultCreated += OnJobResultCreated;
         engine.Events.JobStateChanged += OnJobStateChanged;
+        engine.Events.JobDiscoveryChanged += OnJobDiscoveryChanged;
         engine.Events.JobExecutionCompleted += OnJobExecutionCompleted;
         engine.Events.DownloadStarted += OnNestedSongDownloadStarted;
         engine.Events.DownloadStateChanged += OnDownloadStateChanged;
@@ -41,6 +42,7 @@ public sealed class EngineStateStore
         engine.Events.JobRegistered -= OnJobRegistered;
         engine.Events.JobResultCreated -= OnJobResultCreated;
         engine.Events.JobStateChanged -= OnJobStateChanged;
+        engine.Events.JobDiscoveryChanged -= OnJobDiscoveryChanged;
         engine.Events.JobExecutionCompleted -= OnJobExecutionCompleted;
         engine.Events.DownloadStarted -= OnNestedSongDownloadStarted;
         engine.Events.DownloadStateChanged -= OnDownloadStateChanged;
@@ -340,6 +342,29 @@ public sealed class EngineStateStore
         PublishJobAndWorkflowUpserts(summaries, workflowSummaries);
     }
 
+    private void OnJobDiscoveryChanged(Job job)
+    {
+        List<JobSummaryDto> summaries = [];
+        lock (gate)
+        {
+            if (jobs.ContainsKey(job.Id))
+            {
+                summaries.Add(UpdateJobRecord(job).Summary);
+            }
+            else
+            {
+                var containingRecords = UpdateRecordsContainingJob(job.Id);
+                if (containingRecords.Count > 0)
+                    summaries.AddRange(containingRecords.Select(record => record.Summary));
+            }
+        }
+
+        if (summaries.Count == 0)
+            return;
+
+        PublishJobAndWorkflowUpserts(summaries, []);
+    }
+
     private void OnJobExecutionCompleted(Job job)
     {
         JobSummaryDto summary;
@@ -591,7 +616,7 @@ public sealed class EngineStateStore
             parentJobId,
             resultJobId,
             sourceJobId,
-            job.Discovery?.ResultCount,
+            job.Discovery?.RawResultCount,
             job.Discovery?.LockedFileCount,
             job.Config?.AppliedAutoProfiles?.OrderBy(x => x).ToList() ?? [],
             BuildActions(job),

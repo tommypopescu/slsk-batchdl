@@ -1062,7 +1062,7 @@ namespace Tests.Eventing
                 capturedActivity = j.ActivityPhase;
             };
 
-            song.Discovery = new DiscoverySummary { ResultCount = 5, LockedFileCount = 2 };
+            song.Discovery = new DiscoverySummary { RawResultCount = 5, LockedFileCount = 2 };
             song.UpdateActivity(JobActivityPhase.Downloading);
 
             var raiseMethod = typeof(EngineEvents).GetMethod("RaiseJobStateChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
@@ -1070,7 +1070,7 @@ namespace Tests.Eventing
 
             Assert.AreEqual(JobActivityPhase.Downloading, capturedActivity);
             Assert.IsNotNull(capturedDiscovery);
-            Assert.AreEqual(5, capturedDiscovery.ResultCount);
+            Assert.AreEqual(5, capturedDiscovery.RawResultCount);
             Assert.AreEqual(2, capturedDiscovery.LockedFileCount);
         }
 
@@ -1085,7 +1085,7 @@ namespace Tests.Eventing
             events.JobStateChanged += j => sub1SawIt = j.Discovery != null;
             events.JobStateChanged += j => sub2SawIt = j.Discovery != null;
 
-            song.Discovery = new DiscoverySummary { ResultCount = 1 };
+            song.Discovery = new DiscoverySummary { RawResultCount = 1 };
             song.UpdateActivity(JobActivityPhase.Downloading);
 
             var raiseMethod = typeof(EngineEvents).GetMethod("RaiseJobStateChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);

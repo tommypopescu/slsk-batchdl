@@ -55,7 +55,7 @@ The hyphen ` - ` determines what part of the input is the artist and title, whic
 sockseek "Album Title"
 sockseek "Artist - Album Title"
 ```
-Again, prefer to separate artist from album title with ` - ` when providing both artist and title.
+Again, prefer to separate artist from album title with ` - ` when providing both.
 
 #### Download an album interactively
 ```bash
@@ -534,7 +534,7 @@ Sockseek captures bounded stdout/stderr for ordinary on-complete commands, so ch
 
 ### Variables
 
-The available variables are the same as in name-format, with the following additions:
+The available variables are the same as in [name-format](#available-variables), with the following additions:
 - `{exitcode}` - Previous command's exit code
 - `{stdout}` - Previous command's stdout
 - `{stderr}` - Previous command's stderr
@@ -661,12 +661,12 @@ s:"Artist - My Favorite Song"           strict-title=true;format=flac
 Add a profile to your `sockseek.conf`:
 ```ini
 [wishlist]
-input = ~/sockseek/wishlist.txt 
+input = {configdir}/wishlist.txt 
 input-type = list
-index-path = ~/sockseek/wishlist-index.sockseek
-log-file = ~/sockseek/wishlist.log
+index-path = {configdir}/wishlist-index.csv
+log-file = {configdir}/wishlist.log
 ```
-This will create a global index file `wishlist-index.sockseek` which will be scanned every time Sockseek is run to skip wishlist items that have already been downloaded. If you want to continue searching until a version satisfying the preferred conditions is found, also add `skip-check-pref-cond = true` (note that this requires the files to remain in the same spot after being downloaded).  
+This will create a global index file `wishlist-index.csv` which will be scanned every time Sockseek is run to skip wishlist items that have already been downloaded. If you want to continue searching until a version satisfying the preferred conditions is found, also add `skip-check-pref-cond = true` (note that this requires the files to remain in the same spot after being downloaded).  
 
 Now you can manually run, or set up a cron job / scheduled task to periodically run Sockseek with the following option:
 ```bash
@@ -692,11 +692,12 @@ sockseek --profile wishlist
 ### Speeding things up
 The following options will make it go faster, but may decrease search result quality or cause instability:
 
-- `--fast-search` skips waiting until the search completes and downloads as soon as a file matching the preferred conditions is found
+- `--fast-search` skips waiting until the search completes and downloads as soon as a file matching the preferred conditions is found (songs only)
+- `--search-timeout` decrease to make searches end faster at the possible cost of fewer results
 - `--concurrent-jobs` controls how many leaf jobs can run at once (default: 20)
 - `--concurrent-searches` controls how many Soulseek searches can run at once (default: 2)
 - `--concurrent-extractors` controls how many inputs can be extracted at once (default: 4)
-- `--max-stale-time` is set to 30 seconds by default, Sockseek will wait a long time before giving up on a file.
+- `--max-stale-time` is set to 30 seconds by default, Sockseek will wait a long time before giving up on a file once it's chosen.
 
 ### Testing Options
 You can test almost any aspect of the search and downloading logic by using `--mock-files-dir` and pointing it to a local directory containing audio files. This directory will then be used instead of searching Soulseek. Example:
@@ -792,7 +793,7 @@ sockseek daemon                 Start the HTTP/SignalR daemon instead of running
 #### Search Options
 ```
 --fast-search                   Begin downloading as soon as a file satisfying the preferred
-                                conditions is found. Only for normal download mode.
+                                conditions is found. Only for song downloads.
 --fast-search-delay <ms>        Delay before accepting fast-search candidates (default: 300)
 --fast-search-min-up-speed <n>  Minimum upload speed for fast-search candidates (default: 1)
 --remove-ft                     Remove 'feat.' and everything after before searching

@@ -1,15 +1,16 @@
 ## TODO
 
-- Add `q` to quit. When any jobs are running or pending, prompt if should cancel [Y/n/Esc]. In local mode, n=Esc="do not cancel, keep running". In remote mode, n="exit without cancelling workflow remotely" and Esc="cancel prompt, keep running" (the prompt should be different depending on if local or remote mode for clarity).
+### v4.0
 
-- Add a `--idle-when-done` (or similar) option that will make it idle instead of exiting at the end. 
+- Add a persistence layer
 
-- Should be possible to connect to daemon without creating a new workflow, in order to see all jobs already running on the server.
-    - This is high priority because it exercises the API (proving we can reconstruct all state without events)
-    - Connect like this when running in remote mode and no input is supplied/or an explicit flag is passed
-    - Automatically `--idle-when-done` in this case
+- Implement soulseek client features (Look how slskd does it for a start):
+    - Sharing / Uploads
+    - Chats (private, public)
+    - User browsing
 
 - Preconditions before starting GUI work:
+    - Complete `TODO [ARCHITECTURE][GUI-EVENT-DELTAS]` in `Sockseek.Api/Contracts/ServerEvents.cs`: replace summary-heavy SignalR events with a snapshot + compact delta protocol before building the GUI.
     - Make daemon-wide monitoring, not just workflow monitoring. A GUI must be able to subscribe to and display all daemon jobs/workflows; the CLI should optionally support the same mode.
     - Add GUI-friendly startup snapshot endpoints, e.g. a daemon snapshot containing workflows, jobs, current transfer/progress state, and enough metadata to hydrate `WorkflowClientStore` without relying on event replay.
     - Add `WorkflowClientStore` APIs for daemon-wide views: all workflows, all jobs, grouped jobs, active jobs, terminal jobs, and workflow/job lookup.
@@ -18,14 +19,13 @@
     - Keep SignalR as the primary live-update transport for GUI/remote CLI; use polling/HTTP snapshots for initial load and recovery, not as the main update loop.
     - Keep durable state updates and ephemeral activity/log edges conceptually separate in the API/client store, even when they travel in the same batch.
 
-- Add a shortcut to submit another job during execution. Pressing `a` prompts for an input.
-    - args supported. E.g. `a` -> type `Artist - Title --format flac` is valid. Do not require wrapping the input in quotes. Treat everything after `--` as args.
-    - `a` prompt should not pause rendering (unlike the other prompts), unless using no-progress/plain mode. When using live mode, need to display the prompt below the status bar _inside_ the live section (otherwise will get overwritten/interleave).
-    - CLI should NOT exit while `a` prompt is active.
-    
+- Create a webui
+    - All the usual functions of a soulseek client
 
-- Implement sharing service. Look how slskd does it for a start.
-
-- (breaking) Maybe use yaml for settings instead of our custom format, and improve structure.
+- User+password webui authentication.
 
 - Test performance again for song and album searches (CPU and allocations, include the raw search collection phase + projection) on big queries (e.g. `love`)
+
+### Later
+
+- (breaking) Maybe use yaml for settings instead of our custom format, and improve structure.

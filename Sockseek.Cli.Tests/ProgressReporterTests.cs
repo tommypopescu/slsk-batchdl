@@ -419,7 +419,7 @@ public class CliProgressReporterTests
             ParentJobId: null,
             ResultJobId: null,
             SourceJobId: null,
-            DiscoveryResultCount: null,
+            DiscoveryRawResultCount: null,
             DiscoveryLockedFileCount: null,
             AppliedAutoProfiles: [],
             AvailableActions: []);
@@ -545,6 +545,15 @@ public class CliProgressReporterTests
     {
         Assert.AreEqual("Spotify: ", TerminalLiveRenderer.SourcePrefixText("Spotify"));
         Assert.AreEqual("", TerminalLiveRenderer.SourcePrefixText(null));
+    }
+
+    [TestMethod]
+    public void TerminalLiveRenderer_SearchingResultAnnotation_OnlyAppliesWhileSearching()
+    {
+        Assert.AreEqual(" (123)", TerminalLiveRenderer.SearchingResultAnnotation("searching", 123));
+        Assert.AreEqual(" (0)", TerminalLiveRenderer.SearchingResultAnnotation("searching", 0));
+        Assert.AreEqual("", TerminalLiveRenderer.SearchingResultAnnotation("processing results", 123));
+        Assert.AreEqual("", TerminalLiveRenderer.SearchingResultAnnotation("searching", null));
     }
 
     [TestMethod]
@@ -988,7 +997,7 @@ public class CliProgressReporterTests
                 ParentJobId: null,
                 ResultJobId: null,
                 SourceJobId: null,
-                DiscoveryResultCount: null,
+                DiscoveryRawResultCount: null,
                 DiscoveryLockedFileCount: null,
                 AppliedAutoProfiles: [],
                 AvailableActions: []);
@@ -1359,7 +1368,7 @@ public class CliProgressReporterTests
                 ParentJobId: null,
                 ResultJobId: null,
                 SourceJobId: null,
-                DiscoveryResultCount: null,
+                DiscoveryRawResultCount: null,
                 DiscoveryLockedFileCount: null,
                 AppliedAutoProfiles: [],
                 AvailableActions: []));
@@ -1379,7 +1388,7 @@ public class CliProgressReporterTests
                 ParentJobId: aggregateId,
                 ResultJobId: null,
                 SourceJobId: null,
-                DiscoveryResultCount: null,
+                DiscoveryRawResultCount: null,
                 DiscoveryLockedFileCount: null,
                 AppliedAutoProfiles: [],
                 AvailableActions: []));
@@ -1508,7 +1517,7 @@ public class CliProgressReporterTests
             ParentJobId: null,
             ResultJobId: null,
             SourceJobId: null,
-            DiscoveryResultCount: null,
+            DiscoveryRawResultCount: null,
             DiscoveryLockedFileCount: null,
             AppliedAutoProfiles: [],
             AvailableActions: []);
@@ -1531,7 +1540,7 @@ public class CliProgressReporterTests
             ParentJobId: parentJobId,
             ResultJobId: null,
             SourceJobId: null,
-            DiscoveryResultCount: null,
+            DiscoveryRawResultCount: null,
             DiscoveryLockedFileCount: null,
             AppliedAutoProfiles: [],
             AvailableActions: []);
@@ -1555,7 +1564,7 @@ public class CliProgressReporterTests
             ParentJobId: null,
             ResultJobId: null,
             SourceJobId: null,
-            DiscoveryResultCount: null,
+            DiscoveryRawResultCount: null,
             DiscoveryLockedFileCount: null,
             AppliedAutoProfiles: [],
             AvailableActions: []);

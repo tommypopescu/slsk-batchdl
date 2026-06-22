@@ -84,7 +84,7 @@ public static partial class Help
   Search Options
 
     --fast-search                   Begin downloading as soon as a file satisfying the preferred
-                                    conditions is found. Only for normal download mode.
+                                    conditions is found. Only for song downloads.
     --fast-search-delay <ms>        Delay before accepting fast-search candidates (default: 300)
     --fast-search-min-up-speed <n>  Minimum upload speed for fast-search candidates (default: 1)
     --remove-ft                     Remove 'feat.' and everything after before searching
@@ -715,12 +715,13 @@ Tips
     The following options will make it go faster, but may decrease search result quality or cause
     instability:
     - --fast-search skips waiting until the search completes and downloads as soon as a file
-      matching the preferred conditions is found
+      matching the preferred conditions is found (songs only)
+    - --search-timeout decrease to make searches end faster at the possible cost of fewer results
     - --concurrent-jobs controls how many leaf jobs can run at once (default: 20)
     - --concurrent-searches controls how many Soulseek searches can run at once (default: 2)
     - --concurrent-extractors controls how many inputs can be extracted at once (default: 4)
     - --max-stale-time is set to 30 seconds by default, Sockseek will wait a long time before giving
-      up on a file.
+      up on a file once it's chosen.
 
   Testing Options
     You can test almost any aspect of the search and downloading logic by using --mock-files-dir and

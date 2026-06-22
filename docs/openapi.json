@@ -3730,7 +3730,7 @@
             ],
             "format": "uuid"
           },
-          "discoveryResultCount": {
+          "discoveryRawResultCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",

@@ -392,7 +392,7 @@ public class JobActivityLogFormatterTests
             ParentJobId: null,
             ResultJobId: null,
             SourceJobId: null,
-            DiscoveryResultCount: null,
+            DiscoveryRawResultCount: null,
             DiscoveryLockedFileCount: null,
             AppliedAutoProfiles: [],
             AvailableActions: []);

@@ -76,6 +76,7 @@ internal sealed record JobView(
     long? SpeedBytesPerSecond = null,
     int? DoneChildren = null,
     int? TotalChildren = null,
+    int? DiscoveryRawResultCount = null,
     IReadOnlyList<JobChildView>? Children = null,
     TerminalFileMetadata? Metadata = null,
     string? ParentId = null,
@@ -926,6 +927,12 @@ internal sealed class TerminalLiveRenderer : IDisposable
             _ => null,
         };
 
+    internal static string SearchingResultAnnotation(string state, int? rawResultCount)
+        => string.Equals(state, "searching", StringComparison.OrdinalIgnoreCase)
+            && rawResultCount.HasValue
+            ? $" ({rawResultCount.Value})"
+            : "";
+
     private static IReadOnlyList<LiveCell> JobLeftCells(JobView job, IReadOnlyList<JobChildView> visibleChildren, int hiddenChildren, out TerminalFileMetadata? outMetadata)
     {
         bool isAlbum = IsAlbumKind(job.Kind);
@@ -955,7 +962,7 @@ internal sealed class TerminalLiveRenderer : IDisposable
         }
         else
         {
-            annotation = "";
+            annotation = SearchingResultAnnotation(job.State, job.DiscoveryRawResultCount);
             stateStyle = StateStyle(job.State);
         }
 

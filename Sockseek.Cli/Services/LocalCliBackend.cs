@@ -806,7 +806,7 @@ internal sealed class LocalCliBackend
             null,
             null,
             sourceJobId,
-            job.Discovery?.ResultCount,
+            job.Discovery?.RawResultCount,
             job.Discovery?.LockedFileCount,
             job.Config?.AppliedAutoProfiles?.ToList() ?? [],
             [],

@@ -113,6 +113,35 @@ namespace Tests.Unit
         }
 
         [TestMethod]
+        public async Task SearchAlbum_RaisesDiscoveryProgressOnVisibleAlbumJob()
+        {
+            var response = new SearchResponse("User", 1, true, 1000, 0,
+            [
+                TestHelpers.CreateSlFile(@"ELO\Time\01. Track.mp3", length: 181),
+                TestHelpers.CreateSlFile(@"ELO\Time\02. Track.mp3", length: 182),
+            ]);
+            var client = CreateMockClient([response]);
+            var settings = TestHelpers.CreateDefaultSettings().Download;
+            var registry = TestHelpers.CreateSessionRegistry();
+            var events = new EngineEvents();
+            var searcher = new Searcher(client, registry, registry, events, 10, 10);
+            var album = new AlbumJob(new AlbumQuery { Artist = "ELO", Album = "Time" });
+            var counts = new List<int>();
+
+            events.JobDiscoveryChanged += job =>
+            {
+                if (ReferenceEquals(job, album) && job.Discovery != null)
+                    counts.Add(job.Discovery.RawResultCount);
+            };
+
+            await searcher.SearchAlbum(album, settings.Search, new ResponseData(), CancellationToken.None);
+
+            CollectionAssert.AreEqual(new[] { 1, 2 }, counts);
+            Assert.AreEqual(2, album.Discovery?.RawResultCount);
+            Assert.AreEqual(1, album.Results.Count);
+        }
+
+        [TestMethod]
         public void AlbumFolders_PreservesAlbumModeSorterOrder()
         {
             var badResponse = new SearchResponse("SlowUser", 1, false, 1, 10,

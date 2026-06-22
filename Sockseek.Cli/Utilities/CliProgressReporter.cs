@@ -470,8 +470,8 @@ public class CliProgressReporter
         if ((summary.TerminalOutcome == ServerJobTerminalOutcome.Succeeded
                 || summary.TerminalOutcome == ServerJobTerminalOutcome.Skipped && summary.SkipReason == ServerJobSkipReason.AlreadyExists)
             && summary.Kind == ServerJobKind.Search
-            && summary.DiscoveryResultCount.HasValue)
-            line += $": Found {summary.DiscoveryResultCount.Value} files";
+            && summary.DiscoveryRawResultCount.HasValue)
+            line += $": Found {summary.DiscoveryRawResultCount.Value} files";
             
         return line;
     }
@@ -496,6 +496,7 @@ public class CliProgressReporter
             Percent: percent,
             DoneChildren: done,
             TotalChildren: total,
+            DiscoveryRawResultCount: summary.DiscoveryRawResultCount,
             Children: children,
             Metadata: metadata,
             ParentId: GetContainerParentId(summary.JobId)));

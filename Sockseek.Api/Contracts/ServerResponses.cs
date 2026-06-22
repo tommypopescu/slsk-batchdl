@@ -96,7 +96,7 @@ public sealed record JobSummaryDto(
     Guid? ParentJobId,
     Guid? ResultJobId,
     Guid? SourceJobId,
-    int? DiscoveryResultCount,
+    int? DiscoveryRawResultCount,
     int? DiscoveryLockedFileCount,
     IReadOnlyList<string> AppliedAutoProfiles,
     IReadOnlyList<ResourceActionDto> AvailableActions,
@@ -146,7 +146,7 @@ public sealed record JobSummaryDto(
         Guid? ParentJobId,
         Guid? ResultJobId,
         Guid? SourceJobId,
-        int? DiscoveryResultCount,
+        int? DiscoveryRawResultCount,
         int? DiscoveryLockedFileCount,
         IReadOnlyList<string> AppliedAutoProfiles,
         IReadOnlyList<ResourceActionDto> AvailableActions,
@@ -168,7 +168,7 @@ public sealed record JobSummaryDto(
             ParentJobId,
             ResultJobId,
             SourceJobId,
-            DiscoveryResultCount,
+            DiscoveryRawResultCount,
             DiscoveryLockedFileCount,
             AppliedAutoProfiles,
             AvailableActions,
@@ -232,4 +232,3 @@ public sealed record JobQuery(
     Guid? WorkflowId,
     bool IncludeAll,
     ServerJobSkipReason? SkipReason = null);
-

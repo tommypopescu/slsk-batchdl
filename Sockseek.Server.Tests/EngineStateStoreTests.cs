@@ -51,6 +51,28 @@ public class EngineStateStoreTests
     }
 
     [TestMethod]
+    public void JobDiscoveryChanged_UpdatesSummaryDiscoveryCounts()
+    {
+        var store = new EngineStateStore();
+        var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Album" });
+        JobSummaryDto? published = null;
+        store.JobUpserted += summary => published = summary;
+
+        Register(store, album);
+
+        album.Discovery = new DiscoverySummary { RawResultCount = 123, LockedFileCount = 4 };
+        DiscoveryChanged(store, album);
+
+        var summary = store.GetJobSummary(album.Id);
+        Assert.IsNotNull(summary);
+        Assert.AreEqual(123, summary.DiscoveryRawResultCount);
+        Assert.AreEqual(4, summary.DiscoveryLockedFileCount);
+        Assert.IsNotNull(published);
+        Assert.AreEqual(123, published.DiscoveryRawResultCount);
+        Assert.AreEqual(4, published.DiscoveryLockedFileCount);
+    }
+
+    [TestMethod]
     public void GetJobs_FiltersByLifecycleAndTerminalOutcome()
     {
         var store = new EngineStateStore();
@@ -344,6 +366,13 @@ public class EngineStateStoreTests
     {
         typeof(EngineStateStore)
             .GetMethod("OnJobStateChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(store, [job]);
+    }
+
+    private static void DiscoveryChanged(EngineStateStore store, Job job)
+    {
+        typeof(EngineStateStore)
+            .GetMethod("OnJobDiscoveryChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(store, [job]);
     }
 

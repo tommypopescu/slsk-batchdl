@@ -66,7 +66,7 @@ public class EngineEventDtoAdapterTests
             null,
             null,
             null,
-            job.Discovery?.ResultCount,
+            job.Discovery?.RawResultCount,
             job.Discovery?.LockedFileCount,
             [],
             []);

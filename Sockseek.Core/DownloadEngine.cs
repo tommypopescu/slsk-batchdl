@@ -1215,14 +1215,14 @@ public class DownloadEngine
             int newFilesFound = await searcher!.CompleteFolder(job.TargetFolder, job.Cts!.Token);
             job.NewFilesFoundCount = newFilesFound;
             job.RetrievalOutcome = FolderRetrievalOutcome.Completed;
-            job.Discovery = new DiscoverySummary { ResultCount = newFilesFound, LockedFileCount = 0 };
+            job.Discovery = new DiscoverySummary { RawResultCount = newFilesFound, LockedFileCount = 0 };
             var outcome = JobOutcome.Done();
             CommitOutcome(job, outcome);
             return outcome;
         }
         catch (OperationCanceledException)
         {
-            job.Discovery = new DiscoverySummary { ResultCount = 0, LockedFileCount = 0 };
+            job.Discovery = new DiscoverySummary { RawResultCount = 0, LockedFileCount = 0 };
             job.RetrievalOutcome = FolderRetrievalOutcome.Cancelled;
             var outcome = JobOutcome.Cancelled(CancellationSourceFor(job, parentToken));
             CommitOutcome(job, outcome);
@@ -1262,11 +1262,8 @@ public class DownloadEngine
                 return searchFailure;
         }
 
-        job.Discovery = new DiscoverySummary
-        {
-            ResultCount = job.Candidates?.Count ?? 0,
-            LockedFileCount = responseData.lockedFilesCount,
-        };
+        job.Discovery ??= new DiscoverySummary();
+        job.Discovery.LockedFileCount = responseData.lockedFilesCount;
 
         var manualOutcome = job.Candidates?.Count > 0
             ? JobOutcome.AwaitingSelection()
@@ -1317,11 +1314,8 @@ public class DownloadEngine
         }
         foundSomething = job.Results.Count > 0;
 
-        job.Discovery = new DiscoverySummary
-        {
-            ResultCount = job.Results.Count,
-            LockedFileCount = responseData.lockedFilesCount
-        };
+        job.Discovery ??= new DiscoverySummary();
+        job.Discovery.LockedFileCount = responseData.lockedFilesCount;
 
         if (!foundSomething)
         {
@@ -1373,11 +1367,8 @@ public class DownloadEngine
 
         bool foundSomething = job.Songs.Count > 0;
 
-        job.Discovery = new DiscoverySummary
-        {
-            ResultCount = foundSomething ? 1 : 0,
-            LockedFileCount = responseData.lockedFilesCount,
-        };
+        job.Discovery ??= new DiscoverySummary();
+        job.Discovery.LockedFileCount = responseData.lockedFilesCount;
 
         if (!foundSomething)
         {
@@ -1439,7 +1430,8 @@ public class DownloadEngine
             album.DownloadBehaviorPolicy = job.DownloadBehaviorPolicy;
 
         bool foundSomething = newAlbumJobs.Count > 0;
-        job.Discovery = new DiscoverySummary { ResultCount = job.Albums.Count, LockedFileCount = responseData.lockedFilesCount };
+        job.Discovery ??= new DiscoverySummary();
+        job.Discovery.LockedFileCount = responseData.lockedFilesCount;
 
         if (config.PrintResults)
         {
@@ -2944,7 +2936,7 @@ public class DownloadEngine
                 parentJob.UpdateActivity(parentActivityBeforeRetrieval, parentActivityUntilBeforeRetrieval);
             }
 
-            rfJob.Discovery = new DiscoverySummary { ResultCount = count, LockedFileCount = 0 };
+            rfJob.Discovery = new DiscoverySummary { RawResultCount = count, LockedFileCount = 0 };
             Events.RaiseJobExecutionCompleted(rfJob);
         }
     }

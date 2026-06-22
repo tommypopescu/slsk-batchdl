@@ -40,6 +40,27 @@ public partial class Searcher
 
     // ── raw search job ──────────────────────────────────────────────────────
 
+    private void InitializeDiscoveryProgress(Job job)
+    {
+        if (job.Discovery is { RawResultCount: 0, LockedFileCount: 0 })
+            return;
+
+        job.Discovery = new DiscoverySummary();
+    }
+
+    private void UpdateDiscoveryProgress(Job job, SearchSession session)
+    {
+        job.Discovery ??= new DiscoverySummary();
+        var count = session.Revision;
+        var locked = session.LockedFileCount;
+        if (job.Discovery.RawResultCount == count && job.Discovery.LockedFileCount == locked)
+            return;
+
+        job.Discovery.RawResultCount = count;
+        job.Discovery.LockedFileCount = locked;
+        events.RaiseJobDiscoveryChanged(job);
+    }
+
     public async Task<JobOutcome> Search(
         SearchJob job,
         SearchSettings search,
@@ -51,6 +72,9 @@ public partial class Searcher
     {
         var session = job.Session;
         var activityJob = phaseOwner ?? job;
+        InitializeDiscoveryProgress(activityJob);
+        void OnRawResultAdded(SearchSession _, SearchRawResult __) => UpdateDiscoveryProgress(activityJob, session);
+        session.RawResultAdded += OnRawResultAdded;
 
         try
         {
@@ -71,7 +95,9 @@ public partial class Searcher
             activityJob.UpdateActivity(JobActivityPhase.ProcessingSearchResults);
             responseData.resultCount = session.Results.Count;
             responseData.lockedFilesCount += session.LockedFileCount;
-            job.Discovery = new DiscoverySummary { ResultCount = session.Results.Count, LockedFileCount = session.LockedFileCount };
+            UpdateDiscoveryProgress(activityJob, session);
+            if (!ReferenceEquals(activityJob, job))
+                job.Discovery = new DiscoverySummary { RawResultCount = session.Results.Count, LockedFileCount = session.LockedFileCount };
             session.Complete();
             return JobOutcome.Done();
         }
@@ -86,6 +112,10 @@ public partial class Searcher
                 session.Complete();
             throw;
         }
+        finally
+        {
+            session.RawResultAdded -= OnRawResultAdded;
+        }
     }
 
 
@@ -99,6 +129,9 @@ public partial class Searcher
         Action<FileCandidate>? onFastSearchCandidate = null)
     {
         var session = new SearchSession();
+        InitializeDiscoveryProgress(song);
+        void OnRawResultAdded(SearchSession _, SearchRawResult __) => UpdateDiscoveryProgress(song, session);
+        session.RawResultAdded += OnRawResultAdded;
         searchRegistry.Searches.TryAdd(song, new SearchInfo(session.Results));
 
         void responseHandler(SearchResponse r)
@@ -136,6 +169,7 @@ public partial class Searcher
         }
         finally
         {
+            session.RawResultAdded -= OnRawResultAdded;
             concurrencySemaphore.Release();
             searchRegistry.Searches.TryRemove(song, out _);
         }
@@ -143,9 +177,8 @@ public partial class Searcher
         song.UpdateActivity(JobActivityPhase.ProcessingSearchResults);
         responseData.lockedFilesCount += session.LockedFileCount;
 
-        song.Discovery ??= new DiscoverySummary();
         responseData.resultCount = session.Results.Count;
-        song.Discovery.ResultCount = session.Results.Count;
+        UpdateDiscoveryProgress(song, session);
 
         SockseekLog.Soulseek.Debug($"{session.Results.Count} results found: {song}");
 
@@ -184,6 +217,9 @@ public partial class Searcher
     public async Task<JobOutcome?> SearchAggregate(AggregateJob job, SearchSettings search, ResponseData responseData, CancellationToken ct)
     {
         var session = new SearchSession();
+        InitializeDiscoveryProgress(job);
+        void OnRawResultAdded(SearchSession _, SearchRawResult __) => UpdateDiscoveryProgress(job, session);
+        session.RawResultAdded += OnRawResultAdded;
 
         SearchOptions getOpts(int timeout, FileConditions nec, FileConditions prf) =>
             new(
@@ -197,10 +233,15 @@ public partial class Searcher
         job.UpdateActivity(JobActivityPhase.WaitingForSearchConcurrency);
         await concurrencySemaphore.WaitAsync(ct);
         try { await RunSearches(job.Query, session.Results, getOpts, session.AddResponse, search, ct, ownerJob: job); }
-        finally { concurrencySemaphore.Release(); }
+        finally
+        {
+            session.RawResultAdded -= OnRawResultAdded;
+            concurrencySemaphore.Release();
+        }
 
         responseData.lockedFilesCount += session.LockedFileCount;
         responseData.resultCount = session.Results.Count;
+        UpdateDiscoveryProgress(job, session);
         job.UpdateActivity(JobActivityPhase.ProcessingSearchResults);
         job.Songs = SearchResultProjector.AggregateTracks(session.Snapshot(), job.Query, search, userStats.UserSuccessCounts);
         return null;

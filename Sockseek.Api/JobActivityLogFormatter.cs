@@ -599,8 +599,8 @@ public sealed class JobActivityLogFormatter
 
         if (summary.TerminalOutcome == ServerJobTerminalOutcome.Succeeded
             && summary.Kind == ServerJobKind.Search
-            && summary.DiscoveryResultCount.HasValue)
-            line += $": Found {summary.DiscoveryResultCount.Value} files";
+            && summary.DiscoveryRawResultCount.HasValue)
+            line += $": Found {summary.DiscoveryRawResultCount.Value} files";
 
         if (!string.IsNullOrEmpty(summary.FailureMessage))
             line += "\n" + $"    Error: {summary.FailureMessage}";

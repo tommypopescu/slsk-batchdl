@@ -8,7 +8,8 @@ namespace Sockseek.Core.Jobs;
 
     public class DiscoverySummary
     {
-        public int ResultCount { get; set; }
+        // Raw search/browse items discovered before result projection, filtering, grouping, or bucketing.
+        public int RawResultCount { get; set; }
         public int LockedFileCount { get; set; }
     }
 

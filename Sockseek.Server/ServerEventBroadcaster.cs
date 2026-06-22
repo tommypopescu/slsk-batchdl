@@ -150,7 +150,7 @@ public sealed class ServerEventBroadcaster : IDisposable
             null,
             null,
             null,
-            job.Discovery?.ResultCount,
+            job.Discovery?.RawResultCount,
             job.Discovery?.LockedFileCount,
             job.Config?.AppliedAutoProfiles?.ToList() ?? [],
             [],

@@ -25,6 +25,7 @@ public class EngineEvents
     public event Action<Job, Job?>? JobRegistered;       // job, parent (if any)
     public event Action<Job>? JobStateChanged;     // job split-state fields changed
     public event Action<Job, JobActivityPhase, DateTimeOffset?>? JobActivityChanged; // job, phase, until
+    public event Action<Job>? JobDiscoveryChanged; // search/browse result count changed
     // Fired when a job's own execution path is finished.
     // For ExtractJob this is raised immediately after the result job has been produced,
     // not after any optional automatic processing of that result.
@@ -72,6 +73,7 @@ public class EngineEvents
     internal void RaiseJobStateChanged(Job job) => JobStateChanged?.Invoke(job);
     internal void RaiseJobActivityChanged(Job job, JobActivityPhase phase, DateTimeOffset? untilUtc)
         => JobActivityChanged?.Invoke(job, phase, untilUtc);
+    internal void RaiseJobDiscoveryChanged(Job job) => JobDiscoveryChanged?.Invoke(job);
     internal void RaiseJobExecutionCompleted(Job job) => JobExecutionCompleted?.Invoke(job);
     internal void RaiseJobResultCreated(ExtractJob job, Job result) => JobResultCreated?.Invoke(job, result);
     internal void RaiseEngineCompleted(JobList queue) => EngineCompleted?.Invoke(queue);

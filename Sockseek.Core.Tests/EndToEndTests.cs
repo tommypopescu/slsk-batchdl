@@ -1281,6 +1281,8 @@ namespace Tests.EndToEnd
                 await app.RunAsync(CancellationToken.None);
 
                 Assert.IsTrue(albumJob.Results.Count > 0, "Print-results mode should populate album search results.");
+                Assert.AreEqual(4, albumJob.Discovery?.RawResultCount, "Live discovery count should remain the raw file-hit count, not the projected album-folder count.");
+                Assert.IsTrue(albumJob.Results.Count < albumJob.Discovery?.RawResultCount, "This fixture must keep projected album folders fewer than raw file hits.");
                 Assert.AreEqual(0, Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Length,
                     "Print-results mode should not download album files.");
             }
@@ -1348,6 +1350,8 @@ namespace Tests.EndToEnd
 
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, aggregateJob.TerminalOutcome);
                 Assert.IsTrue(aggregateJob.Albums.Count > 0, "Print-results mode should retain album-aggregate candidates for printing.");
+                Assert.AreEqual(4, aggregateJob.Discovery?.RawResultCount, "Live discovery count should remain the raw file-hit count, not the projected album-bucket count.");
+                Assert.IsTrue(aggregateJob.Albums.Count < aggregateJob.Discovery?.RawResultCount, "This fixture must keep projected album buckets fewer than raw file hits.");
                 Assert.AreEqual(0, searchedAlbumJobs, "Print-results mode should not re-search album-aggregate candidate albums.");
                 Assert.AreEqual(0, Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Length,
                     "Print-results mode should not download album-aggregate files.");

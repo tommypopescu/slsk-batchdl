@@ -24,6 +24,39 @@ public sealed record ServerEventEnvelopeDto(
 /// Batched workflow-scoped SignalR update. Clients should apply state fields first,
 /// activity entries second, and progress last.
 /// </summary>
+// TODO [ARCHITECTURE][GUI-EVENT-DELTAS]: Before GUI work, replace this summary-heavy
+// SignalR contract with a snapshot + compact delta replication protocol.
+//
+// Desired model:
+// - HTTP endpoints provide full snapshots for startup and recovery.
+// - SignalR batches provide ordered, compact deltas only.
+// - Add sparse patch DTOs such as WorkflowPatchDto, JobPatchDto, TransferPatchDto,
+//   and SearchPatchDto. `JobPatchDto` should carry only changed fields like
+//   lifecycle/activity/outcome, discovery counts, names, failure info, or actions.
+// - Use full JobSummaryDto payloads only for startup snapshots, newly appeared jobs,
+//   or rare explicit row replacement, not for every activity/terminal/progress edge.
+// - Convert durable UI state changes into state patches, not activity/log events.
+//   This includes `job.activity-changed`, `song.state-changed`, `job.started`,
+//   album selection/download-start/folder-retrieval state, transfer state, and
+//   discovery counts. Clients must be able to reconstruct the UI from an HTTP
+//   snapshot plus ordered patches without replaying log-style activity events.
+// - Keep compact semantic activity events only for non-state, user-visible edges:
+//   job messages, diagnostics, download-attempt failures, extraction/listing text,
+//   and other plain-mode log lines. These events should carry jobId/workflowId plus
+//   the few fields needed to format the message, never a full JobSummaryDto.
+// - Represent transfer state as coalescible TransferPatchDto values instead of many
+//   `download.state-changed` activity events. `download.started` and terminal
+//   transfer patches should carry only jobId plus small display/reference fields
+//   like username, remote filename, output path, or a candidate id/hash. Full
+//   FileCandidateDto, AlbumFolderDto, and SongJobPayloadDto metadata belongs in
+//   snapshots, detail endpoints, or explicit result endpoints.
+// - Stop nesting full ServerEventEnvelopeDto objects inside workflow batches; the
+//   batch already has sequence/workflow/timestamp metadata.
+// - Let EngineStateStore compute patches from previous/current snapshots and let
+//   ServerEventCoalescer merge patches per job/transfer/search during the flush window.
+// - Make WorkflowClientStore apply initial snapshots plus ordered patches. Local CLI,
+//   remote CLI, and future GUI should render from that same client-side state store;
+//   sequence gaps should trigger HTTP snapshot recovery.
 public sealed record WorkflowUpdateBatchDto(
     long Sequence,
     DateTimeOffset OccurredAtUtc,
@@ -182,7 +215,7 @@ public sealed record SongStateChangedEventDto(
     ServerJobFailureReason? FailureReason,
     string? DownloadPath,
     FileCandidateDto? ChosenCandidate,
-    int? DiscoveryResultCount = null,
+    int? DiscoveryRawResultCount = null,
     int? DiscoveryLockedFileCount = null,
     string? FailureMessage = null,
     ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None)
@@ -216,7 +249,7 @@ public sealed record SongStateChangedEventDto(
         ServerJobFailureReason? FailureReason,
         string? DownloadPath,
         FileCandidateDto? ChosenCandidate,
-        int? DiscoveryResultCount = null,
+        int? DiscoveryRawResultCount = null,
         int? DiscoveryLockedFileCount = null,
         string? FailureMessage = null,
         ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None)
@@ -233,7 +266,7 @@ public sealed record SongStateChangedEventDto(
             FailureReason,
             DownloadPath,
             ChosenCandidate,
-            DiscoveryResultCount,
+            DiscoveryRawResultCount,
             DiscoveryLockedFileCount,
             FailureMessage,
             CancellationSource)
