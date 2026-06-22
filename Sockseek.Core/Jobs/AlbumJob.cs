@@ -25,10 +25,51 @@ namespace Sockseek.Core.Jobs;
         // Set by the engine after the user/callback selects a folder.
         // When pre-set (e.g. direct link), the search phase is skipped.
         private AlbumFolder? _resolvedTarget;
+        private AlbumFolder? _trackJobFolder;
         public AlbumFolder? ResolvedTarget
         {
             get => _resolvedTarget;
             set { if (!ReferenceEquals(_resolvedTarget, value)) { _resolvedTarget = value; OnPropertyChanged(); } }
+        }
+
+        // Runtime child jobs for the currently selected/downloaded album folder.
+        // AlbumFolder.Files stays as pure search-result candidate data.
+        public List<SongJob> TrackJobs { get; } = [];
+
+        public List<SongJob> EnsureTrackJobs(AlbumFolder folder)
+        {
+            if (!ReferenceEquals(_trackJobFolder, folder))
+            {
+                TrackJobs.Clear();
+                _trackJobFolder = folder;
+            }
+
+            var existing = TrackJobs
+                .Where(song => song.ResolvedTarget != null)
+                .Select(song => (song.ResolvedTarget!.Username, song.ResolvedTarget!.Filename))
+                .ToHashSet();
+
+            foreach (var file in folder.Files)
+            {
+                var key = (file.Candidate.Username, file.Candidate.Filename);
+                if (existing.Add(key))
+                    TrackJobs.Add(CreateTrackJob(file));
+            }
+
+            return TrackJobs;
+        }
+
+        internal static SongJob CreateTrackJob(AlbumFile file)
+            => new(new SongQuery(file.Query))
+            {
+                ResolvedTarget = file.Candidate,
+                Candidates = [file.Candidate],
+            };
+
+        public void ClearTrackJobs()
+        {
+            TrackJobs.Clear();
+            _trackJobFolder = null;
         }
 
         // When a folder is explicitly selected up front (for example from an interactive
@@ -77,7 +118,7 @@ namespace Sockseek.Core.Jobs;
         public bool IsStale(int maxStaleTimeMs)
         {
             if (_resolvedTarget == null) return false;
-            var inProgress = _resolvedTarget.Files.Where(f => f.IsPending).ToList();
+            var inProgress = TrackJobs.Where(f => f.IsPending).ToList();
             if (inProgress.Count == 0) return false;
             return inProgress.All(f =>
                 f.LastActivityTime.HasValue &&
@@ -87,7 +128,7 @@ namespace Sockseek.Core.Jobs;
         public List<SongJob> GetStaleFiles(int maxStaleTimeMs)
         {
             if (_resolvedTarget == null) return new();
-            return _resolvedTarget.Files
+            return TrackJobs
                 .Where(f => f.IsPending
                     && f.LastActivityTime.HasValue
                     && (DateTime.Now - f.LastActivityTime.Value).TotalMilliseconds > maxStaleTimeMs)

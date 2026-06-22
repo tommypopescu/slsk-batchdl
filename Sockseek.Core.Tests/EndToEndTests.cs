@@ -535,19 +535,13 @@ namespace Tests.EndToEnd
                 [completedRemoteFile, failingRemoteFile]);
             var testClient = new ClientTests.MockSoulseekClient([response], failingUsers: ["failuser"]);
 
-            var completedSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "First" })
-            {
-                ResolvedTarget = new FileCandidate(response, completedRemoteFile),
-            };
-            completedSong.SetDone(completedPath);
-            var failingSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "Second" })
-            {
-                ResolvedTarget = new FileCandidate(response, failingRemoteFile),
-            };
             var folder = new AlbumFolder(
                 response.Username,
                 Utils.GetDirectoryNameSlsk(failingRemoteFile.Filename),
-                [completedSong, failingSong])
+                [
+                    TestHelpers.CreateAlbumFile(response, completedRemoteFile),
+                    TestHelpers.CreateAlbumFile(response, failingRemoteFile),
+                ])
                 {
                     IsFullyRetrieved = true,
                 };
@@ -555,6 +549,9 @@ namespace Tests.EndToEnd
             {
                 Results = [folder],
             };
+            album.EnsureTrackJobs(folder)
+                .Single(song => song.ResolvedTarget!.Filename == completedRemoteFile.Filename)
+                .SetDone(completedPath);
 
             try
             {
@@ -657,19 +654,13 @@ namespace Tests.EndToEnd
                 "canceluser", 1, true, 100_000, 0,
                 [completedRemoteFile, cancellableRemoteFile]);
 
-            var completedSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "First" })
-            {
-                ResolvedTarget = new FileCandidate(response, completedRemoteFile),
-            };
-            completedSong.SetDone(completedPath);
-            var cancellableSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "Second" })
-            {
-                ResolvedTarget = new FileCandidate(response, cancellableRemoteFile),
-            };
             var folder = new AlbumFolder(
                 response.Username,
                 Utils.GetDirectoryNameSlsk(cancellableRemoteFile.Filename),
-                [completedSong, cancellableSong])
+                [
+                    TestHelpers.CreateAlbumFile(response, completedRemoteFile),
+                    TestHelpers.CreateAlbumFile(response, cancellableRemoteFile),
+                ])
                 {
                     IsFullyRetrieved = true,
                 };
@@ -677,6 +668,9 @@ namespace Tests.EndToEnd
             {
                 Results = [folder],
             };
+            album.EnsureTrackJobs(folder)
+                .Single(song => song.ResolvedTarget!.Filename == completedRemoteFile.Filename)
+                .SetDone(completedPath);
 
             var testClient = new ClientTests.MockSoulseekClient([response])
             {
@@ -754,19 +748,13 @@ namespace Tests.EndToEnd
                 [completedRemoteFile, failingRemoteFile]);
             var testClient = new ClientTests.MockSoulseekClient([response], failingUsers: ["failuser"]);
 
-            var completedSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "First" })
-            {
-                ResolvedTarget = new FileCandidate(response, completedRemoteFile),
-            };
-            completedSong.SetDone(completedPath);
-            var failingSong = new SongJob(new SongQuery { Artist = "Test Artist", Album = "Test Album", Title = "Second" })
-            {
-                ResolvedTarget = new FileCandidate(response, failingRemoteFile),
-            };
             var folder = new AlbumFolder(
                 response.Username,
                 Utils.GetDirectoryNameSlsk(failingRemoteFile.Filename),
-                [completedSong, failingSong])
+                [
+                    TestHelpers.CreateAlbumFile(response, completedRemoteFile),
+                    TestHelpers.CreateAlbumFile(response, failingRemoteFile),
+                ])
                 {
                     IsFullyRetrieved = true,
                 };
@@ -774,6 +762,9 @@ namespace Tests.EndToEnd
             {
                 Results = [folder],
             };
+            album.EnsureTrackJobs(folder)
+                .Single(song => song.ResolvedTarget!.Filename == completedRemoteFile.Filename)
+                .SetDone(completedPath);
 
             try
             {
@@ -837,7 +828,7 @@ namespace Tests.EndToEnd
                 if (albumJob2 != null)
                 {
                     Console.WriteLine($"[Trace] AlbumJob state={albumJob2.LifecycleState}/{albumJob2.ActivityPhase}/{albumJob2.TerminalOutcome}/{albumJob2.SkipReason} failureReason={albumJob2.FailureReason} resolvedTarget={albumJob2.ResolvedTarget?.FolderPath} results={albumJob2.Results.Count}");
-                    foreach (var f in albumJob2.Results.SelectMany(r => r.Files))
+                    foreach (var f in albumJob2.TrackJobs)
                         Console.WriteLine($"[Trace]   file: {f.Query.Title} state={f.LifecycleState}/{f.ActivityPhase}/{f.TerminalOutcome}/{f.SkipReason} dp={f.DownloadPath} candidates={f.Candidates?.Count} rt={f.ResolvedTarget?.Filename}");
                 }
                 var downloadedFiles = System.IO.Directory.GetFiles(Path.Combine(outputDir, "(2011) testalbum [MP3]"), "*", SearchOption.AllDirectories);

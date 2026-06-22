@@ -266,8 +266,8 @@ public class M3uEditor
                 {
                     SongJob sj      => new[] { sj },
                     AggregateJob ag => ag.Songs.Where(s => s.IsSuccessfulTerminal).DefaultIfEmpty(ag.Songs.FirstOrDefault()!).Where(s => s != null)!,
-                    AlbumJob aj     => aj.ResolvedTarget?.Files ?? Enumerable.Empty<SongJob>(),
-                    AlbumAggregateJob aaj => aaj.Albums.SelectMany(a => a.ResolvedTarget?.Files ?? Enumerable.Empty<SongJob>()),
+                    AlbumJob aj     => aj.TrackJobs,
+                    AlbumAggregateJob aaj => aaj.Albums.SelectMany(a => a.TrackJobs),
                     _               => Enumerable.Empty<SongJob>(),
                 };
 

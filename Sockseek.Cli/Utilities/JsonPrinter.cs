@@ -232,8 +232,8 @@ public static class JsonPrinter
             .Where(f => f.Files.Count > 0)
             .Select(f => new AlbumResultJson
             {
-                User  = new UserInfoJson(f.Files[0].ResolvedTarget!.Response),
-                Files = f.Files.Select(af => new FileInfoJson(af.ResolvedTarget!.File)).ToList()
+                User  = new UserInfoJson(f.Files[0].Candidate.Response),
+                Files = f.Files.Select(af => new FileInfoJson(af.Candidate.File)).ToList()
             });
 
         var json = JsonSerializer.Serialize(albumResults, _options);

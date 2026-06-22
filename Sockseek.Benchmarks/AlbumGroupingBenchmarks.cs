@@ -284,9 +284,9 @@ public partial class AlbumGroupingBenchmarks
     private static string? LegacyRepresentativeAudioFilename(List<LegacyAlbumFolderFile> folderFiles)
         => folderFiles.FirstOrDefault(f => f.IsMusic).File?.Filename;
 
-    private static List<SongJob> LegacyBuildAlbumFiles(List<LegacyAlbumFolderFile> folderFiles, SongQuery inferDefault)
+    private static List<AlbumFile> LegacyBuildAlbumFiles(List<LegacyAlbumFolderFile> folderFiles, SongQuery inferDefault)
     {
-        var files = new List<SongJob>(folderFiles.Count);
+        var files = new List<AlbumFile>(folderFiles.Count);
         var inferredByFilename = new Dictionary<string, SongQuery>();
 
         foreach (var item in folderFiles)
@@ -297,7 +297,7 @@ public partial class AlbumGroupingBenchmarks
                 inferredByFilename.Add(item.File.Filename, info);
             }
 
-            files.Add(new SongJob(info) { ResolvedTarget = new FileCandidate(item.Response, item.File) });
+            files.Add(new AlbumFile(info, new FileCandidate(item.Response, item.File)));
         }
 
         return files;

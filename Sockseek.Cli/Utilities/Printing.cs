@@ -621,7 +621,7 @@ public static class Printing
     public static void PrintAlbumLink(AlbumFolder folder)
     {
         if (folder.Files.Count == 0) return;
-        string directory = Utils.GreatestCommonDirectorySlsk(folder.Files.Select(f => f.ResolvedTarget!.Filename));
+        string directory = Utils.GreatestCommonDirectorySlsk(folder.Files.Select(f => f.Filename));
         var link = $"slsk://{folder.Username}/{directory.Replace('\\', '/').TrimEnd('/')}/";
         WriteLine(link);
     }
@@ -634,10 +634,10 @@ public static class Printing
         lock (ConsoleLock)
         {
             Console.ResetColor();
-            var firstResponse = folder.Files[0].ResolvedTarget!.Response;
+            var firstResponse = folder.Files[0].Candidate.Response;
             string noSlot   = !firstResponse.HasFreeUploadSlot ? ", no upload slots" : "";
             string userInfo = $"{firstResponse.Username} ({((float)firstResponse.UploadSpeed / (1024 * 1024)):F3}MB/s{noSlot})";
-            var (parents, propsList) = FolderInfo(folder.Files.Select(f => f.ResolvedTarget!.File), folder.FolderPath);
+            var (parents, propsList) = FolderInfo(folder.Files.Select(f => f.Candidate.File), folder.FolderPath);
 
             string format     = propsList.FirstOrDefault() ?? "";
             string otherProps = propsList.Count > 1 ? " / " + string.Join(" / ", propsList.Skip(1)) : "";
@@ -663,8 +663,8 @@ public static class Printing
             {
                 Write($" [{i + 1:D2}]", ConsoleColor.DarkGray, force: force);
             }
-            string customPath = PathRelativeToFolder(af.ResolvedTarget!.File.Filename, ancestor);
-            WriteLine("    " + DisplayString(af.Query, af.ResolvedTarget!.File, af.ResolvedTarget!.Response, customPath: customPath, showUser: false), ConsoleColor.Gray, force: force);
+            string customPath = PathRelativeToFolder(af.Candidate.File.Filename, ancestor);
+            WriteLine("    " + DisplayString(af.Query, af.Candidate.File, af.Candidate.Response, customPath: customPath, showUser: false), ConsoleColor.Gray, force: force);
             i++;
         }
 

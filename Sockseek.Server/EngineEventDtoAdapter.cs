@@ -58,11 +58,11 @@ public sealed class EngineEventDtoAdapter
                     publish("album.download-started", new AlbumDownloadStartedEventDto(
                         getSummary(job),
                         ToAlbumFolderDto(folder, includeFiles: false),
-                        folder.Files.Select(ToSongJobPayloadDto).ToList()));
+                        albumJob.TrackJobs.Select(ToSongJobPayloadDto).ToList()));
                     publish("album.track-download-started", new AlbumTrackDownloadStartedEventDto(
                         getSummary(job),
                         ToAlbumFolderDto(folder, includeFiles: false),
-                        folder.Files.Select(ToSongJobPayloadDto).ToList()));
+                        albumJob.TrackJobs.Select(ToSongJobPayloadDto).ToList()));
                 }
                 else if (albumJob.IsTerminal)
                     publish("album.state-changed", new AlbumStateChangedEventDto(getSummary(job), albumJob.DownloadPath));
@@ -240,14 +240,13 @@ public sealed class EngineEventDtoAdapter
             folder.FolderPath,
             new PeerInfoDto(
                 folder.Username,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.HasFreeUploadSlot,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.UploadSpeed),
+                folder.Files.FirstOrDefault()?.Candidate.Response.HasFreeUploadSlot,
+                folder.Files.FirstOrDefault()?.Candidate.Response.UploadSpeed),
             folder.SearchFileCount,
             folder.SearchAudioFileCount,
             includeFiles
                 ? folder.Files
-                    .Where(song => song.ResolvedTarget != null)
-                    .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
+                    .Select(file => ToFileCandidateDto(file.Candidate))
                     .ToList()
                 : null,
             folder.IsFullyRetrieved);

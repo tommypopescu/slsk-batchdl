@@ -388,7 +388,7 @@ public class CliEndToEndTests
                 {
                     var folder = request.Folders.First();
                     var selected = folder.Files
-                        .Where(song => song.ResolvedTarget?.Filename.EndsWith("Track Two.mp3", StringComparison.OrdinalIgnoreCase) == true)
+                        .Where(song => song.Filename.EndsWith("Track Two.mp3", StringComparison.OrdinalIgnoreCase))
                         .ToList();
 
                     return Task.FromResult(new InteractiveModeManager.RunResult(

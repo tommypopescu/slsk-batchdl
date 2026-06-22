@@ -4,7 +4,6 @@ using Sockseek.Core.Models;
 namespace Sockseek.Core.Jobs;
     // Unified song job. Used for both search+download and pre-resolved downloads.
     // If ResolvedTarget is non-null the engine skips the search phase.
-    // Also used as the per-file unit inside AlbumFolder.Files.
     public class SongJob : Job, IUpgradeable
     {
         public SongQuery Query { get; set; }

@@ -95,6 +95,7 @@ internal sealed class LocalCliBackend
         ApplySubmissionOptionsToInheritedSettings(settings, options);
         NormalizeLocalSettings(settings);
 
+        job.EnsureDisplayId();
         engine.Enqueue(job, settings);
         return Task.FromResult(stateStore.GetJobSummary(job.Id) ?? BuildSubmittedJobSummary(job));
     }
@@ -190,14 +191,13 @@ internal sealed class LocalCliBackend
                     folder.FolderPath,
                     new PeerInfoDto(
                         folder.Username,
-                        folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.HasFreeUploadSlot,
-                        folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.UploadSpeed),
+                        folder.Files.FirstOrDefault()?.Candidate.Response.HasFreeUploadSlot,
+                        folder.Files.FirstOrDefault()?.Candidate.Response.UploadSpeed),
                     folder.SearchFileCount,
                     folder.SearchAudioFileCount,
                     includeFiles
                         ? folder.Files
-                            .Where(song => song.ResolvedTarget != null)
-                            .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
+                            .Select(file => ToFileCandidateDto(file.Candidate))
                             .ToList()
                         : null,
                     folder.IsFullyRetrieved)).ToList()));
@@ -316,6 +316,7 @@ internal sealed class LocalCliBackend
 
         var retrieveJob = new RetrieveFolderJob(folder) { ItemName = folder.FolderPath, WorkflowId = sourceJob.WorkflowId };
         stateStore.SetSourceJob(retrieveJob.Id, sourceJobId);
+        retrieveJob.EnsureDisplayId();
         engine.Enqueue(retrieveJob, sourceJob.Config);
         return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(retrieveJob.Id) ?? BuildSubmittedJobSummary(retrieveJob, sourceJobId));
     }
@@ -370,6 +371,7 @@ internal sealed class LocalCliBackend
             if (!manualSong.Candidates.Contains(candidate))
                 manualSong.Candidates.Insert(0, candidate);
             manualSong.ResetToPending();
+            manualSong.EnsureDisplayId();
             engine.Resume(manualSong);
             summaries.Add(stateStore.GetJobSummary(manualSong.Id) ?? BuildSubmittedJobSummary(manualSong));
             return Task.FromResult<IReadOnlyList<JobSummaryDto>?>(summaries);
@@ -403,6 +405,7 @@ internal sealed class LocalCliBackend
                 followUpSongJob.CopySourceMutationFrom(sourceJob);
             stateStore.SetSourceJob(followUpSongJob.Id, sourceJobId);
             submissionOptionsResolver?.SetJobOptions(followUpSongJob.Id, request.Options);
+            followUpSongJob.EnsureDisplayId();
             engine.Enqueue(followUpSongJob, settings);
             summaries.Add(stateStore.GetJobSummary(followUpSongJob.Id) ?? BuildSubmittedJobSummary(followUpSongJob, sourceJobId));
         }
@@ -469,6 +472,7 @@ internal sealed class LocalCliBackend
 
         stateStore.SetSourceJob(followUpAlbumJob.Id, sourceJobId);
         submissionOptionsResolver?.SetJobOptions(followUpAlbumJob.Id, request.Options);
+        followUpAlbumJob.EnsureDisplayId();
         engine.Enqueue(followUpAlbumJob, settings);
         return Task.FromResult<JobSummaryDto?>(stateStore.GetJobSummary(followUpAlbumJob.Id) ?? BuildSubmittedJobSummary(followUpAlbumJob, sourceJobId));
     }
@@ -738,16 +742,14 @@ internal sealed class LocalCliBackend
         if (sourceJob is AlbumJob albumJob)
             return albumJob.Results
                 .SelectMany(folder => folder.Files)
-                .Select(song => song.ResolvedTarget)
-                .OfType<FileCandidate>()
+                .Select(file => file.Candidate)
                 .FirstOrDefault(candidate => Matches(candidate, candidateRef));
 
         if (sourceJob is AlbumAggregateJob aggregateAlbumJob)
             return aggregateAlbumJob.Albums
                 .SelectMany(album => album.Results)
                 .SelectMany(folder => folder.Files)
-                .Select(song => song.ResolvedTarget)
-                .OfType<FileCandidate>()
+                .Select(file => file.Candidate)
                 .FirstOrDefault(candidate => Matches(candidate, candidateRef));
 
         return null;
@@ -775,10 +777,9 @@ internal sealed class LocalCliBackend
         return searchJob.GetAlbumFolders(searchJob.Config.Search)
             .Items
             .SelectMany(folder => folder.Files)
-            .Select(song => song.ResolvedTarget)
+            .Select(file => file.Candidate)
             .FirstOrDefault(candidate =>
-                candidate != null
-                && string.Equals(candidate.Username, candidateRef.Username, StringComparison.Ordinal)
+                string.Equals(candidate.Username, candidateRef.Username, StringComparison.Ordinal)
                 && string.Equals(candidate.Filename, candidateRef.Filename, StringComparison.Ordinal));
     }
 
@@ -874,14 +875,13 @@ internal sealed class LocalCliBackend
             folder.FolderPath,
             new PeerInfoDto(
                 folder.Username,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.HasFreeUploadSlot,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.UploadSpeed),
+                folder.Files.FirstOrDefault()?.Candidate.Response.HasFreeUploadSlot,
+                folder.Files.FirstOrDefault()?.Candidate.Response.UploadSpeed),
             folder.SearchFileCount,
             folder.SearchAudioFileCount,
             includeFiles
                 ? folder.Files
-                    .Where(song => song.ResolvedTarget != null)
-                    .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
+                    .Select(file => ToFileCandidateDto(file.Candidate))
                     .ToList()
                 : null,
             folder.IsFullyRetrieved);

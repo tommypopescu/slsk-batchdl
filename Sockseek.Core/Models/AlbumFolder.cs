@@ -1,4 +1,3 @@
-using Sockseek.Core.Jobs;
 using Sockseek.Core.Services;
 
 namespace Sockseek.Core.Models;
@@ -6,7 +5,7 @@ namespace Sockseek.Core.Models;
     {
         public string        Username   { get; }
         public string        FolderPath { get; }
-        public List<SongJob> Files      => files.Value;
+        public List<AlbumFile> Files    => files.Value;
         public int           SearchFileCount { get; }
         public int           SearchAudioFileCount { get; }
         public int[]         SearchSortedAudioLengths { get; }
@@ -16,33 +15,32 @@ namespace Sockseek.Core.Models;
         public bool          IsFullyRetrieved { get; set; }
         internal ResultSorter.SortEntry? SearchAggregateSortEntry { get; }
 
-        private readonly Lazy<List<SongJob>> files;
+        private readonly Lazy<List<AlbumFile>> files;
 
-        public AlbumFolder(string username, string folderPath, List<SongJob> files)
+        public AlbumFolder(string username, string folderPath, List<AlbumFile> files)
         {
             Username = username;
             FolderPath = folderPath;
-            this.files = new Lazy<List<SongJob>>(() => files);
+            this.files = new Lazy<List<AlbumFile>>(() => files);
 
             var audioFiles = files
-                .Where(f => !f.IsNotAudio && f.ResolvedTarget != null)
+                .Where(f => !f.IsNotAudio)
                 .ToList();
             SearchFileCount = files.Count;
             SearchAudioFileCount = audioFiles.Count;
             SearchSortedAudioLengths = audioFiles
-                .Select(f => f.ResolvedTarget!.File.Length ?? -1)
+                .Select(f => f.Candidate.File.Length ?? -1)
                 .OrderBy(x => x)
                 .ToArray();
             SearchRepresentativeAudioFilename = audioFiles
                 .FirstOrDefault()
-                ?.ResolvedTarget!
-                .Filename;
+                ?.Filename;
             SearchAudioQualityCoverage = AlbumAudioQualityCoverage.Inactive(SearchAudioFileCount);
             HasSearchMetadata = true;
             SearchAggregateSortEntry = null;
         }
 
-        public AlbumFolder(string username, string folderPath, Func<List<SongJob>> filesFactory)
+        public AlbumFolder(string username, string folderPath, Func<List<AlbumFile>> filesFactory)
             : this(username, folderPath, filesFactory, 0, 0, [], null, AlbumAudioQualityCoverage.Inactive(0), hasSearchMetadata: false)
         {
         }
@@ -50,7 +48,7 @@ namespace Sockseek.Core.Models;
         public AlbumFolder(
             string username,
             string folderPath,
-            Func<List<SongJob>> filesFactory,
+            Func<List<AlbumFile>> filesFactory,
             int searchAudioFileCount,
             int[] searchSortedAudioLengths,
             string? searchRepresentativeAudioFilename)
@@ -61,7 +59,7 @@ namespace Sockseek.Core.Models;
         public AlbumFolder(
             string username,
             string folderPath,
-            Func<List<SongJob>> filesFactory,
+            Func<List<AlbumFile>> filesFactory,
             int searchFileCount,
             int searchAudioFileCount,
             int[] searchSortedAudioLengths,
@@ -73,7 +71,7 @@ namespace Sockseek.Core.Models;
         internal AlbumFolder(
             string username,
             string folderPath,
-            Func<List<SongJob>> filesFactory,
+            Func<List<AlbumFile>> filesFactory,
             int searchFileCount,
             int searchAudioFileCount,
             int[] searchSortedAudioLengths,
@@ -87,7 +85,7 @@ namespace Sockseek.Core.Models;
         private AlbumFolder(
             string username,
             string folderPath,
-            Func<List<SongJob>> filesFactory,
+            Func<List<AlbumFile>> filesFactory,
             int searchFileCount,
             int searchAudioFileCount,
             int[] searchSortedAudioLengths,
@@ -98,7 +96,7 @@ namespace Sockseek.Core.Models;
         {
             Username = username;
             FolderPath = folderPath;
-            files = new Lazy<List<SongJob>>(filesFactory);
+            files = new Lazy<List<AlbumFile>>(filesFactory);
             SearchFileCount = searchFileCount;
             SearchAudioFileCount = searchAudioFileCount;
             SearchSortedAudioLengths = searchSortedAudioLengths;

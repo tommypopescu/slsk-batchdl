@@ -1013,7 +1013,7 @@ public class CliProgressReporterTests
             var converted = (AlbumFolder)InvokePrivate(reporter, "ToAlbumFolder", folder)!;
 
             Assert.AreEqual(1, converted.Files.Count);
-            Assert.AreEqual(@"Artist\Album\01. Artist - Track.flac", converted.Files[0].ResolvedTarget?.Filename);
+            Assert.AreEqual(@"Artist\Album\01. Artist - Track.flac", converted.Files[0].Filename);
         }
         finally
         {
@@ -1772,19 +1772,19 @@ public class CliProgressReporterTests
 
     private static AlbumJob CompletedAlbum(string artist, string album, int trackCount)
     {
+        var response = new Soulseek.SearchResponse("local", 1, true, 100, 0, []);
         var files = Enumerable.Range(1, trackCount)
-            .Select(i =>
-            {
-                var song = new SongJob(new SongQuery { Artist = artist, Title = $"Track {i}" });
-                song.SetDone();
-                return song;
-            })
+            .Select(i => new AlbumFile(
+                new SongQuery { Artist = artist, Title = $"Track {i}" },
+                new FileCandidate(response, new Soulseek.File(i, $@"{artist}\{album}\Track {i}.flac", 100, ".flac"))))
             .ToList();
 
         var job = new AlbumJob(new AlbumQuery { Artist = artist, Album = album })
         {
             ResolvedTarget = new AlbumFolder("local", $@"{artist}\{album}", files),
         };
+        foreach (var track in job.EnsureTrackJobs(job.ResolvedTarget))
+            track.SetDone();
         job.SetDone(Path.Combine("output", album));
         return job;
     }

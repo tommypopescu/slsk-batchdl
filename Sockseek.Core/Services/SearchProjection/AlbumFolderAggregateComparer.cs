@@ -111,13 +111,9 @@ internal sealed class AlbumFolderAggregateComparer : IComparer<AlbumFolder>
         ResultSorter.SortEntry? best = null;
         foreach (var file in folder.Files)
         {
-            var candidate = file.ResolvedTarget;
-            if (candidate == null)
-                continue;
-
             var entry = ResultSorter.CreateSortEntry(
-                candidate.Response,
-                candidate.File,
+                file.Candidate.Response,
+                file.Candidate.File,
                 keyContext,
                 originalIndex: 0);
             if (!entry.HasValue)

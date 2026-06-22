@@ -292,23 +292,20 @@ namespace Tests.Eventing
 
             AlbumJob Album(string albumName, SearchResponse response, Soulseek.File file1, Soulseek.File file2)
             {
-                var songs = new List<SongJob>
-                {
-                    new(new SongQuery { Artist = "Artist", Title = "One", Album = albumName })
-                    {
-                        ResolvedTarget = new FileCandidate(response, file1),
-                    },
-                    new(new SongQuery { Artist = "Artist", Title = "Two", Album = albumName })
-                    {
-                        ResolvedTarget = new FileCandidate(response, file2),
-                    },
-                };
-                var folder = new AlbumFolder(response.Username, Utils.GetDirectoryNameSlsk(file1.Filename), songs);
-                return new AlbumJob(new AlbumQuery { Artist = "Artist", Album = albumName })
+                var folder = new AlbumFolder(
+                    response.Username,
+                    Utils.GetDirectoryNameSlsk(file1.Filename),
+                    [
+                        TestHelpers.CreateAlbumFile(response, file1),
+                        TestHelpers.CreateAlbumFile(response, file2),
+                    ]);
+                var album = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = albumName })
                 {
                     Results = [folder],
                     ResolvedTarget = folder,
                 };
+                album.EnsureTrackJobs(folder);
+                return album;
             }
 
             try
@@ -372,7 +369,7 @@ namespace Tests.Eventing
 
                 Assert.AreEqual(1, maxActiveAlbums, "--concurrent-jobs=1 should allow only one album job to download at a time.");
                 Assert.IsTrue(new[] { album1, album2 }.All(album => album.TerminalOutcome == JobTerminalOutcome.Succeeded));
-                Assert.IsTrue(new[] { album1, album2 }.SelectMany(album => album.ResolvedTarget!.Files).All(song => song.TerminalOutcome == JobTerminalOutcome.Succeeded));
+                Assert.IsTrue(new[] { album1, album2 }.SelectMany(album => album.TrackJobs).All(song => song.TerminalOutcome == JobTerminalOutcome.Succeeded));
             }
             finally
             {
@@ -986,14 +983,19 @@ namespace Tests.Eventing
         private static AlbumFolder AlbumFolderFromSearch(SearchResponse response, IEnumerable<Soulseek.File> files)
         {
             var visibleFiles = files.ToList();
-            var songs = visibleFiles
-                .Select(file => new SongJob(new SongQuery { Artist = "Artist", Album = Utils.GetBaseNameSlsk(Utils.GetDirectoryNameSlsk(file.Filename)), Title = Path.GetFileNameWithoutExtension(file.Filename) })
-                {
-                    ResolvedTarget = new FileCandidate(response, file),
-                })
+            var albumFiles = visibleFiles
+                .Select(file => TestHelpers.CreateAlbumFile(
+                    response,
+                    file,
+                    new SongQuery
+                    {
+                        Artist = "Artist",
+                        Album = Utils.GetBaseNameSlsk(Utils.GetDirectoryNameSlsk(file.Filename)),
+                        Title = Path.GetFileNameWithoutExtension(file.Filename),
+                    }))
                 .ToList();
 
-            return new AlbumFolder(response.Username, Utils.GetDirectoryNameSlsk(visibleFiles.First().Filename), songs);
+            return new AlbumFolder(response.Username, Utils.GetDirectoryNameSlsk(visibleFiles.First().Filename), albumFiles);
         }
 
         private static DownloadSettings AlbumDownloadSettings(string outputDir)
@@ -1013,9 +1015,6 @@ namespace Tests.Eventing
             var downloadSettings = new DownloadSettings();
             var albumQuery = new AlbumQuery { Artist = "Artist One", Album = "Album One" };
             var albumJob = new AlbumJob(albumQuery);
-
-            var songJob = new SongJob(new SongQuery { Artist = "Artist One", Title = "Track One", Album = "Album One" });
-            var folder = new AlbumFolder("test_user", "C:\\Music\\Album One", new List<SongJob> { songJob });
 
             var searchResponse = new SearchResponse(
                 username: "test_user",

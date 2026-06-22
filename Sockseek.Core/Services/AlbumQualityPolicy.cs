@@ -53,8 +53,8 @@ internal static class AlbumQualityPolicy
         ActiveAudioQualityConditions activeQuality)
         => Evaluate(
             folder.Files
-                .Where(song => !song.IsNotAudio && song.ResolvedTarget != null)
-                .Select(song => song.ResolvedTarget!.File),
+                .Where(file => !file.IsNotAudio)
+                .Select(file => file.Candidate.File),
             conditions,
             activeQuality);
 

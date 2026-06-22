@@ -355,6 +355,25 @@ public class EngineStateStoreTests
         Assert.IsNull(payload.ResultDraft);
     }
 
+    [TestMethod]
+    public void AutoProcessedExtractResult_GetsDisplayIdBeforeRegistration()
+    {
+        var store = new EngineStateStore();
+        var extract = new ExtractJob("input.csv", InputType.CSV)
+        {
+            AutoProcessResult = true,
+        };
+        var result = new JobList("batch") { WorkflowId = extract.WorkflowId };
+        extract.Result = result;
+
+        Register(store, extract);
+        ResultCreated(store, extract, result);
+
+        var resultSummary = store.GetJobSummary(result.Id);
+        Assert.IsNotNull(resultSummary);
+        Assert.AreNotEqual(0, resultSummary.DisplayId);
+    }
+
     private static void Register(EngineStateStore store, Job job, Job? parent = null)
     {
         typeof(EngineStateStore)

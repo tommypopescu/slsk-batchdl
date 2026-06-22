@@ -28,7 +28,7 @@ public class InteractiveModeManagerTests
         Assert.IsTrue(ok, error);
         Assert.IsTrue(selected.IsFullyRetrieved);
         Assert.AreEqual(1, selected.Files.Count);
-        Assert.AreEqual(@"Artist\Album\02. Artist - Two.mp3", selected.Files[0].ResolvedTarget!.Filename);
+        Assert.AreEqual(@"Artist\Album\02. Artist - Two.mp3", selected.Files[0].Filename);
     }
 
     [TestMethod]
@@ -252,7 +252,7 @@ public class InteractiveModeManagerTests
             Assert.IsNotNull(result.Folder);
             Assert.AreEqual(@"Artist\Album\Disc 1", result.Folder.FolderPath);
             Assert.AreEqual(1, result.Folder.Files.Count);
-            Assert.AreEqual(@"Artist\Album\Disc 1\01. Artist - One.mp3", result.Folder.Files[0].ResolvedTarget!.Filename);
+            Assert.AreEqual(@"Artist\Album\Disc 1\01. Artist - One.mp3", result.Folder.Files[0].Filename);
             var text = output.ToString();
             Assert.IsTrue(text.Contains(@"Folder: Album\Disc 1", StringComparison.Ordinal));
             Assert.IsTrue(text.Contains(@"Changed folder: Artist\Album\Disc 1", StringComparison.Ordinal));
@@ -328,13 +328,12 @@ public class InteractiveModeManagerTests
             EnqueueKey(ch, ch == ' ' ? ConsoleKey.Spacebar : default);
     }
 
-    private static SongJob CreateSong(string filename)
+    private static AlbumFile CreateSong(string filename)
     {
         var response = new Soulseek.SearchResponse("local", 1, true, 100, 0, []);
         var file = new Soulseek.File(1, filename, 100, ".mp3");
-        return new SongJob(new SongQuery { Artist = "Artist", Title = Path.GetFileNameWithoutExtension(filename) })
-        {
-            ResolvedTarget = new FileCandidate(response, file),
-        };
+        return new AlbumFile(
+            new SongQuery { Artist = "Artist", Title = Path.GetFileNameWithoutExtension(filename) },
+            new FileCandidate(response, file));
     }
 }

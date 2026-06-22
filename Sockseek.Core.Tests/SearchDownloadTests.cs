@@ -30,7 +30,7 @@ namespace Tests.SearchDownloadTests
             Assert.AreEqual(4, testUserFolder.Files.Count);
             CollectionAssert.AreEqual(
                 index.First(x => x.Username == "testuser").Files.Select(x => x.Filename).ToList(),
-                testUserFolder.Files.Select(x => x.ResolvedTarget!.File.Filename).ToList());
+                testUserFolder.Files.Select(x => x.Candidate.File.Filename).ToList());
         }
     }
 }

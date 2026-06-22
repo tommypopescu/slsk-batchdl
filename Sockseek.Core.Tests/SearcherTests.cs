@@ -560,8 +560,8 @@ namespace Tests.Unit
             Assert.AreEqual(@"ELO\Time", forward[0].FolderPath);
             Assert.AreEqual(@"ELO\Time", reversed[0].FolderPath);
             CollectionAssert.AreEqual(
-                forward[0].Files.Select(x => x.ResolvedTarget!.Filename).ToList(),
-                reversed[0].Files.Select(x => x.ResolvedTarget!.Filename).ToList());
+                forward[0].Files.Select(x => x.Filename).ToList(),
+                reversed[0].Files.Select(x => x.Filename).ToList());
         }
 
         [TestMethod]
@@ -627,17 +627,14 @@ namespace Tests.Unit
                 "User1",
                 @"ELO\Time",
                 [
-                    new SongJob(new SongQuery { Artist = "ELO", Album = "Time", Title = "Twilight" })
-                    {
-                        ResolvedTarget = new FileCandidate(response, track1),
-                    },
+                    TestHelpers.CreateAlbumFile(response, track1),
                 ]);
 
             int newFiles = await searcher.CompleteFolder(folder, CancellationToken.None);
 
             Assert.AreEqual(1, newFiles);
             Assert.AreEqual(2, folder.Files.Count);
-            Assert.AreEqual(@"ELO\Time\02. Yours Truly 2095.mp3", folder.Files[1].ResolvedTarget!.Filename);
+            Assert.AreEqual(@"ELO\Time\02. Yours Truly 2095.mp3", folder.Files[1].Filename);
         }
 
         [TestMethod]
@@ -693,7 +690,7 @@ namespace Tests.Unit
             
             Assert.AreEqual(5, job.Results.Count, "Should find folders matching album name search terms.");
             Assert.IsTrue(job.Results.Any(f => f.Username == "User1"), "User1 folder missing.");
-            Assert.IsTrue(job.Results.All(f => !f.Files.Any(fi => fi.ResolvedTarget!.Filename.Contains("Dancing Queen"))), "Noise file not filtered!");
+            Assert.IsTrue(job.Results.All(f => !f.Files.Any(fi => fi.Filename.Contains("Dancing Queen"))), "Noise file not filtered!");
         }
 
         [TestMethod]
@@ -717,7 +714,7 @@ namespace Tests.Unit
 
             Assert.AreEqual(1, job.Results.Count, "Child directories should merge into the parent album folder.");
             Assert.AreEqual(@"ELO\Time", job.Results[0].FolderPath);
-            Assert.IsTrue(job.Results[0].Files.Any(f => f.ResolvedTarget!.Filename.EndsWith(@"Scans\Time booklet.jpg")),
+            Assert.IsTrue(job.Results[0].Files.Any(f => f.Filename.EndsWith(@"Scans\Time booklet.jpg")),
                 "Merged album folder should retain non-audio files from child directories.");
         }
 
@@ -920,7 +917,7 @@ namespace Tests.Unit
         [TestMethod]
         public void AggregateAlbums_UsesSearchMetadataWithoutMaterializingFiles()
         {
-            List<SongJob> ThrowIfMaterialized() => throw new AssertFailedException("AggregateAlbums should not force AlbumFolder.Files when search metadata is available.");
+            List<AlbumFile> ThrowIfMaterialized() => throw new AssertFailedException("AggregateAlbums should not force AlbumFolder.Files when search metadata is available.");
 
             var folders = new List<AlbumFolder>
             {

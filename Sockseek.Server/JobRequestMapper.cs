@@ -141,16 +141,16 @@ public static class JobRequestMapper
         => new(
             dto.Username,
             dto.FolderPath,
-            dto.Files?.Select(ToSongJob).ToList() ?? [])
+            dto.Files?.Select(ToAlbumFile).ToList() ?? [])
         {
             IsFullyRetrieved = dto.IsFullyRetrieved,
         };
 
-    private static SongJob ToSongJob(FileCandidateDto dto)
+    private static AlbumFile ToAlbumFile(FileCandidateDto dto)
     {
         var candidate = ToFileCandidate(dto);
         var query = Searcher.InferSongQuery(candidate.Filename, new SongQuery());
-        return new SongJob(query) { ResolvedTarget = candidate };
+        return new AlbumFile(query, candidate);
     }
 
     private static FileCandidate ToFileCandidate(FileCandidateDto dto)
@@ -236,8 +236,7 @@ public static class JobRequestMapper
 
         var rawResults = albumJob.Results
             .SelectMany(folder => folder.Files)
-            .Select(song => song.ResolvedTarget)
-            .OfType<FileCandidate>()
+            .Select(file => file.Candidate)
             .Select(candidate => (Response: candidate.Response, File: candidate.File))
             .ToList();
 
@@ -320,7 +319,7 @@ public static class JobRequestMapper
             .Where(folder => string.Equals(folder.Username, folderRef.Username, StringComparison.Ordinal)
                 && PathsAreRelated(folder.FolderPath, folderRef.FolderPath))
             .SelectMany(folder => folder.Files)
-            .Where(song => song.ResolvedTarget?.Filename.StartsWith(folderRef.FolderPath + "\\", StringComparison.OrdinalIgnoreCase) == true)
+            .Where(file => file.Filename.StartsWith(folderRef.FolderPath + "\\", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         return seedFiles.Count == 0
@@ -350,8 +349,7 @@ public static class JobRequestMapper
             .ToHashSet();
 
         var files = folder.Files
-            .Where(song => song.ResolvedTarget != null
-                && selected.Contains((song.ResolvedTarget.Username, song.ResolvedTarget.Filename)))
+            .Where(file => selected.Contains((file.Candidate.Username, file.Candidate.Filename)))
             .ToList();
 
         if (files.Count != selected.Count)

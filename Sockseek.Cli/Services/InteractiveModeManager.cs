@@ -203,7 +203,7 @@ public class InteractiveModeManager
                     {
                         var subdir     = CombineRemoteFolderPath(currentFolder, options);
                         var childFiles = folder.Files
-                            .Where(af => IsInFolderPath(af.ResolvedTarget!.Filename, subdir))
+                            .Where(af => IsInFolderPath(af.Filename, subdir))
                             .ToList();
 
                         if (childFiles.Count == 0)
@@ -233,7 +233,7 @@ public class InteractiveModeManager
                             ? folder
                             : GetFolderSnapshot(username, subfolder)
                             ?? new AlbumFolder(username, subfolder, folder.Files
-                                .Where(af => IsInFolderPath(af.ResolvedTarget!.Filename, subfolder))
+                                .Where(af => IsInFolderPath(af.Filename, subfolder))
                                 .ToList());
 
                         if (!targetFolder.IsFullyRetrieved)
@@ -378,7 +378,7 @@ public class InteractiveModeManager
 
     private static bool FolderMatchesFilter(AlbumFolder folder, string filter)
     {
-        return folder.Files.Any(af => af.ResolvedTarget!.Filename.ContainsIgnoreCase(filter));
+        return folder.Files.Any(af => af.Filename.ContainsIgnoreCase(filter));
     }
 
     private static bool IsInFolderPath(string filename, string folderPath)

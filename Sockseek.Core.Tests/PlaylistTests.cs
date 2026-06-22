@@ -36,14 +36,17 @@ namespace Tests.Playlist
             queue.Add(song1);
 
             var album1 = new AlbumJob(new AlbumQuery { Artist = "AlbumArtist", Album = "Album1" });
-            var songA = new SongJob(new SongQuery { Artist = "AlbumArtist", Title = "TrackA" });
-            songA.SetDone();
-            songA.DownloadPath = "AlbumArtist/Album1/TrackA.mp3";
-            var songB = new SongJob(new SongQuery { Artist = "AlbumArtist", Title = "TrackB" });
-            songB.SetDone();
-            songB.DownloadPath = "AlbumArtist/Album1/TrackB.mp3";
-            var folder = new AlbumFolder("user", "AlbumArtist\\Album1", [songA, songB]);
+            var folder = new AlbumFolder("user", "AlbumArtist\\Album1",
+            [
+                TestHelpers.CreateAlbumFile("user", "AlbumArtist\\Album1\\TrackA.mp3"),
+                TestHelpers.CreateAlbumFile("user", "AlbumArtist\\Album1\\TrackB.mp3"),
+            ]);
             album1.ResolvedTarget = folder;
+            var tracks = album1.EnsureTrackJobs(folder);
+            tracks[0].SetDone();
+            tracks[0].DownloadPath = "AlbumArtist/Album1/TrackA.mp3";
+            tracks[1].SetDone();
+            tracks[1].DownloadPath = "AlbumArtist/Album1/TrackB.mp3";
             album1.SetDone();
             queue.Add(album1);
 
@@ -105,8 +108,13 @@ namespace Tests.Playlist
             imageSong.SetDone();
             imageSong.DownloadPath = "Artist/Album/Cover.jpg";
 
-            var folder = new AlbumFolder("user", "Artist\\Album", [audioSong, imageSong]);
+            var folder = new AlbumFolder("user", "Artist\\Album",
+            [
+                TestHelpers.CreateAlbumFile(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(1, "Track.mp3", 100, ".mp3")),
+                TestHelpers.CreateAlbumFile(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(2, "Cover.jpg", 100, ".jpg")),
+            ]);
             album.ResolvedTarget = folder;
+            album.TrackJobs.AddRange([audioSong, imageSong]);
             album.SetDone();
             queue.Add(album);
 

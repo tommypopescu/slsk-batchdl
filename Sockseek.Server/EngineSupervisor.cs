@@ -188,6 +188,7 @@ public sealed class EngineSupervisor
         if (settings.NeedLogin && !CanAcceptLoginRequiredJobs())
             throw new ArgumentException("This server is not configured for Soulseek login. Configure username/password, enable random login, or use a non-login submission.");
 
+        job.EnsureDisplayId();
         await submissionChannel.Writer.WriteAsync(new QueuedSubmission(job, settings), ct);
 
         return StateStore.GetJobSummary(job.Id) ?? BuildSubmittedJobSummary(job);
@@ -438,6 +439,7 @@ public sealed class EngineSupervisor
         var retrieveJob = new RetrieveFolderJob(folder) { ItemName = folder.FolderPath };
         retrieveJob.WorkflowId = sourceJob.WorkflowId;
         StateStore.SetSourceJob(retrieveJob.Id, sourceJobId);
+        retrieveJob.EnsureDisplayId();
         await submissionChannel.Writer.WriteAsync(new QueuedSubmission(retrieveJob, sourceJob.Config), ct);
         return StateStore.GetJobSummary(retrieveJob.Id) ?? BuildSubmittedJobSummary(retrieveJob, sourceJobId);
     }
@@ -468,6 +470,7 @@ public sealed class EngineSupervisor
                 manualSong.Candidates.Insert(0, candidate);
             manualSong.ResetToPending();
 
+            manualSong.EnsureDisplayId();
             await submissionChannel.Writer.WriteAsync(QueuedSubmission.Resume(manualSong), ct);
             return new List<JobSummaryDto> { StateStore.GetJobSummary(manualSong.Id) ?? BuildSubmittedJobSummary(manualSong, sourceJobId) };
         }
@@ -654,14 +657,13 @@ public sealed class EngineSupervisor
             folder.FolderPath,
             new PeerInfoDto(
                 folder.Username,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.HasFreeUploadSlot,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.UploadSpeed),
+                folder.Files.FirstOrDefault()?.Candidate.Response.HasFreeUploadSlot,
+                folder.Files.FirstOrDefault()?.Candidate.Response.UploadSpeed),
             folder.SearchFileCount,
             folder.SearchAudioFileCount,
             includeFiles
                 ? folder.Files
-                    .Where(song => song.ResolvedTarget != null)
-                    .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
+                    .Select(file => ToFileCandidateDto(file.Candidate))
                     .ToList()
                 : null,
             folder.IsFullyRetrieved);
@@ -762,16 +764,14 @@ public sealed class EngineSupervisor
         if (sourceJob is AlbumJob albumJob)
             return albumJob.Results
                 .SelectMany(folder => folder.Files)
-                .Select(song => song.ResolvedTarget)
-                .OfType<FileCandidate>()
+                .Select(file => file.Candidate)
                 .FirstOrDefault(candidate => Matches(candidate, candidateRef));
 
         if (sourceJob is AlbumAggregateJob aggregateAlbumJob)
             return aggregateAlbumJob.Albums
                 .SelectMany(album => album.Results)
                 .SelectMany(folder => folder.Files)
-                .Select(song => song.ResolvedTarget)
-                .OfType<FileCandidate>()
+                .Select(file => file.Candidate)
                 .FirstOrDefault(candidate => Matches(candidate, candidateRef));
 
         return null;
@@ -794,10 +794,9 @@ public sealed class EngineSupervisor
         return searchJob.GetAlbumFolders(searchJob.Config.Search)
             .Items
             .SelectMany(folder => folder.Files)
-            .Select(song => song.ResolvedTarget)
+            .Select(file => file.Candidate)
             .FirstOrDefault(candidate =>
-                candidate != null
-                && string.Equals(candidate.Username, candidateRef.Username, StringComparison.Ordinal)
+                string.Equals(candidate.Username, candidateRef.Username, StringComparison.Ordinal)
                 && string.Equals(candidate.Filename, candidateRef.Filename, StringComparison.Ordinal));
     }
 
@@ -823,6 +822,7 @@ public sealed class EngineSupervisor
         StateStore.SetSourceJob(followUpJob.Id, sourceJobId);
         if (isolateOptions)
             jobSettingsResolver.SetJobOptions(followUpJob.Id, options);
+        followUpJob.EnsureDisplayId();
         await submissionChannel.Writer.WriteAsync(new QueuedSubmission(followUpJob, settings), ct);
         return StateStore.GetJobSummary(followUpJob.Id) ?? BuildSubmittedJobSummary(followUpJob, sourceJobId);
     }

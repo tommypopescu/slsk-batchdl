@@ -179,7 +179,7 @@ public sealed class IncrementalAlbumAggregateProjector
             ? folder.SearchSortedAudioLengths
             : folder.Files
                 .Where(f => !f.IsNotAudio)
-                .Select(f => f.ResolvedTarget!.File.Length ?? -1)
+                .Select(f => f.Candidate.File.Length ?? -1)
                 .OrderBy(x => x)
                 .ToArray();
 
@@ -210,7 +210,7 @@ public sealed class IncrementalAlbumAggregateProjector
     private static string? RepresentativeAudioFilename(AlbumFolder folder)
         => folder.HasSearchMetadata
             ? folder.SearchRepresentativeAudioFilename
-            : folder.Files.FirstOrDefault(f => !f.IsNotAudio)?.ResolvedTarget?.Filename;
+            : folder.Files.FirstOrDefault(f => !f.IsNotAudio)?.Filename;
 
     private sealed class AlbumAggregateBucket
     {

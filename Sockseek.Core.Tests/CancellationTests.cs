@@ -761,23 +761,22 @@ namespace Tests.Cancellation
                 engine.CompleteEnqueue();
                 var runTask = engine.RunAsync(CancellationToken.None);
 
-                await WaitForAsync(() => folder != null && folder.Files.Any(song => song.ActivityPhase == JobActivityPhase.Downloading), 5000);
+                await WaitForAsync(() => albumJob?.TrackJobs.Any(song => song.ActivityPhase == JobActivityPhase.Downloading) == true, 5000);
 
                 albumJob!.Cancel(JobCancellationSource.UserRequestedJob);
                 await IgnoreCancellation(runTask);
 
                 Assert.IsNotNull(folder);
                 Assert.IsFalse(
-                    folder!.Files.Any(song => song.LifecycleState == JobLifecycleState.Pending || song.ActivityPhase is JobActivityPhase.Searching or JobActivityPhase.Downloading),
+                    albumJob!.TrackJobs.Any(song => song.LifecycleState == JobLifecycleState.Pending || song.ActivityPhase is JobActivityPhase.Searching or JobActivityPhase.Downloading),
                     "Cancelling an album should not leave unresolved folder files in active states.");
                 Assert.IsTrue(
-                    folder.Files.Any(song => song.IsUnsuccessfulTerminal && song.FailureReason == JobFailureReason.Cancelled),
+                    albumJob.TrackJobs.Any(song => song.IsUnsuccessfulTerminal && song.FailureReason == JobFailureReason.Cancelled),
                     "At least one unfinished album file should be marked as cancelled.");
 
                 Assert.IsNotNull(albumJob);
-                var resolved = albumJob!.ResolvedTarget ?? folder;
                 Assert.IsFalse(
-                    resolved.Files.Any(song => song.LifecycleState == JobLifecycleState.Pending || song.ActivityPhase is JobActivityPhase.Searching or JobActivityPhase.Downloading),
+                    albumJob.TrackJobs.Any(song => song.LifecycleState == JobLifecycleState.Pending || song.ActivityPhase is JobActivityPhase.Searching or JobActivityPhase.Downloading),
                     "The album's resolved folder should not expose stale active child states after cancellation.");
             }
             finally

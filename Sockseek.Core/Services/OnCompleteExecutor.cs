@@ -220,7 +220,7 @@ public static class OnCompleteExecutor
     {
         // Album-level on-complete uses the album as the event context, but
         // reads tag variables from the first audio file as its representative.
-        var representativeFile = albumJob.ResolvedTarget?.Files.FirstOrDefault(f => !f.IsNotAudio);
+        var representativeFile = albumJob.TrackJobs.FirstOrDefault(f => !f.IsNotAudio);
 
         var variables = new FileManagerContext
         {

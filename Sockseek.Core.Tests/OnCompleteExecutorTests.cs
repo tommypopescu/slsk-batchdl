@@ -602,7 +602,11 @@ namespace Tests.OnCompleteExecutorTests
                 };
                 firstAudio.SetDone(tagPath, candidate);
 
-                album.ResolvedTarget = new AlbumFolder("user", @"remote\Artist\Album", [firstAudio]);
+                album.ResolvedTarget = new AlbumFolder(
+                    "user",
+                    @"remote\Artist\Album",
+                    [new AlbumFile(firstAudio.Query, candidate)]);
+                album.TrackJobs.Add(firstAudio);
 
                 await OnCompleteExecutor.ExecuteAsync(album, null, new JobContext(), JobOutcome.Done(albumPath));
 

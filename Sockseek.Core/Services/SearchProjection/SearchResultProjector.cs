@@ -40,6 +40,10 @@ public static partial class SearchResultProjector
         SearchSettings search,
         ConcurrentDictionary<string, int> userSuccessCounts)
     {
+        // TODO [ARCHITECTURE]: Aggregate track projection still uses SongJob as a
+        // candidate/result shape. That no longer consumes display IDs, but search
+        // projection should eventually return a pure candidate DTO/model and let the
+        // engine materialize executable SongJob instances only when the aggregate is run.
         var equivalentFiles = Searcher.EquivalentFiles(query, rawResults.Select(x => (x.Response, x.File)), search)
             .Select(x => (x.query, Ordered: ResultSorter.OrderedResults(
                 x.candidates.Select(c => (c.Response, c.File)),
@@ -299,9 +303,9 @@ public static partial class SearchResultProjector
     private static string? RepresentativeAudioFilename(List<AlbumFolderFile> folderFiles)
         => folderFiles.FirstOrDefault(f => f.IsMusic).File?.Filename;
 
-    private static List<SongJob> BuildAlbumFiles(List<AlbumFolderFile> folderFiles, SongQuery inferDefault)
+    private static List<AlbumFile> BuildAlbumFiles(List<AlbumFolderFile> folderFiles, SongQuery inferDefault)
     {
-        var files = new List<SongJob>(folderFiles.Count);
+        var files = new List<AlbumFile>(folderFiles.Count);
         var inferredByFilename = new Dictionary<string, SongQuery>();
 
         foreach (var item in folderFiles)
@@ -312,7 +316,7 @@ public static partial class SearchResultProjector
                 inferredByFilename.Add(item.File.Filename, info);
             }
 
-            files.Add(new SongJob(info) { ResolvedTarget = new FileCandidate(item.Response, item.File) });
+            files.Add(new AlbumFile(info, new FileCandidate(item.Response, item.File)));
         }
 
         return files;
@@ -458,7 +462,7 @@ public static partial class SearchResultProjector
             ? folder.SearchSortedAudioLengths
             : folder.Files
                 .Where(f => !f.IsNotAudio)
-                .Select(f => f.ResolvedTarget!.File.Length ?? -1)
+                .Select(f => f.Candidate.File.Length ?? -1)
                 .OrderBy(x => x)
                 .ToArray();
 
@@ -758,7 +762,7 @@ public static partial class SearchResultProjector
     private static string? RepresentativeAudioFilename(AlbumFolder folder)
         => folder.HasSearchMetadata
             ? folder.SearchRepresentativeAudioFilename
-            : folder.Files.FirstOrDefault(f => !f.IsNotAudio)?.ResolvedTarget?.Filename;
+            : folder.Files.FirstOrDefault(f => !f.IsNotAudio)?.Filename;
 
     [GeneratedRegex(@"^(?i)(dis[c|k]|cd)\s*\d{1,2}$")]
     private static partial Regex DiscPatternRegex();

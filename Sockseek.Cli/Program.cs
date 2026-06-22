@@ -1485,16 +1485,16 @@ internal static partial class Program
         => new(
             folder.Username,
             folder.FolderPath,
-            folder.Files?.Select(ToSongJob).ToList() ?? [])
+            folder.Files?.Select(ToAlbumFile).ToList() ?? [])
         {
             IsFullyRetrieved = folder.IsFullyRetrieved,
         };
 
-    private static SongJob ToSongJob(FileCandidateDto file)
+    private static AlbumFile ToAlbumFile(FileCandidateDto file)
     {
         var candidate = ToFileCandidate(file);
         var query = Searcher.InferSongQuery(candidate.Filename, new SongQuery());
-        return new SongJob(query) { ResolvedTarget = candidate };
+        return new AlbumFile(query, candidate);
     }
 
     private static SongQuery ToSongQuery(SongQueryDto query)

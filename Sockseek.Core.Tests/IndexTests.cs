@@ -276,8 +276,13 @@ namespace Tests.Index
             imageSong.SetDone();
             imageSong.DownloadPath = "Artist/Album/Cover.jpg";
 
-            var folder = new AlbumFolder("user", "Artist\\Album", [audioSong, imageSong]);
+            var folder = new AlbumFolder("user", "Artist\\Album",
+            [
+                TestHelpers.CreateAlbumFile(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(1, "Track.mp3", 100, ".mp3")),
+                TestHelpers.CreateAlbumFile(new Soulseek.SearchResponse("user", 1, true, 100, 0, []), new Soulseek.File(2, "Cover.jpg", 100, ".jpg")),
+            ]);
             album.ResolvedTarget = folder;
+            album.TrackJobs.AddRange([audioSong, imageSong]);
             album.SetDone();
             queue.Add(album);
 

@@ -70,9 +70,26 @@ namespace Sockseek.Core.Jobs;
         }
 
         private static int _nextDisplayId = 0;
+        private int _displayId;
+        private readonly object displayIdLock = new();
 
         public Guid Id { get; } = Guid.NewGuid();
-        public int DisplayId { get; } = Interlocked.Increment(ref _nextDisplayId);
+        public int DisplayId => _displayId;
+
+        public int EnsureDisplayId()
+        {
+            var existing = Volatile.Read(ref _displayId);
+            if (existing != 0)
+                return existing;
+
+            lock (displayIdLock)
+            {
+                if (_displayId == 0)
+                    _displayId = Interlocked.Increment(ref _nextDisplayId);
+
+                return _displayId;
+            }
+        }
 
         // Stable logical grouping for sequentially-related jobs.
         // Multiple executable jobs can share one workflow without sharing job identity.

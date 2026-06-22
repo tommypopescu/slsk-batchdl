@@ -309,9 +309,7 @@ internal sealed class InteractiveCliCoordinator
         var selectedFiles = !exactFiles
             ? null
             : selectedFolder.Files
-                .Select(song => song.ResolvedTarget)
-                .OfType<FileCandidate>()
-                .Select(candidate => new FileCandidateRefDto(candidate.Username, candidate.Filename))
+                .Select(file => new FileCandidateRefDto(file.Candidate.Username, file.Candidate.Filename))
                 .ToList();
         var selection = selected.SkipTrackCountVerification || exactFiles
             ? new AlbumFolderDownloadSelectionDto(
@@ -519,7 +517,7 @@ internal sealed class InteractiveCliCoordinator
         => new AlbumFolder(
             folder.Username,
             folder.FolderPath,
-            () => folder.Files?.Select(ToSongJob).ToList() ?? [])
+            () => folder.Files?.Select(ToAlbumFile).ToList() ?? [])
         {
             IsFullyRetrieved = folder.IsFullyRetrieved,
         };
@@ -531,25 +529,23 @@ internal sealed class InteractiveCliCoordinator
             folder.FolderPath,
             new PeerInfoDto(
                 folder.Username,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.HasFreeUploadSlot,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.UploadSpeed),
+                folder.Files.FirstOrDefault()?.Candidate.Response.HasFreeUploadSlot,
+                folder.Files.FirstOrDefault()?.Candidate.Response.UploadSpeed),
             folder.SearchFileCount,
             folder.SearchAudioFileCount,
             folder.Files
-                .Select(song => song.ResolvedTarget)
-                .OfType<FileCandidate>()
-                .Select(ToFileCandidateDto)
+                .Select(file => ToFileCandidateDto(file.Candidate))
                 .ToList(),
             folder.IsFullyRetrieved);
 
-    private static SongJob ToSongJob(FileCandidateDto file)
+    private static AlbumFile ToAlbumFile(FileCandidateDto file)
     {
         var candidate = new FileCandidate(
             new SearchResponse(file.Username, -1, file.Peer.HasFreeUploadSlot ?? false, file.Peer.UploadSpeed ?? -1, -1, null),
             new Soulseek.File(0, file.Filename, file.Size, file.Extension ?? Path.GetExtension(file.Filename),
                 file.Attributes?.Select(x => new Soulseek.FileAttribute(Enum.Parse<Soulseek.FileAttributeType>(x.Type), x.Value))));
         var query = Searcher.InferSongQuery(candidate.Filename, new SongQuery());
-        return new SongJob(query) { ResolvedTarget = candidate };
+        return new AlbumFile(query, candidate);
     }
 
     private static FileCandidateDto ToFileCandidateDto(FileCandidate candidate)

@@ -267,6 +267,7 @@ public sealed class EngineStateStore
         WorkflowSummaryDto workflowSummary;
         lock (gate)
         {
+            job.EnsureDisplayId();
             jobs[job.Id] = job;
             parentJobIds[job.Id] = parent?.Id;
             summary = UpdateJobRecord(job).Summary;
@@ -285,6 +286,7 @@ public sealed class EngineStateStore
         WorkflowSummaryDto? workflowSummary = null;
         lock (gate)
         {
+            result.EnsureDisplayId();
             resultJobIds[job.Id] = result.Id;
 
             if (jobs.TryGetValue(job.Id, out var extractJob))
@@ -585,8 +587,7 @@ public sealed class EngineStateStore
     private static bool ContainsNestedJob(Job container, Guid jobId)
         => container switch
         {
-            AlbumJob albumJob => albumJob.Results
-                .SelectMany(folder => folder.Files)
+            AlbumJob albumJob => albumJob.TrackJobs
                 .Any(song => song.Id == jobId),
             AggregateJob aggregateJob => aggregateJob.Songs.Any(song => song.Id == jobId),
             JobList jobList => jobList.Jobs.Any(job => job.Id == jobId || ContainsNestedJob(job, jobId)),
@@ -656,10 +657,10 @@ public sealed class EngineStateStore
                 albumJob.DownloadPath,
                 albumJob.ResolvedTarget?.Username,
                 albumJob.ResolvedTarget?.FolderPath,
-                albumJob.ResolvedTarget?.Files.Count,
-                albumJob.ResolvedTarget?.Files.Count(IsTerminalSong),
-                albumJob.ResolvedTarget?.Files.Count(IsSuccessfulSong),
-                albumJob.ResolvedTarget?.Files.Count(IsFailedOrSkippedSong),
+                albumJob.ResolvedTarget != null ? albumJob.TrackJobs.Count : null,
+                albumJob.ResolvedTarget != null ? albumJob.TrackJobs.Count(IsTerminalSong) : null,
+                albumJob.ResolvedTarget != null ? albumJob.TrackJobs.Count(IsSuccessfulSong) : null,
+                albumJob.ResolvedTarget != null ? albumJob.TrackJobs.Count(IsFailedOrSkippedSong) : null,
                 null,
                 null),
             AggregateJob aggregateJob => new AggregateJobPayloadDto(
@@ -855,14 +856,13 @@ public sealed class EngineStateStore
             folder.FolderPath,
             new PeerInfoDto(
                 folder.Username,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.HasFreeUploadSlot,
-                folder.Files.FirstOrDefault()?.ResolvedTarget?.Response.UploadSpeed),
+                folder.Files.FirstOrDefault()?.Candidate.Response.HasFreeUploadSlot,
+                folder.Files.FirstOrDefault()?.Candidate.Response.UploadSpeed),
             folder.SearchFileCount,
             folder.SearchAudioFileCount,
             includeFiles
                 ? folder.Files
-                    .Where(song => song.ResolvedTarget != null)
-                    .Select(song => ToFileCandidateDto(song.ResolvedTarget!))
+                    .Select(file => ToFileCandidateDto(file.Candidate))
                     .ToList()
                 : null,
             folder.IsFullyRetrieved);

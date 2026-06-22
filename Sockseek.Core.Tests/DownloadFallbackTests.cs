@@ -250,8 +250,8 @@ namespace Tests.Core
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, firstAlbum.TerminalOutcome);
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, secondAlbum.TerminalOutcome);
                 Assert.AreEqual(2, testClient.DownloadCallCount, "Second album should reuse both the audio and cover from their final organized paths.");
-                Assert.IsTrue(firstAlbum.ResolvedTarget?.Files.Any(file => file.IsNotAudio && System.IO.File.Exists(file.DownloadPath)) == true);
-                Assert.IsTrue(secondAlbum.ResolvedTarget?.Files.Any(file => file.IsNotAudio && System.IO.File.Exists(file.DownloadPath)) == true);
+                Assert.IsTrue(firstAlbum.TrackJobs.Any(file => file.IsNotAudio && System.IO.File.Exists(file.DownloadPath)));
+                Assert.IsTrue(secondAlbum.TrackJobs.Any(file => file.IsNotAudio && System.IO.File.Exists(file.DownloadPath)));
             }
             finally
             {
@@ -288,7 +288,7 @@ namespace Tests.Core
 
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, album.TerminalOutcome);
                 Assert.AreEqual(1, testClient.DownloadCallCount, "Album-art-only should download the image, not the audio track.");
-                var image = album.Results.SelectMany(folder => folder.Files).Single(file => file.IsNotAudio);
+                var image = album.TrackJobs.Single(file => file.IsNotAudio);
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, image.TerminalOutcome);
                 Assert.IsTrue(System.IO.File.Exists(image.DownloadPath), $"Expected downloaded image at {image.DownloadPath}");
             }
@@ -333,7 +333,7 @@ namespace Tests.Core
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, album.TerminalOutcome);
                 Assert.IsTrue(System.IO.File.Exists(Path.Combine(outputDir, "Album", "01. Artist - Song.mp3")));
 
-                var image = album.ResolvedTarget?.Files.Single(file => file.IsNotAudio);
+                var image = album.TrackJobs.SingleOrDefault(file => file.IsNotAudio);
                 Assert.IsNotNull(image);
                 Assert.AreEqual(JobTerminalOutcome.Failed, image.TerminalOutcome);
             }
@@ -643,7 +643,7 @@ namespace Tests.Core
                 Assert.IsNotNull(albumJob);
                 Assert.IsTrue(albumJob.IsUnsuccessfulTerminal, "An album with a track that cannot be finalized must not be reported as successful.");
                 Assert.AreEqual(JobFailureReason.AllDownloadsFailed, albumJob.FailureReason);
-                var failedTrack = albumJob.ResolvedTarget?.Files.FirstOrDefault();
+                var failedTrack = albumJob.TrackJobs.FirstOrDefault();
                 Assert.IsNotNull(failedTrack);
                 Assert.IsTrue(failedTrack.IsUnsuccessfulTerminal, "The track whose final placement failed should be terminal unsuccessful.");
                 Assert.IsTrue(Directory.Exists(finalPath), "The blocked destination directory should be left untouched.");

@@ -299,10 +299,10 @@ public partial class Searcher
             catch (Exception e) { SockseekLog.Soulseek.Error($"Error getting all files in '{folder.FolderPath}': {e}"); return 0; }
 
             var existing = folder.Files
-                .Select(f => f.ResolvedTarget!.Filename.Replace('/', '\\'))
+                .Select(f => f.Filename.Replace('/', '\\'))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var firstInfo = folder.Files.FirstOrDefault(f => !f.IsNotAudio)?.Query ?? new SongQuery();
-            var firstResp = folder.Files.FirstOrDefault()?.ResolvedTarget?.Response
+            var firstResp = folder.Files.FirstOrDefault()?.Candidate.Response
                             ?? new SearchResponse(folder.Username, -1, false, -1, -1, null);
 
             foreach (var (dir, file) in allFiles)
@@ -315,7 +315,7 @@ public partial class Searcher
                 var info = InferSongQuery(filename, new SongQuery { Artist = firstInfo.Artist, Album = firstInfo.Album });
 
                 newFiles++;
-                folder.Files.Add(new SongJob(info) { ResolvedTarget = candidate });
+                folder.Files.Add(new AlbumFile(info, candidate));
             }
 
             folder.IsFullyRetrieved = true;
@@ -542,8 +542,8 @@ public partial class Searcher
         var audio2 = f2.Files.Where(f => !f.IsNotAudio).ToList();
         if (audio1.Count != audio2.Count) return false;
 
-        f1SortedLengths ??= audio1.Select(f => f.ResolvedTarget!.File.Length ?? -1).OrderBy(x => x).ToArray();
-        var s2 = audio2.Select(f => f.ResolvedTarget!.File.Length ?? -1).OrderBy(x => x).ToArray();
+        f1SortedLengths ??= audio1.Select(f => f.Candidate.File.Length ?? -1).OrderBy(x => x).ToArray();
+        var s2 = audio2.Select(f => f.Candidate.File.Length ?? -1).OrderBy(x => x).ToArray();
 
         for (int i = 0; i < f1SortedLengths.Length; i++)
             if (Math.Abs(f1SortedLengths[i] - s2[i]) > tolerance) return false;

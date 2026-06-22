@@ -170,6 +170,25 @@ namespace Tests
             return new SongJob(new SongQuery { Artist = artist, Title = title, Album = album, Length = length });
         }
 
+        public static AlbumFile CreateAlbumFile(
+            string username,
+            string filename,
+            SongQuery? query = null,
+            long size = 10000,
+            string? extension = null,
+            int? bitrate = null,
+            int? length = null,
+            int? sampleRate = null,
+            int? bitDepth = null)
+        {
+            var response = new SearchResponse(username, 1, true, 100, 0, []);
+            var file = CreateSlFile(filename, size, extension, bitrate, length, sampleRate, bitDepth);
+            return new AlbumFile(query ?? Searcher.InferSongQuery(filename, new SongQuery()), new FileCandidate(response, file));
+        }
+
+        public static AlbumFile CreateAlbumFile(SearchResponse response, File file, SongQuery? query = null)
+            => new(query ?? Searcher.InferSongQuery(file.Filename, new SongQuery()), new FileCandidate(response, file));
+
         public static (EngineSettings Engine, DownloadSettings Download) CreateDefaultSettings()
         {
             var engine = new EngineSettings();
