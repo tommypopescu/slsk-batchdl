@@ -18,6 +18,7 @@
     - Consider a global daemon sequence or snapshot epoch in addition to per-workflow sequences, so all-daemon consumers can detect gaps and recover coherently.
     - Keep SignalR as the primary live-update transport for GUI/remote CLI; use polling/HTTP snapshots for initial load and recovery, not as the main update loop.
     - Keep durable state updates and ephemeral activity/log edges conceptually separate in the API/client store, even when they travel in the same batch.
+    - Think again about the overall API shape.
 
 - Create a webui
     - All the usual functions of a soulseek client

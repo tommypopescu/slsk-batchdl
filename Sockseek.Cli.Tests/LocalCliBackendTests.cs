@@ -467,7 +467,25 @@ public class LocalCliBackendTests
             var engine = new DownloadEngine(engineSettings, clientManager);
             var backend = new LocalCliBackend(engine, downloadSettings);
             var seenTypes = new ConcurrentBag<string>();
-            backend.EventReceived += envelope => seenTypes.Add(envelope.Type);
+            var deliveryOrder = new List<string>();
+            object deliveryGate = new();
+            backend.EventReceived += envelope =>
+            {
+                seenTypes.Add(envelope.Type);
+                if (envelope.Type == "song.searching")
+                {
+                    lock (deliveryGate)
+                        deliveryOrder.Add("event");
+                }
+            };
+            backend.WorkflowUpdated += update =>
+            {
+                if (update.Activity.Any(envelope => envelope.Type == "song.searching"))
+                {
+                    lock (deliveryGate)
+                        deliveryOrder.Add("update");
+                }
+            };
 
             await backend.SubmitSongJobAsync(
                 new SubmitSongJobRequestDto(
@@ -482,6 +500,9 @@ public class LocalCliBackendTests
             Assert.IsTrue(seenTypes.Contains("download.started"));
             Assert.IsTrue(seenTypes.Contains("download.state-changed"));
             Assert.IsTrue(seenTypes.Contains("song.state-changed"));
+            Assert.IsTrue(deliveryOrder.Count >= 2);
+            Assert.AreEqual("event", deliveryOrder[0]);
+            Assert.AreEqual("update", deliveryOrder[1]);
         }
         finally
         {

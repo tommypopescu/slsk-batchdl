@@ -86,6 +86,34 @@ public class ServerEventCoalescerTests
     }
 
     [TestMethod]
+    public void Publish_TerminalWorkflowUpsertFlushesBufferedWorkflowEventsImmediately()
+    {
+        var published = new List<(string Type, object Payload)>();
+        using var coalescer = new ServerEventCoalescer(
+            items => published.AddRange(items.Select(item => (item.Type, item.Payload))),
+            TimeSpan.FromHours(1));
+        var workflowId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+
+        coalescer.Publish("job.upserted", JobSummary(jobId, workflowId, ServerJobLifecycleState.Terminal) with
+        {
+            TerminalOutcome = ServerJobTerminalOutcome.Succeeded,
+        });
+        coalescer.Publish("job.state-changed", new JobStatusEventDto(
+            JobSummary(jobId, workflowId, ServerJobLifecycleState.Terminal) with
+            {
+                TerminalOutcome = ServerJobTerminalOutcome.Succeeded,
+            },
+            "succeeded"));
+        coalescer.Publish("workflow.upserted", WorkflowSummary(workflowId, active: 0, ServerWorkflowState.Completed));
+
+        Assert.AreEqual(3, published.Count);
+        Assert.AreEqual("job.upserted", published[0].Type);
+        Assert.AreEqual("workflow.upserted", published[1].Type);
+        Assert.AreEqual("job.state-changed", published[2].Type);
+    }
+
+    [TestMethod]
     public void Flush_PublishesStateBeforeBufferedActivity()
     {
         var published = new List<(string Type, object Payload)>();
@@ -303,6 +331,9 @@ public class ServerEventCoalescerTests
             CancellationSource = cancellationSource,
         };
 
-    private static WorkflowSummaryDto WorkflowSummary(Guid workflowId, int active)
-        => new(workflowId, "workflow", ServerWorkflowState.Active, [], active, 0, 0);
+    private static WorkflowSummaryDto WorkflowSummary(
+        Guid workflowId,
+        int active,
+        ServerWorkflowState state = ServerWorkflowState.Active)
+        => new(workflowId, "workflow", state, [], active, 0, 0);
 }

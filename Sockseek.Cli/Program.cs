@@ -518,6 +518,7 @@ internal static partial class Program
         {
             Guid workflowId = Guid.NewGuid();
             await backend.SubscribeWorkflowAsync(workflowId, cts.Token);
+            using var terminalUpdateObserver = new WorkflowTerminalUpdateObserver(backend, workflowId);
 
             var options = BuildRemoteSubmissionOptions(args, cliSettings) with { WorkflowId = workflowId };
             var request = new SubmitExtractJobRequestDto(
@@ -656,6 +657,8 @@ internal static partial class Program
             else
                 await WaitForRemoteWorkflowAsync(backend, submission.WorkflowId, cts.Token);
 
+            await terminalUpdateObserver.WaitForTerminalUpdateAsync(cts.Token);
+
             cliReporter?.Stop();
             cliReporter = null;
 
@@ -708,6 +711,50 @@ internal static partial class Program
                 return;
 
             await Task.Delay(200, ct);
+        }
+    }
+
+    private sealed class WorkflowTerminalUpdateObserver : IDisposable
+    {
+        private static readonly TimeSpan TerminalUpdateDrainTimeout = TimeSpan.FromSeconds(2);
+
+        private readonly ICliBackend backend;
+        private readonly Guid workflowId;
+        private readonly TaskCompletionSource terminalUpdateSeen = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public WorkflowTerminalUpdateObserver(ICliBackend backend, Guid workflowId)
+        {
+            this.backend = backend;
+            this.workflowId = workflowId;
+            backend.WorkflowUpdated += OnWorkflowUpdated;
+        }
+
+        public async Task WaitForTerminalUpdateAsync(CancellationToken ct)
+        {
+            if (terminalUpdateSeen.Task.IsCompleted)
+                return;
+
+            try
+            {
+                await terminalUpdateSeen.Task.WaitAsync(TerminalUpdateDrainTimeout, ct);
+            }
+            catch (TimeoutException)
+            {
+                // The HTTP snapshot is authoritative for completion. This wait is only to give
+                // the remote event stream a chance to deliver terminal activity before the CLI exits.
+            }
+        }
+
+        public void Dispose()
+            => backend.WorkflowUpdated -= OnWorkflowUpdated;
+
+        private void OnWorkflowUpdated(WorkflowClientUpdate update)
+        {
+            if (update.WorkflowId != workflowId || update.IsStale)
+                return;
+
+            if (update.Workflow?.State is ServerWorkflowState.Completed or ServerWorkflowState.Failed)
+                terminalUpdateSeen.TrySetResult();
         }
     }
 

@@ -48,9 +48,9 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
         connection.On<WorkflowUpdateBatchDto>("workflowUpdateBatch", batch =>
         {
             var update = workflowStore.Apply(RehydrateBatch(batch));
-            WorkflowUpdated?.Invoke(update);
             foreach (var envelope in update.Events)
                 EventReceived?.Invoke(envelope);
+            WorkflowUpdated?.Invoke(update);
 
             if (update.SequenceGapDetected)
                 _ = HydrateWorkflowSnapshotAsync(update.WorkflowId);
@@ -162,9 +162,9 @@ internal sealed class RemoteCliBackend : ICliBackend, IAsyncDisposable
                 return;
 
             var update = workflowStore.ApplySnapshot(workflow, replaceKnownWorkflowJobs: true);
-            WorkflowUpdated?.Invoke(update);
             foreach (var envelope in update.Events)
                 EventReceived?.Invoke(envelope);
+            WorkflowUpdated?.Invoke(update);
         }
         catch (Exception ex)
         {

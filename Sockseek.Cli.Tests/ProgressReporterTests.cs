@@ -577,6 +577,35 @@ public class CliProgressReporterTests
     }
 
     [TestMethod]
+    public void CliProgressReporter_NonTerminalActivity_IsSupersededByKnownTerminalState()
+    {
+        var workflowId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var terminalJobs = new Dictionary<Guid, byte> { [jobId] = 0 };
+        var summary = CreateExtractSummary(jobId, workflowId, ExpectedJobStatus.Extracting, null);
+
+        var envelope = Envelope("extraction.started", new ExtractionStartedEventDto(summary, "input.txt", "List"));
+
+        Assert.IsTrue(CliProgressReporter.IsSupersededByTerminalState(envelope, terminalJobs));
+    }
+
+    [TestMethod]
+    public void CliProgressReporter_TerminalActivity_IsNotSupersededByKnownTerminalState()
+    {
+        var workflowId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var terminalJobs = new Dictionary<Guid, byte> { [jobId] = 0 };
+        var summary = CreateExtractSummary(jobId, workflowId, ExpectedJobStatus.Failed, ServerProtocol.FailureReasons.Other);
+
+        var envelope = Envelope("extraction.failed", new ExtractionFailedEventDto(
+            summary,
+            "failed",
+            "List"));
+
+        Assert.IsFalse(CliProgressReporter.IsSupersededByTerminalState(envelope, terminalJobs));
+    }
+
+    [TestMethod]
     public void LiveSummaryVisibility_IncludesSearchWaitAndRateLimitButNotPending()
     {
         var summary = CreateSongSummary(Guid.NewGuid(), Guid.NewGuid(), parentJobId: null);

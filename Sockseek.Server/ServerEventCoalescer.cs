@@ -87,6 +87,8 @@ public sealed class ServerEventCoalescer : IDisposable
             if (type == "workflow.upserted" && payload is WorkflowSummaryDto workflow)
             {
                 pendingWorkflowUpserted[workflow.WorkflowId] = workflow;
+                if (workflow.State is ServerWorkflowState.Completed or ServerWorkflowState.Failed)
+                    FlushCore();
                 return;
             }
 

@@ -272,8 +272,9 @@ such as downloading the albums represented by a Spotify song playlist or a CSV o
 
 ### Song
 Downloads a single file for string input and string lines inside list files. Song mode is the default
-for playlists from streaming platforms. Use `-s/--song` for string/list input that should be treated as
-a song search. To restore the pre-3.0 default behavior globally, add `song = true` to your config file.
+for playlists from streaming platforms and CSV song lists. Use `-s/--song` for string/list input that
+should be treated as a song search. To restore the pre-3.0 default behavior globally, add 
+`song = true` to your config file.
 
 ### Album
 Sockseek will search for the album and download an entire folder including non-audio
@@ -712,7 +713,7 @@ If you plan to use a large music library, you may want to add `--mock-files-no-r
 Most used flags at a glance:
 
 ```text
--s, --song                      Treat string/list string input as song searches
+-s, --song                      Treat string input as song search
 -t, --interactive               Pick from album results before downloading
 -g, --aggregate                 Download distinct songs/albums from grouped results
 -p, --path <path>               Download directory
@@ -739,7 +740,7 @@ Most used flags at a glance:
 -p, --path <path>               Download directory
 --input-type <type>             [csv|youtube|spotify|bandcamp|string|list|soulseek|
                                 musicbrainz] (default: auto)
--s, --song                      Song mode for string input and string lines in list files
+-s, --song                      Song mode for string input
 --name-format <format>          Name format for downloaded tracks. See `--help name-format`
 --invalid-replace-str <str>     Replacement string for invalid path characters (default: space)
 

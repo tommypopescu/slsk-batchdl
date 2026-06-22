@@ -27,6 +27,7 @@ public class CliProgressReporter
     private readonly ConcurrentDictionary<Guid, byte> _inlineChildJobs = new();
     private readonly ConcurrentDictionary<Guid, (int DisplayId, string Name, TerminalFileMetadata? Metadata)> _liveSongInfo = new();
     private readonly ConcurrentDictionary<Guid, byte> _liveTerminalParentLogs = new();
+    private readonly ConcurrentDictionary<Guid, byte> _terminalJobs = new();
     private readonly ConcurrentDictionary<Guid, Guid> _songToAlbum = new();
 
     private bool PlainMode => _cli.NoProgress || !LiveMode;
@@ -156,6 +157,9 @@ public class CliProgressReporter
 
     private void HandleEvent(ServerEventEnvelopeDto envelope)
     {
+        if (IsSupersededByTerminalState(envelope, _terminalJobs))
+            return;
+
         switch (envelope.Type)
         {
             case "job.upserted" when envelope.Payload is JobSummaryDto e:
@@ -225,6 +229,11 @@ public class CliProgressReporter
     {
         RememberStructure(summary);
         var status = CliJobStatusPresenter.ForSummary(summary);
+        if (status.IsTerminal)
+            _terminalJobs[summary.JobId] = 0;
+        else
+            _terminalJobs.TryRemove(summary.JobId, out _);
+
         if (!IsInfrastructureJobKind(summary.Kind))
             _live?.UpsertJob(new TerminalJobRecord(
                 summary.JobId.ToString(),
@@ -895,6 +904,10 @@ public class CliProgressReporter
 
     private void ReportStateChanged(SongStateChangedEventDto song)
     {
+        if (song.LifecycleState == ServerJobLifecycleState.Terminal
+            || song.TerminalOutcome != ServerJobTerminalOutcome.None)
+            _terminalJobs[song.JobId] = 0;
+
         MarkAlbumTrackCompleted(song.JobId);
         var candidate = song.ChosenCandidate;
         if ((TryGetAlbumParent(song.JobId, out var albumId) && _albumBlocks.TryGetValue(albumId, out var block))
@@ -979,6 +992,7 @@ public class CliProgressReporter
 
     private void ReportExtractionFailed(ExtractionFailedEventDto job)
     {
+        _terminalJobs[job.Summary.JobId] = 0;
         if (LiveMode)
         {
             RemoveLiveJob(job.Summary.JobId);
@@ -1114,6 +1128,8 @@ public class CliProgressReporter
 
     private void ReportAlbumStateChanged(AlbumStateChangedEventDto job)
     {
+        _terminalJobs[job.Summary.JobId] = 0;
+
         string? remoteFolderDisplay = null;
         if (_albumBlocks.TryRemove(job.Summary.JobId, out var liveBlock))
         {
@@ -1198,6 +1214,55 @@ public class CliProgressReporter
             _savedState.TryRemove(song.JobId.Value, out _);
         }
     }
+
+    internal static bool IsSupersededByTerminalState(
+        ServerEventEnvelopeDto envelope,
+        IReadOnlyDictionary<Guid, byte> terminalJobs)
+    {
+        if (terminalJobs.Count == 0 || IsTerminalActivityEvent(envelope))
+            return false;
+
+        return ActivityJobId(envelope) is Guid jobId && terminalJobs.ContainsKey(jobId);
+    }
+
+    private static bool IsTerminalActivityEvent(ServerEventEnvelopeDto envelope)
+        => envelope.Payload switch
+        {
+            ExtractionFailedEventDto => true,
+            AlbumStateChangedEventDto => true,
+            SongStateChangedEventDto e => e.LifecycleState == ServerJobLifecycleState.Terminal
+                || e.TerminalOutcome != ServerJobTerminalOutcome.None,
+            JobStartedEventDto e => e.Summary.LifecycleState == ServerJobLifecycleState.Terminal,
+            JobStatusEventDto e => e.Summary.LifecycleState == ServerJobLifecycleState.Terminal,
+            JobMessageEventDto e => e.Summary.LifecycleState == ServerJobLifecycleState.Terminal,
+            JobActivityChangedEventDto e => e.Summary.LifecycleState == ServerJobLifecycleState.Terminal,
+            JobFolderRetrievingEventDto e => e.Summary.LifecycleState == ServerJobLifecycleState.Terminal,
+            TrackBatchResolvedEventDto e => e.Summary.LifecycleState == ServerJobLifecycleState.Terminal,
+            _ => false,
+        };
+
+    private static Guid? ActivityJobId(ServerEventEnvelopeDto envelope)
+        => envelope.Payload switch
+        {
+            ExtractionStartedEventDto e => e.Summary.JobId,
+            ExtractionFailedEventDto e => e.Summary.JobId,
+            JobStartedEventDto e => e.Summary.JobId,
+            JobStatusEventDto e => e.Summary.JobId,
+            JobMessageEventDto e => e.Summary.JobId,
+            JobActivityChangedEventDto e => e.Summary.JobId,
+            JobFolderRetrievingEventDto e => e.Summary.JobId,
+            SongSearchingEventDto e => e.JobId,
+            DownloadStartedEventDto e => e.JobId,
+            DownloadProgressEventDto e => e.JobId,
+            DownloadStateChangedEventDto e => e.JobId,
+            DownloadAttemptFailedEventDto e => e.JobId,
+            SongStateChangedEventDto e => e.JobId,
+            AlbumDownloadStartedEventDto e => e.Summary.JobId,
+            AlbumTrackDownloadStartedEventDto e => e.Summary.JobId,
+            AlbumStateChangedEventDto e => e.Summary.JobId,
+            TrackBatchResolvedEventDto e => e.Summary.JobId,
+            _ => null,
+        };
 
     private static AlbumFolder ToAlbumFolder(AlbumFolderDto folder)
         => new(

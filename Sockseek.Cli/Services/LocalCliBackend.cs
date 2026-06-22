@@ -569,8 +569,8 @@ internal sealed class LocalCliBackend
             GetWorkflowId(payload),
             payload);
 
-        PublishWorkflowUpdate(envelope);
         EventReceived?.Invoke(envelope);
+        PublishWorkflowUpdate(envelope);
     }
 
     private void PublishWorkflowUpdate(ServerEventEnvelopeDto envelope)

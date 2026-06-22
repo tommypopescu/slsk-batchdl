@@ -31,7 +31,7 @@ public static partial class Help
     -p, --path <path>               Download directory
     --input-type <type>             [csv|youtube|spotify|bandcamp|string|list|soulseek|
                                     musicbrainz] (default: auto)
-    -s, --song                      Song mode for string input and string lines in list files
+    -s, --song                      Song mode for string input
     --name-format <format>          Name format for downloaded tracks. See `--help name-format`
     --invalid-replace-str <str>     Replacement string for invalid path characters (default: space)
 
@@ -397,9 +397,9 @@ Download modes
 
   Song
     Downloads a single file for string input and string lines inside list files. Song mode is the
-    default for playlists from streaming platforms. Use -s/--song for string/list input that should
-    be treated as a song search. To restore the pre-3.0 default behavior globally, add song = true
-    to your config file.
+    default for playlists from streaming platforms and CSV song lists. Use -s/--song for string/list
+    input that should be treated as a song search. To restore the pre-3.0 default behavior globally,
+    add song = true to your config file.
 
   Album
     Sockseek will search for the album and download an entire folder including non-audio files.

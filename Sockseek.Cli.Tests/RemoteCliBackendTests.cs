@@ -142,10 +142,8 @@ public class RemoteCliBackendTests
         finally
         {
             await app.StopAsync();
-            if (Directory.Exists(musicRoot))
-                Directory.Delete(musicRoot, true);
-            if (Directory.Exists(outputDir))
-                Directory.Delete(outputDir, true);
+            await DeleteDirectoryIfExistsWithRetryAsync(musicRoot);
+            await DeleteDirectoryIfExistsWithRetryAsync(outputDir);
         }
     }
 
@@ -1198,6 +1196,31 @@ public class RemoteCliBackendTests
         }
 
         Assert.Fail(failureMessage);
+    }
+
+    private static async Task DeleteDirectoryIfExistsWithRetryAsync(string path)
+    {
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                    Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return;
+            }
+            catch (IOException) when (attempt < 4)
+            {
+                await Task.Delay(100);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 4)
+            {
+                await Task.Delay(100);
+            }
+        }
     }
 
     private sealed class StaticResponseHandler(HttpResponseMessage response) : HttpMessageHandler

@@ -252,7 +252,7 @@ public class M3uEditor
 
                 foreach (var albumJob in albumJobs)
                 {
-                    if (!albumJob.IsPending)
+                    if (!albumJob.IsPending && ShouldWriteIndexEntry(albumJob))
                     {
                         var (state, reason) = JobToIndexState(albumJob);
                         string key = MakeAlbumKey(albumJob.Query.Artist, albumJob.Query.Album);
@@ -281,7 +281,7 @@ public class M3uEditor
                         continue;
 
                     bool isAlbumChild = job is AlbumJob or AlbumAggregateJob;
-                    if (!isAlbumChild)
+                    if (!isAlbumChild && ShouldWriteIndexEntry(song))
                     {
                         string key = MakeSongKey(song);
                         var prev = PreviousRunResult(song, song.Config?.Search ?? job.Config?.Search);
@@ -492,6 +492,10 @@ public class M3uEditor
         return new IndexEntry { Artist = artist, Album = album, Title = "", Length = -1 }.ToKey();
     }
 
+    private static bool ShouldWriteIndexEntry(Job job)
+        => job.TerminalOutcome != JobTerminalOutcome.Skipped
+            || job.SkipReason is JobSkipReason.AlreadyExists or JobSkipReason.NotFoundLastTime;
+
     // Maps split runtime state to the old index-file state + failure reason.
     private static (JobStateOld state, JobFailureReason reason) JobToIndexState(Job job)
     {
@@ -504,8 +508,6 @@ public class M3uEditor
                 => (JobStateOld.AlreadyExists, JobFailureReason.None),
             JobTerminalOutcome.Skipped when job.SkipReason == JobSkipReason.NotFoundLastTime
                 => (JobStateOld.NotFoundLastTime, job.FailureReason == JobFailureReason.None ? JobFailureReason.NoMatchingResults : job.FailureReason),
-            JobTerminalOutcome.Skipped
-                => (JobStateOld.AlreadyExists, job.FailureReason),
             _ => (JobStateOld.Pending, JobFailureReason.None),
         };
     }

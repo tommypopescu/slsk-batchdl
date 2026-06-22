@@ -163,7 +163,7 @@ namespace Tests.Index
                 queue2.Jobs.Add(j);
             var editor2 = new M3uEditor(testM3uPath, queue2, M3uOption.Index, true);
 
-            for (int i = 0; i < albumJobs.Count; i++)
+            for (int i = 0; i < 2; i++)
             {
                 var prev = editor2.PreviousRunResult((AlbumJob)lookupJobs[i]);
                 Assert.IsNotNull(prev, $"Previous run result not found for {lookupJobs[i].Query.Artist} - {lookupJobs[i].Query.Album}");
@@ -176,6 +176,27 @@ namespace Tests.Index
                 Assert.AreNotEqual(albumJobs[i].DownloadPath, prev.DownloadPath);
                 albumJobs[i].DownloadPath = originalPath;
             }
+
+            Assert.IsNull(editor2.PreviousRunResult((AlbumJob)lookupJobs[2]),
+                "A manual interactive skip must not poison the index as already-exists.");
+        }
+
+        [TestMethod]
+        public void Index_ManualSkippedSong_IsNotPersistedAsAlreadyExists()
+        {
+            var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Title" });
+            song.SetSkipped(JobSkipReason.Manual);
+
+            var (queue, _, _) = MakeSongQueue([song]);
+            File.WriteAllText(testM3uPath, "");
+            var editor = new M3uEditor(testM3uPath, queue, M3uOption.Index, true);
+            editor.Update();
+
+            var lookup = new SongJob(new SongQuery { Artist = "Artist", Title = "Title" });
+            var (queue2, _, _) = MakeSongQueue([lookup]);
+            var editor2 = new M3uEditor(testM3uPath, queue2, M3uOption.Index, true);
+
+            Assert.IsFalse(editor2.TryGetPreviousRunResult(lookup, out _));
         }
 
         [TestMethod]
