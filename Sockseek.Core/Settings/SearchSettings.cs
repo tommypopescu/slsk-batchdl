@@ -39,7 +39,7 @@ public class SearchSettings
 
     // ── Timing ────────────────────────────────────────────────────────────────
 
-    public int SearchTimeout { get; set; } = 6_000;
+    public int SearchTimeout { get; set; } = 5_000;
 
     public int MaxStaleTime { get; set; } = 30_000;
 

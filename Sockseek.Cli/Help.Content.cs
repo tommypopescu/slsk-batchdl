@@ -120,7 +120,7 @@ public static partial class Help
                                     Note that -x causes yt-dlp to download webms in case ffmpeg
                                     is unavailable.
 
-    --search-timeout <ms>           Max search time in ms (default: 6000)
+    --search-timeout <ms>           Max search time in ms (default: 5000)
     --max-stale-time <ms>           Max download time without progress in ms (default: 30000)
     --searches-per-time <num>       Max searches per time interval. Higher values may cause
                                     30-minute bans, see `--help notes`. (default: 34)
