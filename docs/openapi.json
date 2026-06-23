@@ -3,7 +3,7 @@
   "info": {
     "title": "Sockseek daemon API",
     "description": "HTTP API for the Sockseek daemon.",
-    "version": "3.0.0"
+    "version": "3.0.1"
   },
   "paths": {
     "/api/server/info": {
