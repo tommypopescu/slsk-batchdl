@@ -886,7 +886,9 @@ public static partial class ConfigManager
                 Download(d => d.Bandcamp.HtmlFromFile = value); break;
 
             default:
-                throw new Exception($"Input error: Unknown argument: {flag}");
+                if (probe != null)
+                    throw new UnknownArgumentProbeException();
+                throw UnknownArgument(flag);
         }
     }
 
@@ -1249,6 +1251,11 @@ public static partial class ConfigManager
         public bool UsesBoolValue { get; set; }
     }
 
+    private sealed class UnknownArgumentProbeException : Exception { }
+
+    private static Exception UnknownArgument(string flag)
+        => new($"Input error: Unknown argument: {flag}");
+
     private static bool OptionUsesBoolValue(string flag)
         => BoolOptionCache.GetOrAdd(flag, static key =>
         {
@@ -1262,6 +1269,10 @@ public static partial class ConfigManager
             try
             {
                 AddProfileOption(entry, key, "true", probe: probe);
+            }
+            catch (UnknownArgumentProbeException)
+            {
+                throw UnknownArgument(key);
             }
             catch
             {

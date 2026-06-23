@@ -873,9 +873,14 @@ namespace Tests.ConfigParsingTests
         }
 
         [TestMethod]
-        public void UnknownFlag_Throws()
+        public void UnknownFlagWithoutParameter_IsReportedAsUnknown()
         {
-            Assert.ThrowsException<Exception>(() => Bind("--not-a-real-flag"));
+            var ex = Assert.ThrowsException<Exception>(() =>
+                Bind("some input", "--this-flag-does-not-exist"));
+
+            Assert.AreEqual(
+                "Input error: Unknown argument: --this-flag-does-not-exist",
+                ex.Message);
         }
     }
 }
