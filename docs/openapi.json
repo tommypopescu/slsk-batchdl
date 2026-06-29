@@ -3604,6 +3604,9 @@
           },
           "cancellationSource": {
             "$ref": "#/components/schemas/ServerJobCancellationSource"
+          },
+          "downloadSource": {
+            "$ref": "#/components/schemas/ServerSongDownloadSource"
           }
         }
       },
@@ -4446,7 +4449,8 @@
           "RetrievingFolder",
           "RunningChildren",
           "Organizing",
-          "RunningOnComplete"
+          "RunningOnComplete",
+          "RunningFallback"
         ]
       },
       "ServerJobCancellationSource": {
@@ -4518,6 +4522,14 @@
         "enum": [
           "cancel"
         ]
+      },
+      "ServerSongDownloadSource": {
+        "enum": [
+          "None",
+          "Soulseek",
+          "Fallback"
+        ],
+        "default": "None"
       },
       "ServerStatusDto": {
         "required": [
@@ -4834,6 +4846,9 @@
           },
           "cancellationSource": {
             "$ref": "#/components/schemas/ServerJobCancellationSource"
+          },
+          "downloadSource": {
+            "$ref": "#/components/schemas/ServerSongDownloadSource"
           }
         }
       },

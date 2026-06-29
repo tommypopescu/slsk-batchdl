@@ -581,6 +581,7 @@ public sealed class JobActivityLogFormatter
             ServerJobActivityPhase.RunningChildren => "running",
             ServerJobActivityPhase.Organizing => "organizing",
             ServerJobActivityPhase.RunningOnComplete => "on-complete",
+            ServerJobActivityPhase.RunningFallback => "fallback",
             _ => lifecycle switch
             {
                 ServerJobLifecycleState.Pending => "pending",

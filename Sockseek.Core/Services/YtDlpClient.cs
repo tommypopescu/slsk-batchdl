@@ -7,6 +7,9 @@ namespace Sockseek.Core.Services;
 
 public sealed class YtDlpSongDownloadFallback(IYtDlpClient client) : ISongDownloadFallback
 {
+    public bool CanRun(SongJob song, DownloadSettings settings)
+        => settings.YtDlp.UseYtdlp;
+
     public async Task<JobOutcome?> TryDownloadAsync(
         SongJob song,
         DownloadSettings settings,
@@ -14,7 +17,7 @@ public sealed class YtDlpSongDownloadFallback(IYtDlpClient client) : ISongDownlo
         IJobLog? log,
         CancellationToken ct)
     {
-        if (!settings.YtDlp.UseYtdlp)
+        if (!CanRun(song, settings))
             return null;
 
         var results = await client.SearchAsync(song.Query, log, ct);
@@ -35,7 +38,7 @@ public sealed class YtDlpSongDownloadFallback(IYtDlpClient client) : ISongDownlo
 
         return string.IsNullOrWhiteSpace(downloadPath)
             ? null
-            : JobOutcome.Done(downloadPath);
+            : JobOutcome.Done(downloadPath, downloadSource: SongDownloadSource.Fallback);
     }
 }
 

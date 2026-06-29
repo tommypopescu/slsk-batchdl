@@ -46,7 +46,8 @@ public sealed class EngineEventDtoAdapter
                         song.Discovery?.RawResultCount,
                         song.Discovery?.LockedFileCount,
                         song.FailureMessage,
-                        EngineStateStore.ToServerJobCancellationSource(song.CancellationSource)));
+                        EngineStateStore.ToServerJobCancellationSource(song.CancellationSource),
+                        EngineStateStore.ToServerSongDownloadSource(song.DownloadSource)));
             }
             else if (job is AlbumJob albumJob)
             {
@@ -231,7 +232,8 @@ public sealed class EngineEventDtoAdapter
             EngineStateStore.ToServerJobSkipReason(song.SkipReason),
             EngineStateStore.ToServerFailureReason(song.FailureReason),
             song.FailureMessage,
-            CancellationSource: EngineStateStore.ToServerJobCancellationSource(song.CancellationSource));
+            CancellationSource: EngineStateStore.ToServerJobCancellationSource(song.CancellationSource),
+            DownloadSource: EngineStateStore.ToServerSongDownloadSource(song.DownloadSource));
 
     public static AlbumFolderDto ToAlbumFolderDto(AlbumFolder folder, bool includeFiles)
         => new(

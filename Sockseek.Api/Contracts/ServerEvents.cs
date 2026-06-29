@@ -227,7 +227,8 @@ public sealed record SongStateChangedEventDto(
     int? DiscoveryRawResultCount = null,
     int? DiscoveryLockedFileCount = null,
     string? FailureMessage = null,
-    ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None)
+    ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None,
+    ServerSongDownloadSource DownloadSource = ServerSongDownloadSource.None)
 {
     public SongStateChangedEventDto()
         : this(
@@ -261,7 +262,8 @@ public sealed record SongStateChangedEventDto(
         int? DiscoveryRawResultCount = null,
         int? DiscoveryLockedFileCount = null,
         string? FailureMessage = null,
-        ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None)
+        ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None,
+        ServerSongDownloadSource DownloadSource = ServerSongDownloadSource.None)
         : this(
             JobId,
             DisplayId,
@@ -278,7 +280,8 @@ public sealed record SongStateChangedEventDto(
             DiscoveryRawResultCount,
             DiscoveryLockedFileCount,
             FailureMessage,
-            CancellationSource)
+            CancellationSource,
+            DownloadSource)
     {
     }
 

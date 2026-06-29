@@ -813,7 +813,8 @@ public sealed class EngineStateStore
             progressPercent,
             BuildActions(song),
             transferState,
-            ToServerJobCancellationSource(song.CancellationSource));
+            ToServerJobCancellationSource(song.CancellationSource),
+            ToServerSongDownloadSource(song.DownloadSource));
     }
 
     private static SongQueryDto ToSongQueryDto(SongQuery query) => new(
@@ -932,6 +933,9 @@ public sealed class EngineStateStore
 
     public static ServerJobTerminalOutcome ToServerJobTerminalOutcome(JobTerminalOutcome outcome)
         => Enum.Parse<ServerJobTerminalOutcome>(outcome.ToString());
+
+    public static ServerSongDownloadSource ToServerSongDownloadSource(SongDownloadSource source)
+        => Enum.Parse<ServerSongDownloadSource>(source.ToString());
 
     public static ServerJobSkipReason ToServerJobSkipReason(JobSkipReason reason)
         => Enum.Parse<ServerJobSkipReason>(reason.ToString());

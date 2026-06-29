@@ -866,7 +866,8 @@ internal sealed class LocalCliBackend
             EngineStateStore.ToServerJobSkipReason(song.SkipReason),
             EngineStateStore.ToServerFailureReason(song.FailureReason),
             song.FailureMessage,
-            CancellationSource: EngineStateStore.ToServerJobCancellationSource(song.CancellationSource));
+            CancellationSource: EngineStateStore.ToServerJobCancellationSource(song.CancellationSource),
+            DownloadSource: EngineStateStore.ToServerSongDownloadSource(song.DownloadSource));
 
     private static AlbumFolderDto ToAlbumFolderDto(AlbumFolder folder, bool includeFiles)
         => new(

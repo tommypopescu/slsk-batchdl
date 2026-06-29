@@ -23,6 +23,7 @@ namespace Sockseek.Api;
 [JsonSerializable(typeof(ServerJobLifecycleState))]
 [JsonSerializable(typeof(ServerJobActivityPhase))]
 [JsonSerializable(typeof(ServerJobTerminalOutcome))]
+[JsonSerializable(typeof(ServerSongDownloadSource))]
 [JsonSerializable(typeof(ServerJobSkipReason))]
 [JsonSerializable(typeof(ServerJobCancellationSource))]
 [JsonSerializable(typeof(ServerWorkflowState))]

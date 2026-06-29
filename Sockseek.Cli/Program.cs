@@ -1326,6 +1326,7 @@ internal static partial class Program
         {
             DownloadPath = song.DownloadPath,
             Candidates = song.Candidates?.Select(ToFileCandidate).ToList(),
+            DownloadSource = ToSongDownloadSource(song.DownloadSource),
         };
 
         ApplyJobOutcome(job, song.LifecycleState, song.ActivityPhase, song.TerminalOutcome, song.SkipReason, song.FailureReason, song.FailureMessage, song.CancellationSource);
@@ -1452,6 +1453,7 @@ internal static partial class Program
             ServerJobActivityPhase.ProcessingSearchResults => JobActivityPhase.ProcessingSearchResults,
             ServerJobActivityPhase.Organizing => JobActivityPhase.Organizing,
             ServerJobActivityPhase.RunningOnComplete => JobActivityPhase.RunningOnComplete,
+            ServerJobActivityPhase.RunningFallback => JobActivityPhase.RunningFallback,
             _ => JobActivityPhase.None,
         };
 
@@ -1471,6 +1473,11 @@ internal static partial class Program
 
         return Enum.TryParse(reason.Value.ToString(), out coreReason);
     }
+
+    private static SongDownloadSource ToSongDownloadSource(ServerSongDownloadSource source)
+        => Enum.TryParse<SongDownloadSource>(source.ToString(), out var coreSource)
+            ? coreSource
+            : SongDownloadSource.None;
 
     private static JobSkipReason ToCoreSkipReason(ServerJobSkipReason? reason)
         => reason == null

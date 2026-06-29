@@ -24,6 +24,7 @@ namespace Sockseek.Core;
         RunningChildren = 8,
         Organizing = 9,
         RunningOnComplete = 10,
+        RunningFallback = 11,
     }
 
     public enum JobTerminalOutcome
@@ -34,6 +35,13 @@ namespace Sockseek.Core;
         Skipped = 3,
         Cancelled = 4,
         PartialSuccess = 5,
+    }
+
+    public enum SongDownloadSource
+    {
+        None = 0,
+        Soulseek = 1,
+        Fallback = 2,
     }
 
     public enum JobSkipReason

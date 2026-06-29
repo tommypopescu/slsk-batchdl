@@ -2458,6 +2458,8 @@ public class DownloadEngine
                 song.ChosenCandidate = outcome.ChosenCandidate;
             if (outcome.DownloadPath != null)
                 song.DownloadPath = outcome.DownloadPath;
+            if (outcome.DownloadSource != SongDownloadSource.None)
+                song.DownloadSource = outcome.DownloadSource;
         }
         else if (job is AlbumJob album && outcome.DownloadPath != null)
         {
@@ -2471,10 +2473,13 @@ public class DownloadEngine
         {
             var downloadPath = song.DownloadPath ?? outcome.DownloadPath;
             var chosenCandidate = song.ChosenCandidate ?? outcome.ChosenCandidate;
+            var downloadSource = song.DownloadSource != SongDownloadSource.None
+                ? song.DownloadSource
+                : outcome.DownloadSource;
 
             return outcome.TerminalOutcome switch
             {
-                JobTerminalOutcome.Succeeded => JobOutcome.Done(downloadPath, chosenCandidate),
+                JobTerminalOutcome.Succeeded => JobOutcome.Done(downloadPath, chosenCandidate, downloadSource),
                 JobTerminalOutcome.Skipped when outcome.SkipReason == JobSkipReason.AlreadyExists => JobOutcome.AlreadyExists(downloadPath),
                 JobTerminalOutcome.Skipped => JobOutcome.Skipped(outcome.SkipReason, outcome.FailureReason, downloadPath),
                 _ => outcome,
@@ -2616,6 +2621,10 @@ public class DownloadEngine
 
         if (candidates == null || candidates.Count == 0)
         {
+            var fallbackOutcome = await TryRunSongDownloadFallback(song, config, organizer, cts.Token);
+            if (fallbackOutcome != null)
+                return fallbackOutcome;
+
             SockseekLog.Jobs.Debug($"[{song.DisplayId}] SongJob: no suitable candidates after search: {song}");
             return searched
                 ? NoMatchingDiscoveryOutcome(responseData, "file result", "file results", "song candidates")
@@ -2687,6 +2696,25 @@ public class DownloadEngine
         return NoMatchingCandidatesOutcome();
     }
 
+    async Task<JobOutcome?> TryRunSongDownloadFallback(
+        SongJob song,
+        DownloadSettings config,
+        FileManager organizer,
+        CancellationToken ct)
+    {
+        if (!_songDownloadFallback.CanRun(song, config))
+            return null;
+
+        song.UpdateActivity(JobActivityPhase.RunningFallback);
+        SockseekLog.Jobs.Info($"[{song.DisplayId}] SongJob: running fallback: {song}");
+        var outcome = await _songDownloadFallback.TryDownloadAsync(song, config, organizer, null, ct);
+        if (outcome == null || !outcome.ShouldCommit)
+            return null;
+
+        SockseekLog.Jobs.Debug($"[{song.DisplayId}] SongJob: fallback produced {outcome.TerminalOutcome}: {song}");
+        return outcome;
+    }
+
     static void CommitOutcome(Job job, JobOutcome outcome)
     {
         if (!outcome.ShouldCommit)
@@ -2708,7 +2736,7 @@ public class DownloadEngine
         {
             case JobTerminalOutcome.Succeeded:
                 if (job is SongJob song)
-                    song.SetDone(outcome.DownloadPath, outcome.ChosenCandidate);
+                    song.SetDone(outcome.DownloadPath, outcome.ChosenCandidate, outcome.DownloadSource);
                 else if (job is AlbumJob album)
                     album.SetDone(outcome.DownloadPath);
                 else

@@ -62,6 +62,7 @@ public enum ServerJobActivityPhase
     RunningChildren,
     Organizing,
     RunningOnComplete,
+    RunningFallback,
 }
 
 /// <summary>Terminal result for completed jobs.</summary>
@@ -74,6 +75,15 @@ public enum ServerJobTerminalOutcome
     Skipped,
     Cancelled,
     PartialSuccess,
+}
+
+/// <summary>Source that produced a terminal song download.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ServerSongDownloadSource>))]
+public enum ServerSongDownloadSource
+{
+    None,
+    Soulseek,
+    Fallback,
 }
 
 /// <summary>Reason a terminal job was skipped.</summary>

@@ -93,7 +93,8 @@ public sealed record SongJobPayloadDto(
     double? ProgressPercent = null,
     IReadOnlyList<ResourceActionDto>? AvailableActions = null,
     string? TransferState = null,
-    ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None) : JobPayloadDto;
+    ServerJobCancellationSource CancellationSource = ServerJobCancellationSource.None,
+    ServerSongDownloadSource DownloadSource = ServerSongDownloadSource.None) : JobPayloadDto;
 
 /// <summary>
 /// Payload for album search/download jobs.

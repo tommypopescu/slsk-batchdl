@@ -6,6 +6,8 @@ namespace Sockseek.Core.Services;
 
 public interface ISongDownloadFallback
 {
+    bool CanRun(SongJob song, DownloadSettings settings);
+
     Task<JobOutcome?> TryDownloadAsync(
         SongJob song,
         DownloadSettings settings,

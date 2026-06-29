@@ -46,6 +46,7 @@ namespace Tests.Core
                 Assert.IsNotNull(songJob);
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, songJob.TerminalOutcome);
                 Assert.AreEqual("gooduser", songJob.ChosenCandidate?.Username, "SongJob should have fallen back to gooduser after failuser failed.");
+                Assert.AreEqual(SongDownloadSource.Soulseek, songJob.DownloadSource);
             }
             finally
             {
@@ -73,6 +74,10 @@ namespace Tests.Core
                 dl.Output.ParentDir = outputDir;
                 dl.YtDlp.UseYtdlp = true;
 
+                SockseekLog.RemoveNonFileOutputs();
+                var logEntries = new List<SockseekLog.StructuredLogEntry>();
+                SockseekLog.AddStructuredSink((entry, _) => logEntries.Add(entry), LogLevel.Information);
+
                 var fakeFallback = new FakeSongDownloadFallback();
                 var song = new SongJob(new SongQuery
                 {
@@ -86,11 +91,21 @@ namespace Tests.Core
                 await app.RunAsync(CancellationToken.None);
 
                 Assert.AreEqual(1, fakeFallback.Calls, "Song fallback should run after the mock Soulseek search returns no results.");
+                Assert.AreEqual(JobActivityPhase.RunningFallback, fakeFallback.ObservedPhase, "Song fallback should run under the fallback activity phase.");
+                var fallbackLog = logEntries.SingleOrDefault(e => e.Message == $"[{song.DisplayId}] SongJob: running fallback: {song}");
+                Assert.IsNotNull(fallbackLog, "Fallback should leave an info-level log entry.");
+                Assert.AreEqual(LogLevel.Information, fallbackLog.Level);
+                Assert.AreEqual(SockseekLog.Categories.Jobs, fallbackLog.CategoryName);
+                Assert.AreEqual(JobLifecycleState.Terminal, song.LifecycleState);
+                Assert.AreEqual(JobActivityPhase.None, song.ActivityPhase);
                 Assert.AreEqual(JobTerminalOutcome.Succeeded, song.TerminalOutcome);
+                Assert.AreEqual(SongDownloadSource.Fallback, song.DownloadSource);
+                Assert.IsNull(song.ChosenCandidate);
                 Assert.IsTrue(System.IO.File.Exists(song.DownloadPath), $"Expected fallback output at {song.DownloadPath}");
             }
             finally
             {
+                SockseekLog.RemoveNonFileOutputs();
                 if (Directory.Exists(rootDir)) Directory.Delete(rootDir, true);
             }
         }
@@ -889,6 +904,10 @@ namespace Tests.Core
         private sealed class FakeSongDownloadFallback : ISongDownloadFallback
         {
             public int Calls { get; private set; }
+            public JobActivityPhase ObservedPhase { get; private set; } = JobActivityPhase.None;
+
+            public bool CanRun(SongJob song, DownloadSettings settings)
+                => settings.YtDlp.UseYtdlp;
 
             public Task<JobOutcome?> TryDownloadAsync(
                 SongJob song,
@@ -897,14 +916,12 @@ namespace Tests.Core
                 IJobLog? log,
                 CancellationToken ct)
             {
-                if (!settings.YtDlp.UseYtdlp)
-                    return Task.FromResult<JobOutcome?>(null);
-
                 Calls++;
+                ObservedPhase = song.ActivityPhase;
                 var path = organizer.GetSavePathNoExt($"{song.Query.Artist} - {song.Query.Title}.mp3") + ".mp3";
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 System.IO.File.WriteAllBytes(path, TestHelpers.EmptyMp3Bytes);
-                return Task.FromResult<JobOutcome?>(JobOutcome.Done(path));
+                return Task.FromResult<JobOutcome?>(JobOutcome.Done(path, downloadSource: SongDownloadSource.Fallback));
             }
         }
     }

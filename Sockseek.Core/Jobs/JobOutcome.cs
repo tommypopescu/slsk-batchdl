@@ -19,6 +19,7 @@ public sealed record JobOutcome
     public string? FailureDetail { get; }
     public string? DownloadPath { get; }
     public FileCandidate? ChosenCandidate { get; }
+    public SongDownloadSource DownloadSource { get; }
 
     private JobOutcome(
         bool shouldCommit,
@@ -31,7 +32,8 @@ public sealed record JobOutcome
         string? failureMessage = null,
         string? failureDetail = null,
         string? downloadPath = null,
-        FileCandidate? chosenCandidate = null)
+        FileCandidate? chosenCandidate = null,
+        SongDownloadSource downloadSource = SongDownloadSource.None)
     {
         ShouldCommit = shouldCommit;
         LifecycleState = lifecycleState;
@@ -44,6 +46,7 @@ public sealed record JobOutcome
         FailureDetail = failureDetail;
         DownloadPath = downloadPath;
         ChosenCandidate = chosenCandidate;
+        DownloadSource = downloadSource;
     }
 
     public bool IsTerminal => TerminalOutcome != JobTerminalOutcome.None;
@@ -57,8 +60,16 @@ public sealed record JobOutcome
     public static JobOutcome Activity(JobActivityPhase phase)
         => new(shouldCommit: true, lifecycleState: JobLifecycleState.Running, activityPhase: phase);
 
-    public static JobOutcome Done(string? downloadPath = null, FileCandidate? chosenCandidate = null)
-        => new(shouldCommit: true, terminalOutcome: JobTerminalOutcome.Succeeded, downloadPath: downloadPath, chosenCandidate: chosenCandidate);
+    public static JobOutcome Done(
+        string? downloadPath = null,
+        FileCandidate? chosenCandidate = null,
+        SongDownloadSource downloadSource = SongDownloadSource.None)
+        => new(
+            shouldCommit: true,
+            terminalOutcome: JobTerminalOutcome.Succeeded,
+            downloadPath: downloadPath,
+            chosenCandidate: chosenCandidate,
+            downloadSource: downloadSource);
 
     public static JobOutcome Failed(JobFailureReason reason, string? message = null, string? detail = null)
     {

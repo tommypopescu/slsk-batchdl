@@ -66,6 +66,7 @@ internal static class CliJobStatusPresenter
             ServerJobActivityPhase.RunningChildren => Active("running"),
             ServerJobActivityPhase.Organizing => Active("organizing"),
             ServerJobActivityPhase.RunningOnComplete => Active("on-complete"),
+            ServerJobActivityPhase.RunningFallback => Active("fallback"),
             _ => lifecycle switch
             {
                 ServerJobLifecycleState.Pending => new("queued", ConsoleColor.Gray, CliJobStatusCategory.Queued),

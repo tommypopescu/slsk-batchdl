@@ -33,6 +33,20 @@ public class EngineStateStoreTests
     }
 
     [TestMethod]
+    public void SongPayload_IncludesDownloadSource()
+    {
+        var store = new EngineStateStore();
+        var song = new SongJob(new SongQuery { Artist = "Artist", Title = "Track" });
+        song.SetDone("C:/music/track.mp3", downloadSource: SongDownloadSource.Fallback);
+
+        Register(store, song);
+
+        var payload = store.GetJobDetail(song.Id)?.Payload as SongJobPayloadDto;
+        Assert.IsNotNull(payload);
+        Assert.AreEqual(ServerSongDownloadSource.Fallback, payload.DownloadSource);
+    }
+
+    [TestMethod]
     public void JobSummary_ExposesLifecycleActivityAndTerminalOutcome()
     {
         var store = new EngineStateStore();

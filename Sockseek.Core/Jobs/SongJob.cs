@@ -46,6 +46,13 @@ namespace Sockseek.Core.Jobs;
             set { if (_downloadPath != value) { _downloadPath = value; OnPropertyChanged(); } }
         }
 
+        private SongDownloadSource _downloadSource = SongDownloadSource.None;
+        public SongDownloadSource DownloadSource
+        {
+            get => _downloadSource;
+            set { if (_downloadSource != value) { _downloadSource = value; OnPropertyChanged(); } }
+        }
+
         private long _bytesTransferred;
         public long BytesTransferred
         {
@@ -82,12 +89,19 @@ namespace Sockseek.Core.Jobs;
         public override void SetDone()
             => SetDone(downloadPath: null);
 
-        public void SetDone(string? downloadPath, FileCandidate? candidate = null)
+        public void SetDone(
+            string? downloadPath,
+            FileCandidate? candidate = null,
+            SongDownloadSource downloadSource = SongDownloadSource.None)
         {
             if (candidate != null)
                 ChosenCandidate = candidate;
             if (downloadPath != null)
                 DownloadPath = downloadPath;
+            if (downloadSource != SongDownloadSource.None)
+                DownloadSource = downloadSource;
+            else if (candidate != null)
+                DownloadSource = SongDownloadSource.Soulseek;
             base.SetDone();
         }
 

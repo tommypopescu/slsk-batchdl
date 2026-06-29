@@ -114,7 +114,7 @@ internal sealed class OutputFinalizer
         if (song.TerminalOutcome != JobTerminalOutcome.Succeeded)
             return;
 
-        PublishDownloadedFileCache(song, JobOutcome.Done(song.DownloadPath, song.ChosenCandidate));
+        PublishDownloadedFileCache(song, JobOutcome.Done(song.DownloadPath, song.ChosenCandidate, song.DownloadSource));
     }
 
     public void PublishDownloadedFileCache(SongJob song, JobOutcome outcome)
