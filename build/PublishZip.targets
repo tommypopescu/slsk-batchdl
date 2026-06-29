@@ -1,9 +1,15 @@
 <!-- 
 dotnet msbuild build/PublishZip.targets -t:PublishAll
+dotnet msbuild build/PublishZip.targets -t:PublishAll -p:SnapshotBuild=true
+dotnet msbuild build/PublishZip.targets -t:PublishAll -p:SnapshotBuild=true -p:VersionPrefix=3.0.3 -p:SnapshotLabel=fix
+dotnet msbuild build/PublishZip.targets -t:PublishAll -p:SnapshotBuild=true -p:UnifiedPackage=true
 dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=linux-x64
 dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64 
 -->
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\Directory.Build.props')" />
+
   <PropertyGroup>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RepoRoot>
     <Framework Condition="'$(Framework)' == ''">net10.0</Framework>
@@ -18,6 +24,33 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
     <PackagerDll>$(RepoRoot)/Sockseek.Packager/bin/$(Configuration)/$(PackagerTargetFramework)/Sockseek.Packager.dll</PackagerDll>
   </PropertyGroup>
 
+  <Target Name="SetSnapshotVersionSuffix"
+          Condition="'$(SnapshotBuild)' == 'true' and '$(VersionSuffix)' == ''">
+    <Exec Command="git -C &quot;$(RepoRoot)&quot; rev-parse --short HEAD"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" ItemName="_GitShortShaOutput" />
+    </Exec>
+
+    <PropertyGroup>
+      <GitShortSha>@(_GitShortShaOutput->'%(Identity)')</GitShortSha>
+      <SnapshotLabel Condition="'$(SnapshotLabel)' == ''">preview</SnapshotLabel>
+      <VersionSuffix>$(SnapshotLabel).g$(GitShortSha)</VersionSuffix>
+    </PropertyGroup>
+
+    <Message Importance="High" Text="Using snapshot version suffix '$(VersionSuffix)'." />
+  </Target>
+
+  <Target Name="SetPackageVersion" DependsOnTargets="SetSnapshotVersionSuffix">
+    <Error Condition="'$(VersionPrefix)' == ''"
+           Text="VersionPrefix is empty. Set -p:VersionPrefix=... or define it in Directory.Build.props." />
+
+    <PropertyGroup>
+      <PackageVersion>$(VersionPrefix)</PackageVersion>
+      <PackageVersion Condition="'$(VersionSuffix)' != ''">$(PackageVersion)-$(VersionSuffix)</PackageVersion>
+    </PropertyGroup>
+  </Target>
+
   <Target Name="BuildPackager"
           Condition="'$(IsWindowsRid)' != 'True'"
           Inputs="$(RepoRoot)/Sockseek.Packager/Program.cs;$(PackagerProject)"
@@ -28,7 +61,7 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
              RemoveProperties="RuntimeIdentifier;SelfContained;PublishSelfContained;PublishSingleFile;PublishTrimmed;PublishReadyToRun;PublishAot" />
   </Target>
 
-  <Target Name="PublishPackage" DependsOnTargets="BuildPackager">
+  <Target Name="PublishPackage" DependsOnTargets="SetPackageVersion;BuildPackager">
     <Error Condition="'$(RID)' == ''" Text="Set RID, e.g. -p:RID=linux-x64" />
 
     <PropertyGroup>
@@ -37,15 +70,17 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
       <PublishLabel Condition="'$(PublishLabel)' == ''">$(RID)</PublishLabel>
       <PublishDir>$(PublishRoot)/$(PublishLabel)</PublishDir>
       <IsWindowsRid>$([System.String]::Copy('$(RID)').StartsWith('win'))</IsWindowsRid>
-      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' == 'True'">sockseek_$(PublishLabel).zip</PackageName>
-      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' != 'True'">sockseek_$(PublishLabel).tar.gz</PackageName>
+      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' == 'True'">sockseek_$(PackageVersion)_$(PublishLabel).zip</PackageName>
+      <PackageName Condition="'$(PackageName)' == '' and '$(IsWindowsRid)' != 'True'">sockseek_$(PackageVersion)_$(PublishLabel).tar.gz</PackageName>
       <PackagePath>$(PackageDir)/$(PackageName)</PackagePath>
+      <VersionProperties Condition="'$(VersionPrefix)' != ''">-p:VersionPrefix=&quot;$(VersionPrefix)&quot;</VersionProperties>
+      <VersionProperties Condition="'$(VersionSuffix)' != ''">$(VersionProperties) -p:VersionSuffix=&quot;$(VersionSuffix)&quot;</VersionProperties>
     </PropertyGroup>
 
     <RemoveDir Directories="$(PublishDir)" Condition="Exists('$(PublishDir)')" />
     <MakeDir Directories="$(PublishDir);$(PackageDir)" />
 
-    <Exec Command="dotnet publish &quot;$(CliProject)&quot; -c Release -f $(Framework) -r $(RID) -o &quot;$(PublishDir)&quot; -p:PublishSingleFile=true -p:PublishTrimmed=$(Trimmed) -p:DebugType=embedded -p:DebugSymbols=true -p:IncludeSymbolsInSingleFile=false -p:OpenApiGenerateDocuments=false -p:PathMap=&quot;$(RepoRoot)=/_/&quot; --self-contained=$(SelfContained)" />
+    <Exec Command="dotnet publish &quot;$(CliProject)&quot; -c Release -f $(Framework) -r $(RID) -o &quot;$(PublishDir)&quot; $(VersionProperties) -p:PublishSingleFile=true -p:PublishTrimmed=$(Trimmed) -p:DebugType=embedded -p:DebugSymbols=true -p:IncludeSymbolsInSingleFile=false -p:OpenApiGenerateDocuments=false -p:PathMap=&quot;$(RepoRoot)=/_/&quot; --self-contained=$(SelfContained)" />
 
     <Copy SourceFiles="$(RepoRoot)/LICENSE"
           DestinationFolder="$(PublishDir)"
@@ -71,17 +106,43 @@ dotnet msbuild build/PublishZip.targets -t:PublishZip -p:RID=win-x64
 
   <Target Name="PublishZip" DependsOnTargets="PublishPackage" />
 
-  <Target Name="PublishAll">
+  <Target Name="PublishAll" DependsOnTargets="SetPackageVersion">
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=win-x64;PublishLabel=win-x64;PackageName=sockseek_win-x64.zip" />
+             Properties="RID=win-x64;PublishLabel=win-x64;VersionPrefix=$(VersionPrefix);VersionSuffix=$(VersionSuffix)" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=linux-x64;PublishLabel=linux-x64;PackageName=sockseek_linux-x64.tar.gz" />
+             Properties="RID=linux-x64;PublishLabel=linux-x64;VersionPrefix=$(VersionPrefix);VersionSuffix=$(VersionSuffix)" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=linux-arm;PublishLabel=linux-arm;PackageName=sockseek_linux-arm.tar.gz" />
+             Properties="RID=linux-arm;PublishLabel=linux-arm;VersionPrefix=$(VersionPrefix);VersionSuffix=$(VersionSuffix)" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=osx-x64;PublishLabel=osx-x64;PackageName=sockseek_osx-x64.tar.gz" />
+             Properties="RID=osx-x64;PublishLabel=osx-x64;VersionPrefix=$(VersionPrefix);VersionSuffix=$(VersionSuffix)" />
     <MSBuild Projects="$(MSBuildThisFileFullPath)" Targets="PublishPackage"
-             Properties="RID=osx-arm64;PublishLabel=osx-arm64;PackageName=sockseek_osx-arm64.tar.gz" />
+             Properties="RID=osx-arm64;PublishLabel=osx-arm64;VersionPrefix=$(VersionPrefix);VersionSuffix=$(VersionSuffix)" />
+
+    <ItemGroup Condition="'$(UnifiedPackage)' == 'true'">
+      <PackagesForUnifiedZip Include="$(PackageDir)/sockseek_$(PackageVersion)_win-x64.zip" />
+      <PackagesForUnifiedZip Include="$(PackageDir)/sockseek_$(PackageVersion)_linux-x64.tar.gz" />
+      <PackagesForUnifiedZip Include="$(PackageDir)/sockseek_$(PackageVersion)_linux-arm.tar.gz" />
+      <PackagesForUnifiedZip Include="$(PackageDir)/sockseek_$(PackageVersion)_osx-x64.tar.gz" />
+      <PackagesForUnifiedZip Include="$(PackageDir)/sockseek_$(PackageVersion)_osx-arm64.tar.gz" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(UnifiedPackage)' == 'true'">
+      <UnifiedPackageName Condition="'$(UnifiedPackageName)' == ''">sockseek_$(PackageVersion)_all.zip</UnifiedPackageName>
+      <UnifiedPackagePath>$(PackageDir)/$(UnifiedPackageName)</UnifiedPackagePath>
+      <UnifiedPackageStagingDir>$(PackageDir)/_unified</UnifiedPackageStagingDir>
+    </PropertyGroup>
+
+    <RemoveDir Directories="$(UnifiedPackageStagingDir)" Condition="'$(UnifiedPackage)' == 'true' and Exists('$(UnifiedPackageStagingDir)')" />
+    <MakeDir Directories="$(UnifiedPackageStagingDir)" Condition="'$(UnifiedPackage)' == 'true'" />
+    <Delete Files="$(UnifiedPackagePath)" Condition="'$(UnifiedPackage)' == 'true' and Exists('$(UnifiedPackagePath)')" />
+    <Copy SourceFiles="@(PackagesForUnifiedZip)"
+          DestinationFolder="$(UnifiedPackageStagingDir)"
+          Condition="'$(UnifiedPackage)' == 'true'" />
+    <ZipDirectory SourceDirectory="$(UnifiedPackageStagingDir)"
+                  DestinationFile="$(UnifiedPackagePath)"
+                  Overwrite="true"
+                  Condition="'$(UnifiedPackage)' == 'true'" />
+    <RemoveDir Directories="$(UnifiedPackageStagingDir)" Condition="'$(UnifiedPackage)' == 'true' and Exists('$(UnifiedPackageStagingDir)')" />
   </Target>
 
   <Target Name="CleanArtifacts">
