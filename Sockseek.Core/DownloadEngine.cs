@@ -2707,7 +2707,8 @@ public class DownloadEngine
 
         song.UpdateActivity(JobActivityPhase.RunningFallback);
         SockseekLog.Jobs.Info($"[{song.DisplayId}] SongJob: running fallback: {song}");
-        var outcome = await _songDownloadFallback.TryDownloadAsync(song, config, organizer, null, ct);
+        var fallbackLog = ExtractorContext.ForJob(song, Events).Log;
+        var outcome = await _songDownloadFallback.TryDownloadAsync(song, config, organizer, fallbackLog, ct);
         if (outcome == null || !outcome.ShouldCommit)
             return null;
 

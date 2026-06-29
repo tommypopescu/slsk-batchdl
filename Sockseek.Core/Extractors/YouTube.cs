@@ -548,7 +548,7 @@ namespace Sockseek.Core.Extractors;
                 UseShellExecute = false,
             };
 
-            log.Debug($"{process.StartInfo.FileName} {process.StartInfo.Arguments}");
+            log.Info($"{process.StartInfo.FileName} {process.StartInfo.Arguments}");
             process.Start();
 
             var stdoutTask = ReadLinesAsync(process.StandardOutput);
