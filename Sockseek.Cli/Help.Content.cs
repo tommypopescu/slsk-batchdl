@@ -115,8 +115,6 @@ public static partial class Help
                                     ""{id}"" -f bestaudio/best -ci -o ""{savepath-noext}.%(ext)s"" -x
                                     Available vars are: {id}, {savedir}, {savepath},
                                     {savepath-noext}.
-                                    Warning: If you change the -o parameter, Sockseek won't be able
-                                    to index the downloaded files.
                                     Note that -x causes yt-dlp to download webms in case ffmpeg
                                     is unavailable.
 
