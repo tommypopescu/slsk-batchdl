@@ -268,14 +268,31 @@ public class RemoteCliBackendTests
             await using var backend = new RemoteCliBackend(url);
             await backend.StartAsync();
 
+            var workflowId = Guid.NewGuid();
+            var terminalAlbumActivitySeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            backend.EventReceived += envelope =>
+            {
+                if (envelope.WorkflowId == workflowId
+                    && envelope.Type == "album.state-changed"
+                    && envelope.Payload is AlbumStateChangedEventDto album
+                    && album.Summary.LifecycleState == ServerJobLifecycleState.Terminal)
+                {
+                    terminalAlbumActivitySeen.TrySetResult();
+                }
+            };
+
             var summary = await backend.SubmitExtractJobAsync(
                 new SubmitExtractJobRequestDto(
                     "Artist Album",
                     "String",
                     Options: new SubmissionOptionsDto(
+                        WorkflowId: workflowId,
                         DownloadSettings: ConfigManager.CreateCliDownloadSettingsPatch(["-a", "--no-browse-folder"]))));
 
             await WaitForWorkflowStateAsync(backend, summary.WorkflowId, ServerWorkflowState.Completed);
+            await AwaitOrFailAsync(
+                terminalAlbumActivitySeen.Task,
+                "Timed out waiting for the remote terminal album activity event.");
 
             await WaitForConditionAsync(
                 () => Task.FromResult(Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories).Length >= 2),
@@ -1081,6 +1098,18 @@ public class RemoteCliBackendTests
         }
 
         Assert.Fail($"Timed out waiting for event '{eventType}'. Seen: {string.Join(", ", seenTypes.Distinct().OrderBy(x => x))}");
+    }
+
+    private static async Task AwaitOrFailAsync(Task task, string failureMessage, int timeoutMs = 5000)
+    {
+        try
+        {
+            await task.WaitAsync(TimeSpan.FromMilliseconds(timeoutMs));
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail(failureMessage);
+        }
     }
 
     private static async Task WaitForWorkflowStateAsync(ICliBackend backend, Guid workflowId, ServerWorkflowState expectedState, int timeoutMs = 5000)
