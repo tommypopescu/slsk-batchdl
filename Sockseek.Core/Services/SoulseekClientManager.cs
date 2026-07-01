@@ -1,4 +1,5 @@
 using Soulseek;
+using System.Security.Cryptography;
 using System.Net.Sockets;
 using Sockseek.Core.Settings;
 using System.ComponentModel;
@@ -268,7 +269,18 @@ public class SoulseekClientManager : IDisposable
         else
         {
             SockseekLog.Soulseek.Debug("Configuring Soulseek Client connection options.");
-            var serverConnectionOptions = new ConnectionOptions(
+            int startingToken = CreateRandomStartingToken();
+            SockseekLog.Soulseek.Debug($"Using Soulseek client starting token {startingToken}.");
+            return new SoulseekClient(SockseekSoulseekClientIdentity.MinorVersion, CreateClientOptions(settings, startingToken));
+        }
+    }
+
+    internal static int CreateRandomStartingToken()
+        => RandomNumberGenerator.GetInt32(1, int.MaxValue);
+
+    internal static SoulseekClientOptions CreateClientOptions(EngineSettings settings, int startingToken)
+    {
+        var serverConnectionOptions = new ConnectionOptions(
             connectTimeout: settings.ConnectTimeout,
             configureSocket: (socket) =>
             {
@@ -278,45 +290,46 @@ public class SoulseekClientManager : IDisposable
                 socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 15);
             });
 
-            var transferConnectionOptions = new ConnectionOptions(
-                inactivityTimeout: int.MaxValue, // this is handled by --max-stale-time
-                configureSocket: (socket) =>
-                {
-                    socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
-                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 15);
-                    socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 15);
-                });
+        var transferConnectionOptions = new ConnectionOptions(
+            inactivityTimeout: int.MaxValue, // this is handled by --max-stale-time
+            configureSocket: (socket) =>
+            {
+                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 15);
+                socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 15);
+            });
 
-            Task<UserInfo> userInfoResolver(string username, System.Net.IPEndPoint ip) => Task.FromResult(new UserInfo(
-                description: settings.UserDescription ?? "",
-                uploadSlots: 1,
-                queueLength: 0,
-                hasFreeUploadSlot: true
-            ));
+        Task<UserInfo> userInfoResolver(string username, System.Net.IPEndPoint ip) => Task.FromResult(new UserInfo(
+            description: settings.UserDescription ?? "",
+            uploadSlots: 1,
+            queueLength: 0,
+            hasFreeUploadSlot: true
+        ));
 
-            var clientOptionsBuilder = new SoulseekClientOptions(
+        var clientOptionsBuilder = new SoulseekClientOptions(
+            transferConnectionOptions: transferConnectionOptions,
+            serverConnectionOptions: serverConnectionOptions,
+            listenPort: settings.ListenPort ?? 49998,
+            maximumConcurrentSearches: int.MaxValue, // this is limited later in the searcher code
+            userInfoResolver: userInfoResolver,
+            startingToken: startingToken
+        );
+
+        if (settings.ListenPort == null)
+        {
+            // No listen port: create client without listener to avoid bind failures
+            clientOptionsBuilder = new SoulseekClientOptions(
                 transferConnectionOptions: transferConnectionOptions,
                 serverConnectionOptions: serverConnectionOptions,
-                listenPort: settings.ListenPort ?? 49998,
-                maximumConcurrentSearches: int.MaxValue, // this is limited later in the searcher code
-                userInfoResolver: userInfoResolver
+                enableListener: false,
+                maximumConcurrentSearches: int.MaxValue,
+                userInfoResolver: userInfoResolver,
+                startingToken: startingToken
             );
-
-            if (settings.ListenPort == null)
-            {
-                // No listen port: create client without listener to avoid bind failures
-                clientOptionsBuilder = new SoulseekClientOptions(
-                    transferConnectionOptions: transferConnectionOptions,
-                    serverConnectionOptions: serverConnectionOptions,
-                    enableListener: false,
-                    maximumConcurrentSearches: int.MaxValue,
-                    userInfoResolver: userInfoResolver
-                );
-            }
-
-            return new SoulseekClient(SockseekSoulseekClientIdentity.MinorVersion, clientOptionsBuilder);
         }
+
+        return clientOptionsBuilder;
     }
 
     /// <summary>

@@ -10,6 +10,40 @@ namespace Tests.Core;
 public class SoulseekClientManagerTests
 {
     [TestMethod]
+    public void CreateRandomStartingToken_ReturnsPositiveToken()
+    {
+        for (int i = 0; i < 20; i++)
+        {
+            int token = SoulseekClientManager.CreateRandomStartingToken();
+
+            Assert.IsTrue(token > 0);
+            Assert.IsTrue(token < int.MaxValue);
+        }
+    }
+
+    [TestMethod]
+    public void CreateClientOptions_UsesProvidedStartingToken_WithListener()
+    {
+        const int token = 123_456_789;
+        var options = SoulseekClientManager.CreateClientOptions(
+            new EngineSettings { ListenPort = 49998 },
+            token);
+
+        Assert.AreEqual(token, options.StartingToken);
+    }
+
+    [TestMethod]
+    public void CreateClientOptions_UsesProvidedStartingToken_WithoutListener()
+    {
+        const int token = 987_654_321;
+        var options = SoulseekClientManager.CreateClientOptions(
+            new EngineSettings { ListenPort = null },
+            token);
+
+        Assert.AreEqual(token, options.StartingToken);
+    }
+
+    [TestMethod]
     public void Dispose_DisposesUnderlyingClient()
     {
         var mockClient = new MockSoulseekClient(new());
