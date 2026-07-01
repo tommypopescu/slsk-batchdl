@@ -1196,7 +1196,7 @@ namespace Tests.EndToEnd
 
                 var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
                 var registry = TestHelpers.CreateSessionRegistry();
-                var searcher = new Searcher(testClient, registry, registry, new EngineEvents(), 10, 10);
+                var searcher = new Searcher(testClient, registry, new EngineEvents(), 10, 10);
                 var seedJob = new AlbumJob(new AlbumQuery { Artist = "Artist", Album = "Chosen Album" });
                 await searcher.SearchAlbum(seedJob, rootSettings.Search, new ResponseData(), CancellationToken.None);
                 var selected = seedJob.Results.Single();
@@ -1255,7 +1255,7 @@ namespace Tests.EndToEnd
 
                 var clientManager = TestHelpers.CreateMockClientManager(testClient, engineSettings);
                 var registry = TestHelpers.CreateSessionRegistry();
-                var searcher = new Searcher(testClient, registry, registry, new EngineEvents(), 10, 10);
+                var searcher = new Searcher(testClient, registry, new EngineEvents(), 10, 10);
                 var seedSong = new SongJob(new SongQuery { Artist = "Artist", Title = "Real Track" });
                 await searcher.SearchSong(seedSong, rootSettings.Search, new ResponseData(), CancellationToken.None);
                 var selected = seedSong.Candidates!.Single();

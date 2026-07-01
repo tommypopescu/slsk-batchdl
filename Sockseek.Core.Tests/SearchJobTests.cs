@@ -40,7 +40,7 @@ namespace Tests.Unit
             };
             var config = TestHelpers.CreateDefaultSettings().Download;
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(new ClientTests.MockSoulseekClient(index), registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(new ClientTests.MockSoulseekClient(index), registry, new EngineEvents(), 10, 10);
             var job = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track" });
 
             await searcher.Search(job, config.Search, new ResponseData(), CancellationToken.None);
@@ -105,7 +105,7 @@ namespace Tests.Unit
             };
             var config = TestHelpers.CreateDefaultSettings().Download;
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(new ClientTests.MockSoulseekClient(index), registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(new ClientTests.MockSoulseekClient(index), registry, new EngineEvents(), 10, 10);
             var job = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track" });
             var originalSession = job.Session;
             var streamed = new List<SearchRawResult>();
@@ -161,7 +161,7 @@ namespace Tests.Unit
             };
             var config = TestHelpers.CreateDefaultSettings().Download;
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(new ClientTests.MockSoulseekClient(index), registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(new ClientTests.MockSoulseekClient(index), registry, new EngineEvents(), 10, 10);
             var job = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track" });
 
             await searcher.Search(job, config.Search, new ResponseData(), CancellationToken.None);
@@ -359,7 +359,7 @@ namespace Tests.Unit
             var registry = TestHelpers.CreateSessionRegistry();
             var client = new ClientTests.MockSoulseekClient([]);
             client.FailNextSearch();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new SearchJob(new SongQuery { Artist = "Artist", Title = "Track" });
             var streamed = new List<SearchRawResult>();
             var readerTask = Task.Run(async () =>

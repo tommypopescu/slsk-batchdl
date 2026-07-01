@@ -19,15 +19,13 @@ namespace Sockseek.Core;
 // TODO [ARCHITECTURE]: Refactor DownloadEngine to alleviate "God Class" anti-pattern.
 // Currently, this class violates the Single Responsibility Principle by managing the queue,
 // instantiating concrete dependencies (new Searcher(), new Downloader()), managing cancellation
-// hierarchies, and running maintenance loops.
+// hierarchies, and service lifetimes.
 // We should adopt Microsoft.Extensions.DependencyInjection:
 // 1. Break this class into isolated services (e.g., IJobPipeline, IQueueOrchestrator).
 // 2. Inject dependencies (ISearcher, IDownloader) via constructor injection.
 // This will drastically improve maintainability and make the orchestration logic actually unit-testable.
 public class DownloadEngine
 {
-    private const int updateInterval = 100;
-
     private Searcher? searcher = null;
     private Downloader? downloader = null;
 
@@ -590,12 +588,11 @@ public class DownloadEngine
                 }
 
                 await _clientManager.WaitUntilReadyAsync(ct);
-                searcher = new Searcher(Client!, _registry, _registry, Events, engineSettings.SearchesPerTime, engineSettings.SearchRenewTime, engineSettings.ConcurrentSearches);
+                searcher = new Searcher(Client!, _registry, Events, engineSettings.SearchesPerTime, engineSettings.SearchRenewTime, engineSettings.ConcurrentSearches);
                 downloader = new Downloader(Client!, _clientManager, _registry, Events, _staleDownloadCoordinator);
-                _ = Task.Run(() => UpdateLoop(appCts.Token), appCts.Token);
                 if (AutomaticStaleChecksEnabled)
                     _ = Task.Run(() => _staleDownloadCoordinator.RunAsync(appCts.Token), appCts.Token);
-                SockseekLog.Jobs.Debug("Update task started");
+                SockseekLog.Jobs.Debug("Soulseek services initialized");
                 servicesInitialized = true;
             }
 
@@ -3438,33 +3435,4 @@ public class DownloadEngine
             : resultKind;
     }
 
-
-    // ── maintenance loop ─────────────────────────────────────────────────────
-    
-    // TODO: Remove this loop. For example: Search registry entries should be scoped to the search
-    // operation that creates them and cleaned up in that operation's finally block.
-    async Task UpdateLoop(CancellationToken cancellationToken)
-    {
-        while (!appCts.IsCancellationRequested)
-        {
-            try
-            {
-                if (_clientManager.IsConnectedAndLoggedIn)
-                {
-                    // Prune completed searches (or those without a handler task)
-                    foreach (var (song, info) in _registry.Searches)
-                        if (info.Task == null || info.Task.IsCompleted)
-                            _registry.Searches.TryRemove(song, out _);
-                }
-
-                await Task.Delay(updateInterval, cancellationToken);
-            }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex)
-            {
-                SockseekLog.Jobs.Error(ex, "Error in update loop");
-                try { await Task.Delay(1000, cancellationToken); } catch { break; }
-            }
-        }
-    }
 }

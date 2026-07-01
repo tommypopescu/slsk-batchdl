@@ -19,7 +19,7 @@ namespace Tests.SearchDownloadTests
             var clientManager = TestHelpers.CreateMockClientManager(client, engineSettings);
             var registry = TestHelpers.CreateSessionRegistry();
             var engine = new DownloadEngine(engineSettings, clientManager);
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 999, 1);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 999, 1);
             var job = new AlbumJob(new AlbumQuery { Album = "testalbum", Artist = "testartist" });
 
             // Act

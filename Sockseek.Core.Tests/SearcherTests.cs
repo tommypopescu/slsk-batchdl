@@ -64,7 +64,7 @@ namespace Tests.Unit
         private Searcher CreateSearcher(ISoulseekClient client, DownloadSettings config)
         {
             var registry = TestHelpers.CreateSessionRegistry();
-            return new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            return new Searcher(client, registry, new EngineEvents(), 10, 10);
         }
 
         [TestMethod]
@@ -90,7 +90,7 @@ namespace Tests.Unit
             var client = CreateMockClient(TestHelpers.CreateTestIndex());
             var settings = TestHelpers.CreateDefaultSettings().Download;
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var song = new SongJob(new SongQuery { Artist = "testartist", Title = "testsong" });
             var phases = new List<JobActivityPhase>();
 
@@ -124,7 +124,7 @@ namespace Tests.Unit
             var settings = TestHelpers.CreateDefaultSettings().Download;
             var registry = TestHelpers.CreateSessionRegistry();
             var events = new EngineEvents();
-            var searcher = new Searcher(client, registry, registry, events, 10, 10);
+            var searcher = new Searcher(client, registry, events, 10, 10);
             var album = new AlbumJob(new AlbumQuery { Artist = "ELO", Album = "Time" });
             var counts = new List<int>();
 
@@ -897,7 +897,7 @@ namespace Tests.Unit
             config.Search.MinSharesAggregate = 1;
 
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
@@ -925,7 +925,7 @@ namespace Tests.Unit
             config.Search.MinSharesAggregate = 2; // Only return if shared by 2+ peers
 
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
@@ -1335,7 +1335,7 @@ namespace Tests.Unit
             config.Search.MinSharesAggregate = 1;
 
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new AggregateJob(new SongQuery { Artist = "ELO", Title = "Blue Sky" });
             var responseData = new ResponseData();
 
@@ -1370,7 +1370,7 @@ namespace Tests.Unit
             config.Search.MinSharesAggregate = 1;
 
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new AggregateJob(new SongQuery { Artist = "ELO", Title = "Blue Sky" });
             var responseData = new ResponseData();
 
@@ -1402,7 +1402,7 @@ namespace Tests.Unit
             config.Search.MinSharesAggregate = 1;
 
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new AggregateJob(new SongQuery { Artist = "ELO", Title = "Blue Sky" });
             var responseData = new ResponseData();
 
@@ -1436,7 +1436,7 @@ namespace Tests.Unit
             config.Search.MinSharesAggregate = 1;
 
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
@@ -1468,7 +1468,7 @@ namespace Tests.Unit
             config.Search.MinSharesAggregate = 1;
 
             var registry = TestHelpers.CreateSessionRegistry();
-            var searcher = new Searcher(client, registry, registry, new EngineEvents(), 10, 10);
+            var searcher = new Searcher(client, registry, new EngineEvents(), 10, 10);
             var job = new AlbumAggregateJob(new AlbumQuery { Artist = "ELO" });
             var responseData = new ResponseData();
 
@@ -1488,7 +1488,7 @@ namespace Tests.Unit
             var registry = TestHelpers.CreateSessionRegistry();
 
             // 1 search per 10 seconds — second search will block immediately
-            var searcher = new Searcher(client, registry, registry, events, searchesPerTime: 1, searchRenewTime: 10);
+            var searcher = new Searcher(client, registry, events, searchesPerTime: 1, searchRenewTime: 10);
 
             var song1 = new SongJob(new SongQuery { Artist = "A", Title = "B" });
             await searcher.SearchSong(song1, settings.Search, new ResponseData(), CancellationToken.None);

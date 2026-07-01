@@ -1,14 +1,10 @@
 using System.Collections.Concurrent;
-using Sockseek.Core.Jobs;
-using Sockseek.Core.Models;
 using Sockseek.Core.Services;
 
 namespace Sockseek.Core.Models;
-    public interface ISearchRegistry
-    {
-        ConcurrentDictionary<SongJob, SearchInfo> Searches { get; }
-    }
-
+    // TODO: Replace this generic session-state registry with purpose-built services:
+    // ActiveDownloadTracker for in-flight transfer state/manual skip/stale cancellation,
+    // DownloadedFileCache for per-run duplicate reuse, and UserSuccessTracker for ranking heuristics.
     public interface IDownloadRegistry
     {
         ConcurrentDictionary<string, ActiveDownload> Downloads { get; }
@@ -20,9 +16,8 @@ namespace Sockseek.Core.Models;
         ConcurrentDictionary<string, int> UserSuccessCounts { get; }
     }
 
-    public class SessionRegistry : ISearchRegistry, IDownloadRegistry, IUserStats
+    public class SessionRegistry : IDownloadRegistry, IUserStats
     {
-        public ConcurrentDictionary<SongJob, SearchInfo> Searches { get; } = new();
         public ConcurrentDictionary<string, ActiveDownload> Downloads { get; } = new();
         public ConcurrentDictionary<string, FileDownloadResult> DownloadedFiles { get; } = new();
         public ConcurrentDictionary<string, int> UserSuccessCounts { get; } = new();

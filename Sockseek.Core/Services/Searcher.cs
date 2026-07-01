@@ -18,20 +18,17 @@ namespace Sockseek.Core.Services;
 public partial class Searcher
 {
     private readonly ISoulseekClient client;
-    private readonly ISearchRegistry searchRegistry;
     private readonly IUserStats userStats;
     private readonly EngineEvents events;
     private readonly RateLimitedSemaphore rateSemaphore;
     private readonly SemaphoreSlim concurrencySemaphore;
 
     public Searcher(ISoulseekClient client,
-                    ISearchRegistry searchRegistry,
                     IUserStats userStats,
                     EngineEvents events,
                     int searchesPerTime, int searchRenewTime, int concurrentSearches = 2)
     {
         this.client = client;
-        this.searchRegistry = searchRegistry;
         this.userStats = userStats;
         this.events = events;
         rateSemaphore = new RateLimitedSemaphore(searchesPerTime, TimeSpan.FromSeconds(searchRenewTime));
@@ -137,7 +134,6 @@ public partial class Searcher
         InitializeDiscoveryProgress(song);
         void OnRawResultAdded(SearchSession _, SearchRawResult __) => UpdateDiscoveryProgress(song, session);
         session.RawResultAdded += OnRawResultAdded;
-        searchRegistry.Searches.TryAdd(song, new SearchInfo(session.Results));
 
         void responseHandler(SearchResponse r)
         {
@@ -176,7 +172,6 @@ public partial class Searcher
         {
             session.RawResultAdded -= OnRawResultAdded;
             concurrencySemaphore.Release();
-            searchRegistry.Searches.TryRemove(song, out _);
         }
 
         song.UpdateActivity(JobActivityPhase.ProcessingSearchResults);
